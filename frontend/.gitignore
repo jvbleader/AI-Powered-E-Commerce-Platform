@@ -1,2 +1,56 @@
-# Frontend ignore rules
-# Add frontend-specific ignore entries here
+# =====================
+# Dependencies
+# =====================
+node_modules/
+
+# Yarn Plug'n'Play
+.pnp/
+.pnp.js
+
+# =====================
+# Next.js build output
+# =====================
+.next/
+out/
+
+# Production build
+build/
+
+# =====================
+# Testing
+# =====================
+coverage/
+
+# =====================
+# Environment / secrets
+# =====================
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+# =====================
+# Vercel
+# =====================
+.vercel/
+
+# =====================
+# TypeScript / Next generated files
+# =====================
+*.tsbuildinfo
+next-env.d.ts
+
+# =====================
+# Logs
+# =====================
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+bun-debug.log*
+
+# =====================
+# Misc
+# =====================
+.DS_Store
+*.pem

@@ -1,1 +1,53 @@
+# =====================
+# OS files
+# =====================
+.DS_Store
+Thumbs.db
+Desktop.ini
 
+# =====================
+# Editor / IDE
+# =====================
+.vscode/
+.idea/
+
+# =====================
+# Environment / secrets
+# Áp dụng cho cả root, fe, be vì pattern không có /
+# =====================
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+# =====================
+# Logs
+# =====================
+*.log
+logs/
+
+# =====================
+# Temporary files
+# =====================
+tmp/
+temp/
+*.tmp
+
+# =====================
+# Local Docker / database volumes
+# Nếu bạn có mount volume local thì ignore
+# =====================
+docker-data/
+.volumes/
+mysql_data/
+redis_data/
+
+# =====================
+# Backup files
+# =====================
+*.bak
+*.swp
+*.swo
+*~
+
+other
