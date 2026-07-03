@@ -15,8 +15,9 @@ import {
 import { AUTH_BASE_PATH, ApiError, apiFetch } from "@/lib/api";
 import type { Address, AppState, OrderStatus, PaymentMethod, PaymentStatus, Product, Role, SellerStatus, User } from "@/types/models";
 
-const STORAGE_KEY = "shepoo-marketplace-state-v1";
-const VERIFICATION_CONTEXT_KEY = "shepoo-verification-context-v1";
+const STORAGE_KEY = "shepoo-marketplace-state-v2";
+const VERIFICATION_CONTEXT_KEY = "shepoo-verification-context-v2";
+const LEGACY_STORAGE_KEYS = ["shepoo-marketplace-state-v1", "shepoo-verification-context-v1"];
 const DEFAULT_AVATAR = "https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=240&q=80";
 const AUTH_ROUTES = {
   me: `${AUTH_BASE_PATH}/me`,
@@ -245,6 +246,7 @@ export const useMarketplaceStore = () => {
 
   useEffect(() => {
     let cancelled = false;
+    LEGACY_STORAGE_KEYS.forEach((key) => window.localStorage.removeItem(key));
     const saved = window.localStorage.getItem(STORAGE_KEY);
     if (saved) {
       setState(hydrateSavedState(JSON.parse(saved) as AppState));
@@ -378,10 +380,25 @@ export const useMarketplaceStore = () => {
       persistVerificationContext(context);
       setVerificationContext(context);
       setState((prev) => ({ ...prev, sessionUserId: undefined, activeRole: "GUEST" }));
+
+      let message = registrationStatus.message;
+      try {
+        const query = new URLSearchParams({ phone: validation.phone });
+        const otpResult = await apiFetch<MessageResponse>(`${AUTH_ROUTES.resendPhone}?${query.toString()}`, {
+          method: "POST"
+        });
+        message = otpResult.message;
+      } catch (error) {
+        message =
+          error instanceof ApiError
+            ? `Dang ky thanh cong, nhung chua gui duoc OTP: ${error.message}`
+            : "Dang ky thanh cong, nhung chua gui duoc OTP. Hay bam Gui lai ma.";
+      }
+
       return {
         ok: true,
-        message: registrationStatus.message,
-        redirectTo: "/verify-email"
+        message,
+        redirectTo: "/verify-phone"
       };
     } catch (error) {
       if (error instanceof ApiError) {
@@ -439,27 +456,32 @@ export const useMarketplaceStore = () => {
     if (!/^\d{6}$/.test(otp.trim())) return { ok: false, message: "OTP phai gom 6 chu so." };
 
     try {
-      const result = await apiFetch<RegistrationStatusResponse>(AUTH_ROUTES.verifyPhone, {
-        method: "POST",
-        body: JSON.stringify({
-          registration_id: verificationContext?.registrationId,
-          phone: normalizedPhone,
-          otp: otp.trim()
-        })
+      const query = new URLSearchParams({ phone: normalizedPhone, otp: otp.trim() });
+      const result = await apiFetch<BackendStatusResponse>(`${AUTH_ROUTES.verifyPhone}?${query.toString()}`, {
+        method: "POST"
       });
-      if (result.completed) {
+      const status: RegistrationStatusResponse = {
+        message: result.message ?? "Xac thuc so dien thoai thanh cong.",
+        registrationId: verificationContext?.registrationId,
+        email: verificationContext?.email ?? currentUser?.email ?? "",
+        phone: normalizedPhone,
+        emailVerified: verificationContext?.emailVerified ?? currentUser?.emailVerified ?? false,
+        phoneVerified: result.completed,
+        completed: Boolean((verificationContext?.emailVerified ?? currentUser?.emailVerified) && result.completed)
+      };
+      if (status.completed) {
         persistVerificationContext(undefined);
         setVerificationContext(undefined);
         setState((prev) => ({ ...prev, sessionUserId: undefined, activeRole: "GUEST" }));
       } else {
-        const context = statusToVerificationContext(result);
+        const context = statusToVerificationContext(status);
         persistVerificationContext(context);
         setVerificationContext(context);
       }
       return {
         ok: true,
-        message: result.message,
-        redirectTo: result.completed ? "/login" : result.emailVerified ? "/verify-phone" : "/verify-email"
+        message: status.message,
+        redirectTo: status.completed ? "/login" : status.emailVerified ? "/verify-phone" : "/verify-email"
       };
     } catch (error) {
       if (error instanceof ApiError) {
@@ -467,7 +489,7 @@ export const useMarketplaceStore = () => {
       }
       return { ok: false, message: "Khong the xac thuc so dien thoai luc nay." };
     }
-  }, [verificationContext?.registrationId]);
+  }, [currentUser?.email, currentUser?.emailVerified, verificationContext?.email, verificationContext?.emailVerified, verificationContext?.registrationId]);
 
   const resendEmailVerification = useCallback(async () => {
     try {
@@ -487,15 +509,24 @@ export const useMarketplaceStore = () => {
     }
   }, [currentUser?.fullName, verificationContext?.email]);
 
-  const resendPhoneVerification = useCallback(async () => {
+  const resendPhoneVerification = useCallback(async (phoneOverride?: string) => {
+    const normalizedPhone = normalizeAuthPhone(phoneOverride ?? verificationContext?.phone ?? currentUser?.phone ?? "");
+    if (!PHONE_RE.test(normalizedPhone)) return { ok: false, message: "So dien thoai khong hop le." };
+
     try {
-      const result = await apiFetch<MessageResponse>(AUTH_ROUTES.resendPhone, {
-        method: "POST",
-        body: JSON.stringify({
-          registration_id: verificationContext?.registrationId,
-          phone: verificationContext?.phone
-        })
+      const query = new URLSearchParams({ phone: normalizedPhone });
+      const result = await apiFetch<MessageResponse>(`${AUTH_ROUTES.resendPhone}?${query.toString()}`, {
+        method: "POST"
       });
+      const context: VerificationContext = {
+        registrationId: verificationContext?.registrationId,
+        email: verificationContext?.email ?? currentUser?.email ?? "",
+        phone: normalizedPhone,
+        emailVerified: verificationContext?.emailVerified ?? currentUser?.emailVerified ?? false,
+        phoneVerified: false
+      };
+      persistVerificationContext(context);
+      setVerificationContext(context);
       return { ok: true, message: result.message };
     } catch (error) {
       if (error instanceof ApiError) {
@@ -503,7 +534,7 @@ export const useMarketplaceStore = () => {
       }
       return { ok: false, message: "Khong the gui lai OTP luc nay." };
     }
-  }, [verificationContext?.phone, verificationContext?.registrationId]);
+  }, [currentUser?.email, currentUser?.emailVerified, currentUser?.phone, verificationContext?.email, verificationContext?.emailVerified, verificationContext?.phone, verificationContext?.registrationId]);
 
   const logout = useCallback(async () => {
     try {

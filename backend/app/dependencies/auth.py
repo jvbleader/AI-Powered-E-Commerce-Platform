@@ -23,7 +23,7 @@ async def get_current_user(
             )
         payload = jwt_service.decode_jwt_token(token)
 
-    user = await user_repositoriy.get_user_by_id(payload["sub"], db)
+    user = await user_repositoriy.get_user_by_public_id(payload["sub"], db)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Người dùng không tồn tại."

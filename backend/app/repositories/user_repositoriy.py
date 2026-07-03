@@ -7,20 +7,24 @@ from models.user import User
 from models.user_role import UserRole
 
 
-async def get_user_by_email(email: int, db: AsyncSession) -> User:
+async def get_user_by_email(email: str, db: AsyncSession) -> User:
     result = await db.execute(select(User).where(User.email == email))
     return result.scalar_one_or_none()
 
 
-async def get_user_by_phone(phone: int, db: AsyncSession) -> User:
+async def get_user_by_phone(phone: str, db: AsyncSession) -> User:
     result = await db.execute(select(User).where(User.phone == phone))
     return result.scalar_one_or_none()
 
 
-async def get_user_by_username(username: int, db: AsyncSession) -> User:
+async def get_user_by_username(username: str, db: AsyncSession) -> User:
     result = await db.execute(select(User).where(User.username == username))
     return result.scalar_one_or_none()
 
+
+async def get_user_by_public_id(public_id: str, db: AsyncSession) -> User:
+    result = await db.execute(select(User).where(User.public_id == public_id))
+    return result.scalar_one_or_none()
 
 async def get_user_by_id(id: int, db: AsyncSession) -> User:
     result = await db.execute(select(User).where(User.id == id))

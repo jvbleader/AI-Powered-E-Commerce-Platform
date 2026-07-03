@@ -1,14 +1,89 @@
-version: "3.9"
+name: AI-POWERED-E-COMMERCE-PLATFORM
 
 services:
+  mysql:
+    image: mysql:8.4
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root_password}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-ecommerce_db}
+      MYSQL_USER: ${MYSQL_USER:-ecommerce_user}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-ecommerce_password}
+    ports:
+      - "${MYSQL_PORT:-3307}:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u$${MYSQL_USER} -p$${MYSQL_PASSWORD} --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+
   backend:
-    # Backend service
     build:
       context: ./backend
-      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      APP_ENV: development
+      PYTHONPATH: /app/app:/app
+      PORT: "8000"
+      INIT_DB_ON_START: ${INIT_DB_ON_START:-true}
+      DATABASE_URL: mysql+asyncmy://${MYSQL_USER:-ecommerce_user}:${MYSQL_PASSWORD:-ecommerce_password}@mysql:3306/${MYSQL_DATABASE:-ecommerce_db}
+      ASYNC_DATABASE_URL: mysql+asyncmy://${MYSQL_USER:-ecommerce_user}:${MYSQL_PASSWORD:-ecommerce_password}@mysql:3306/${MYSQL_DATABASE:-ecommerce_db}
+      ACCESS_TOKEN_SECRET: ${ACCESS_TOKEN_SECRET:-dev-access-token-secret-change-me}
+      TOKEN_HASH_PEPPER: ${TOKEN_HASH_PEPPER:-dev-token-hash-pepper-change-me}
+      ACCESS_TOKEN_TTL_MINUTES: ${ACCESS_TOKEN_TTL_MINUTES:-15}
+      REFRESH_TOKEN_TTL_DAYS: ${REFRESH_TOKEN_TTL_DAYS:-30}
+      COOKIE_SECURE: ""
+      COOKIE_SAME_SITE: lax
+      FRONTEND_URL: http://localhost:${FRONTEND_PORT:-3000}
+      CORS_ORIGINS: http://localhost:${FRONTEND_PORT:-3000},http://127.0.0.1:${FRONTEND_PORT:-3000}
+      DEV_AUTH_DEBUG: ${DEV_AUTH_DEBUG:-false}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM_EMAIL: ${SMTP_FROM_EMAIL:-}
+      SMTP_FROM_NAME: ${SMTP_FROM_NAME:-Shepoo}
+      SMTP_USE_TLS: ${SMTP_USE_TLS:-true}
+      SMTP_TIMEOUT_SECONDS: ${SMTP_TIMEOUT_SECONDS:-10}
+      EMAIL_VERIFYCATION_TOKEN_EXPIRE_MINUTES: ${EMAIL_VERIFYCATION_TOKEN_EXPIRE_MINUTES:-10}
+      PHONE_OTP_TTL_MINUTES: ${PHONE_OTP_TTL_MINUTES:-5}
+      PHONE_OTP_MAX_ATTEMPTS: ${PHONE_OTP_MAX_ATTEMPTS:-5}
+      LOG_LEVEL: INFO
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3).read()\""]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
 
   frontend:
-    # Frontend service
     build:
       context: ./frontend
-      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    environment:
+      NODE_ENV: development
+      NEXT_TELEMETRY_DISABLED: "1"
+      NEXT_PUBLIC_API_BASE_URL: http://localhost:${BACKEND_PORT:-8000}
+      NEXT_PUBLIC_AUTH_BASE_PATH: /auth
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3000').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))\""]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+volumes:
+  mysql_data:

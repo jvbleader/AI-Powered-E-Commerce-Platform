@@ -64,24 +64,38 @@ async def send_verify_email(
         await db.rollback()
         raise
 
-    return MessageResponse(message=f"Đã gửi lại mã xác thực tới email: {email}")
+    return MessageResponse(message=f"Đã gửi link xác thực tới email: {email}")
 
 
-# @router.post(
-#     "/verify-phone",
-#     response_model=VerifyStatus,
-#     status_code=status.HTTP_202_ACCEPTED,
-# )
-# async def verify_phone():
-#     pass
+@router.post(
+    "/verify-phone",
+    response_model=RouterStatusResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def verify_phone(phone:str, otp: str, db: Annotated[AsyncSession, Depends(get_db)]):
+    try:
+        await verify_phone_service.verify_phone(phone=phone, otp=otp, db=db)
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        raise
 
-# @router.post(
-#     "/verify-phone/send",
-#     response_model=None,
-#     status_code=status.HTTP_200_OK,
-# )
-# async def verify_phone():
-#     pass
+    return RouterStatusResponse(completed=True)
+
+@router.post(
+    "/verify-phone/send",
+    response_model=None,
+    status_code=status.HTTP_200_OK,
+)
+async def verify_phone(phone: str, db: Annotated[AsyncSession, Depends(get_db)]):
+    try:
+        await verify_phone_service.send_phone_otp(phone, db)
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        raise
+
+    return MessageResponse(message=f"Đã gửi otp xác thực tới số điện thoại: {phone}")
 
 
 @router.post(
@@ -94,7 +108,7 @@ async def login(
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
     try:
-        result = await auth_service.login(data, request, response, db)
+        result = await auth_service.login(data, request, db)
         await db.commit()
     except Exception:
         await db.rollback()
@@ -102,7 +116,7 @@ async def login(
 
     jwt_service.set_auth_cookies(response, result.access_token, result.refresh_token)
 
-    return MessageResponse("Đăng nhập thành công.")
+    return MessageResponse(message="Đăng nhập thành công.")
 
 
 @router.post(
@@ -133,7 +147,7 @@ async def get_me(
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
-    roles = user_role_repository.get_role_list_by_user_id(current_user.id)
+    roles = await user_role_repository.get_role_list_by_user_id(current_user.id, db=db)
     return auth_service.user_to_response(current_user, roles)
 
 
@@ -154,4 +168,4 @@ async def logout(
         raise
 
     jwt_service.clear_auth_cookies(response)
-    return MessageResponse("Đăng xuất thành công.")
+    return MessageResponse(message="Đăng xuất thành công.")

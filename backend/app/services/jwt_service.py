@@ -21,7 +21,7 @@ load_dotenv()
 SECRET_KEY = os.getenv("ACCESS_TOKEN_SECRET")
 ACCESS_TOKEN_TTL_MINUTES = int(os.getenv("ACCESS_TOKEN_TTL_MINUTES"))
 REFRESH_TOKEN_TTL_DAYS = int(os.getenv("REFRESH_TOKEN_TTL_DAYS"))
-COOKIE_SECURE = os.getenv("COOKIE_SECURE")
+COOKIE_SECURE = bool(os.getenv("COOKIE_SECURE"))
 COOKIE_SAME_SITE = os.getenv("COOKIE_SAME_SITE")
 COOKIE_DOMAIN = os.getenv("COOKIE_DOMAIN")
 ALGORITHM = "HS256"
@@ -29,10 +29,10 @@ ISSUER = "shepoo_ecommerce-platform"
 AUDIENCE = "shepoo_ecommerce-platform"
 
 
-def create_jwt_token(type: str, id: int) -> str:
+def create_jwt_token(type: str, public_id: str) -> str:
     now = datetime.now(UTC)
     payload = {
-        "sub": id,
+        "sub": public_id,
         "type": type,
         "iat": now,
         "exp": now
@@ -51,12 +51,12 @@ def create_jwt_token(type: str, id: int) -> str:
     return token
 
 
-def create_access_token(id: int) -> str:
-    return create_jwt_token(id=id, type="access")
+def create_access_token(public_id: str) -> str:
+    return create_jwt_token(public_id=public_id, type="access")
 
 
-def create_refresh_token(id: int) -> str:
-    return create_jwt_token(id=id, type="refresh")
+def create_refresh_token(public_id: str) -> str:
+    return create_jwt_token(public_id=public_id, type="refresh")
 
 
 def decode_jwt_token(token: str) -> dict:
@@ -70,13 +70,13 @@ def decode_jwt_token(token: str) -> dict:
             options={"require": ["sub", "type", "iat", "exp", "aud", "iss", "jti"]},
         )
         return payload
-    except InvalidTokenError:
-        raise HTTPException(
-            detail="Token không hợp lệ!", status_code=status.HTTP_401_UNAUTHORIZED
-        )
     except ExpiredSignatureError:
         raise HTTPException(
             detail="Token đã hết hạn!", status_code=status.HTTP_401_UNAUTHORIZED
+        )
+    except InvalidTokenError:
+        raise HTTPException(
+            detail="Token không hợp lệ!", status_code=status.HTTP_401_UNAUTHORIZED
         )
 
 
@@ -90,7 +90,7 @@ async def verify_refresh_token(db: AsyncSession, token: str) -> user.User:
             status_code=status.HTTP_401_UNAUTHORIZED,
         )
 
-    db_user = await get_user_by_id(payload["sub"], db=db)
+    db_user = await get_user_by_public_id(payload["sub"], db=db)
     if db_user is None:
         raise HTTPException(
             detail="Người dùng không tồn tại.", status_code=status.HTTP_404_NOT_FOUND
@@ -99,9 +99,9 @@ async def verify_refresh_token(db: AsyncSession, token: str) -> user.User:
     return db_user
 
 
-def jwt_token_expires_at(db: AsyncSession, token: str) -> datetime:
+def jwt_token_expires_at(token: str, db: AsyncSession) -> datetime:
     payload = decode_jwt_token(token=token)
-    return payload["exp"]
+    return datetime.fromtimestamp(payload["exp"], UTC)
 
 
 def _cookie_options(max_age: int) -> dict[str, Any]:
@@ -130,7 +130,7 @@ def set_auth_cookies(
         response.set_cookie(
             key="refresh_token",
             value=refresh_token,
-            path="/auth/refresh"
+            path="/auth/refresh",
             ** _cookie_options(max_age=REFRESH_TOKEN_TTL_DAYS * 24 * 60 * 60),
         )
 

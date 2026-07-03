@@ -8,7 +8,7 @@ from models.user_session import UserSession
 
 async def create_session(payload: dict, db: AsyncSession):
     session = UserSession(**payload)
-    await db.add(session)
+    db.add(session)
     await db.flush()
     return session
 

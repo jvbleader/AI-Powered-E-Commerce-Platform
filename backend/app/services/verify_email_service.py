@@ -57,15 +57,15 @@ async def verify_email(token: str, db: AsyncSession):
             status_code=status.HTTP_403_FORBIDDEN, detail="Token không hợp lệ."
         )
 
-    if email_verification.expires_at < datetime.now(UTC):
+    if email_verification.expires_at < datetime.now(UTC).replace(tzinfo=None):
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="Token đã hết hạn."
+            status_code=status.HTTP_403_FORBIDDEN, detail="Đã hết hạn xác thực email."
         )
 
     user_id = email_verification.user_id
 
     await set_email_verified_at(user_id=user_id, time=datetime.now(UTC), db=db)
-    await delete_email_verifycation_token_by_user_id(uses_id=user_id, db=db)
+    await delete_email_verifycation_token_by_user_id(user_id=user_id, db=db)
 
 
 async def send_email_token(email: str, full_name: str, db: AsyncSession):
@@ -85,7 +85,7 @@ async def send_email_token(email: str, full_name: str, db: AsyncSession):
         user_id=user.id,
         token_hash=hash_token(token),
         expires_at=now + timedelta(minutes=EMAIL_VERIFYCATION_TOKEN_EXPIRE_MINUTES),
-        create_at=now,
+        created_at=now,
         db=db,
     )
 

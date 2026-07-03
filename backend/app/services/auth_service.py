@@ -80,14 +80,14 @@ async def login(
             status_code=status.HTTP_403_FORBIDDEN, detail="Tài khoản đã bị khoá."
         )
 
-    access_token = create_access_token(id=user.id)
-    refresh_token = create_refresh_token(id=user.id)
+    access_token = create_access_token(public_id=user.public_id)
+    refresh_token = create_refresh_token(public_id=user.public_id)
 
     session = await create_session(
         {
             "user_id": user.id,
             "refresh_token_hash": hash_token(refresh_token),
-            "expires_at": jwt_token_expires_at(refresh_token),
+            "expires_at": jwt_token_expires_at(refresh_token, db),
             "user_agent": request.headers.get("user-agent"),  ########################
             "ip_address": _request_ip(request=request),
             # "device_name":
