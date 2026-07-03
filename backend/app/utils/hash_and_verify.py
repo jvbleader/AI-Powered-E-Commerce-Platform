@@ -2,11 +2,10 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import os
 
 from argon2 import PasswordHasher
 from argon2.exceptions import VerificationError, VerifyMismatchError
-
-import os
 from dotenv import load_dotenv
 
 load_dotenv()

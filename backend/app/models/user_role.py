@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime
+from typing import TYPE_CHECKING
 from uuid import uuid4
 
 from sqlalchemy import (
@@ -17,13 +18,11 @@ from sqlalchemy import (
 from sqlalchemy.dialects import mysql
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from typing import TYPE_CHECKING
+from models.base import Base, utc_now
 
 if TYPE_CHECKING:
     from models.user import User
-    
-    
-from models.base import Base, utc_now
+
 
 class UserRole(Base):
     __tablename__ = "user_roles"

@@ -8,7 +8,6 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-
 APP_DIR = Path(__file__).resolve().parent
 BACKEND_DIR = APP_DIR.parent
 PROJECT_DIR = BACKEND_DIR.parent
@@ -39,7 +38,9 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=csv_env("CORS_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000"),
+    allow_origins=csv_env(
+        "CORS_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000"
+    ),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

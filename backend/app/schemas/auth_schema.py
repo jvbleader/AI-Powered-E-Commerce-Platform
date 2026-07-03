@@ -1,8 +1,17 @@
 import re
-from pydantic import Field, BaseModel, ConfigDict, EmailStr, field_validator, model_validator
+
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    EmailStr,
+    Field,
+    field_validator,
+    model_validator,
+)
 
 PHONE_RE = re.compile(r"^0(3|5|7|8|9)\d{8}$")
 OTP_RE = re.compile(r"^\d{6}$")
+
 
 def normalize_phone_number(value: str) -> str:
     phone = re.sub(r"[\s.\-()]", "", value.strip())
@@ -26,41 +35,47 @@ class RegisterRequest(BaseModel):
     email: EmailStr = Field()
     phone: str = Field(min_length=8, max_length=12)
     password: str = Field(min_length=8, max_length=128)
-    confirm_password : str = Field(min_length=8, max_length=128)
-    
+    confirm_password: str = Field(min_length=8, max_length=128)
+
     @field_validator("email")
     @classmethod
     def normalize_email(cls, value: str) -> str:
         return value.strip().lower()
-    
+
     @field_validator("phone")
     @classmethod
     def normalize_phone(cls, value: str) -> str:
         return validate_phone_number(value)
-    
+
     @model_validator(mode="after")
     def validate_confirm_password(self) -> "RegisterRequest":
         if self.password != self.confirm_password:
             raise ValueError("Mật khẩu xác nhận không khớp.")
         return self
-    
+
+
 class RegisterResponse(BaseModel):
     fullname: str = Field(min_length=2, max_length=150)
     username: str = Field(min_length=2, max_length=40)
     email: EmailStr = Field()
     phone: str = Field(min_length=8, max_length=12)
-    
+
+
 class LoginRequest(BaseModel):
-    identifier: str = Field(min_length=2, description="Username hoặc Email/Số điện thoại")
+    identifier: str = Field(
+        min_length=2, description="Username hoặc Email/Số điện thoại"
+    )
     password: str = Field(min_length=8, max_length=128)
-    
-    
+
+
 class LoginReponse(BaseModel):
     access_token: str
     refresh_token: str
-    
+
+
 class RouterStatusResponse(BaseModel):
     completed: bool
-    
+
+
 class MessageResponse(BaseModel):
     message: str

@@ -9,6 +9,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from models.base import Base, utc_now
 from models.user import User
 
+
 class PasswordResetToken(Base):
     __tablename__ = "password_reset_tokens"
 

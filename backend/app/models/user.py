@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime
+from typing import TYPE_CHECKING
 from uuid import uuid4
 
 from sqlalchemy import (
@@ -17,9 +18,7 @@ from sqlalchemy import (
 from sqlalchemy.dialects import mysql
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from models.base import Base, utc_now, new_public_id
-
-from typing import TYPE_CHECKING
+from models.base import Base, new_public_id, utc_now
 
 if TYPE_CHECKING:
     from models.user_role import UserRole
@@ -100,5 +99,3 @@ class User(Base):
     #     uselist=False,
     # )
     # cart: Mapped["Cart | None"] = relationship(back_populates="user", uselist=False)
-
-

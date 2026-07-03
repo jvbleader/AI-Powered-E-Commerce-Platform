@@ -9,6 +9,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from models.base import Base, utc_now
 from models.user import User
 
+
 class EmailVerificationToken(Base):
     __tablename__ = "email_verification_tokens"
 
