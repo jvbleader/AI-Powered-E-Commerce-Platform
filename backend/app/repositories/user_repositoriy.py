@@ -17,8 +17,8 @@ async def get_user_by_phone(phone: str, db: AsyncSession) -> User:
     return result.scalar_one_or_none()
 
 
-async def get_user_by_username(username: str, db: AsyncSession) -> User:
-    result = await db.execute(select(User).where(User.username == username))
+async def get_user_by_user_name(user_name: str, db: AsyncSession) -> User:
+    result = await db.execute(select(User).where(User.user_name == user_name))
     return result.scalar_one_or_none()
 
 
@@ -55,4 +55,15 @@ async def set_email_verified_at(user_id: int, time: datetime, db: AsyncSession):
 async def set_phone_verified_at(user_id: int, time: datetime, db: AsyncSession):
     user = await db.get(User, user_id)
     user.phone_verified_at = time
+    await db.flush()
+
+
+async def change_password_hash_by_user(user: User, password_hash: str, db: AsyncSession):
+    user.password_hash = password_hash
+    await db.flush()
+    
+    
+async def change_password_hash_by_user_id(user_id: int, password_hash: str, db: AsyncSession):
+    user = await get_user_by_id(user_id, db)
+    user.password_hash = password_hash
     await db.flush()

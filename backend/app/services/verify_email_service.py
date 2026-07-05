@@ -6,15 +6,16 @@ from email.message import EmailMessage
 from urllib.parse import urlencode
 
 from dotenv import load_dotenv
-from fastapi import Depends, HTTPException, status
+from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-import jwt_service
-from repositories.email_verifycation_token_repository import *
-from repositories.user_session_repository import *
-from repositories.user_repositoriy import *
-from schemas.auth_schema import *
-from utils.hash_and_verify import *
+from repositories.email_verifycation_token_repository import (
+    create_email_verifycation,
+    delete_email_verifycation_token_by_user_id,
+    get_email_verifycation_by_token_hash,
+)
+from repositories.user_repositoriy import get_user_by_email, set_email_verified_at
+from utils.hash_and_verify import hash_token
 
 load_dotenv()
 SMTP_FROM_EMAIL = os.getenv("SMTP_FROM_EMAIL")
@@ -98,11 +99,11 @@ async def send_email_token(email: str, full_name: str, db: AsyncSession):
     message["Subject"] = "Xác thực email Shepoo"
     message["From"] = sender
     message["To"] = email
-    message.set_content(f"""Xin chào {full_name},
-        
-        Bấm vào link sau để xác thực email Shepoo: {link}
-        
-        Nếu bạn không muốn xác thực tài khoản Shepoo, vui lòng bỏ qua email này!""")
+    message.set_content(
+        f"""Xin chào {full_name},\n
+                        Bấm vào link sau để xác thực email Shepoo: {link}\n
+                        Nếu bạn không muốn xác thực tài khoản Shepoo, vui lòng bỏ qua email này!"""
+    )
 
     try:
         with smtplib.SMTP(
@@ -110,10 +111,10 @@ async def send_email_token(email: str, full_name: str, db: AsyncSession):
         ) as smtp:
             if SMTP_USE_TLS:
                 smtp.starttls()
-            username = _clean(SMTP_USERNAME)
+            user_name = _clean(SMTP_USERNAME)
             password = _clean(SMTP_PASSWORD)
-            if username and password:
-                smtp.login(username, password)
+            if user_name and password:
+                smtp.login(user_name, password)
             smtp.send_message(message)
     except Exception:
         raise HTTPException(

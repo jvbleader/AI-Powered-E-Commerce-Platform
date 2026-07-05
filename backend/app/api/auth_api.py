@@ -1,17 +1,27 @@
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Request, Response, status
+from pydantic import EmailStr
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.database import get_db
 from dependencies.auth import get_current_user
 from models.user import User
 from repositories import user_role_repository
-from schemas.auth_schema import *
+from schemas.auth_schema import (
+    ChangePasswordRequest,
+    LoginRequest,
+    MessageResponse,
+    RegisterRequest,
+    RegisterResponse,
+    ResetPasswordRequest,
+    RouterStatusResponse,
+)
 from schemas.user_schema import UserMeResponse
 from services import (
     auth_service,
     jwt_service,
+    password_service,
     verify_email_service,
     verify_phone_service,
 )
@@ -72,7 +82,9 @@ async def send_verify_email(
     response_model=RouterStatusResponse,
     status_code=status.HTTP_202_ACCEPTED,
 )
-async def verify_phone(phone:str, otp: str, db: Annotated[AsyncSession, Depends(get_db)]):
+async def verify_phone(
+    phone: str, otp: str, db: Annotated[AsyncSession, Depends(get_db)]
+):
     try:
         await verify_phone_service.verify_phone(phone=phone, otp=otp, db=db)
         await db.commit()
@@ -82,12 +94,13 @@ async def verify_phone(phone:str, otp: str, db: Annotated[AsyncSession, Depends(
 
     return RouterStatusResponse(completed=True)
 
+
 @router.post(
     "/verify-phone/send",
     response_model=None,
     status_code=status.HTTP_200_OK,
 )
-async def verify_phone(phone: str, db: Annotated[AsyncSession, Depends(get_db)]):
+async def send_verify_phone(phone: str, db: Annotated[AsyncSession, Depends(get_db)]):
     try:
         await verify_phone_service.send_phone_otp(phone, db)
         await db.commit()
@@ -153,7 +166,7 @@ async def get_me(
 
 @router.post(
     "/logout",
-    response_model=None,
+    response_model=MessageResponse,
 )
 async def logout(
     request: Request, response: Response, db: Annotated[AsyncSession, Depends(get_db)]
@@ -169,3 +182,50 @@ async def logout(
 
     jwt_service.clear_auth_cookies(response)
     return MessageResponse(message="Đăng xuất thành công.")
+
+
+@router.post("/change-password", response_model=MessageResponse)
+async def change_password(
+    user: Annotated[User, Depends(get_current_user)],
+    data: ChangePasswordRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    try:
+        await password_service.change_password(user=user, data=data, db=db)
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        raise
+
+    return MessageResponse(message="Đổi mật khẩu thành công.")
+
+
+@router.post("/reset-password", response_model=MessageResponse)
+async def reset_password(
+    token: str, data: ResetPasswordRequest, db: Annotated[AsyncSession, Depends(get_db)]
+):
+    try:
+        await password_service.reset_pasword(token, data, db)
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        raise
+
+    return MessageResponse(message="Đặt lại mật khẩu thành công.")
+
+
+@router.post(
+    "/reset-password/send-email",
+)
+async def send_reset_password_email(
+    email: EmailStr,
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    try:
+        await password_service.send_reset_password_email(email, db)
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        raise
+
+    return MessageResponse(message="Đã gửi email.")

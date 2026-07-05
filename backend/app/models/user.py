@@ -2,18 +2,14 @@ from __future__ import annotations
 
 from datetime import date, datetime
 from typing import TYPE_CHECKING
-from uuid import uuid4
 
 from sqlalchemy import (
-    Boolean,
     CHAR,
     CheckConstraint,
     Date,
     DateTime,
-    ForeignKey,
     Index,
     String,
-    text,
 )
 from sqlalchemy.dialects import mysql
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -51,8 +47,8 @@ class User(Base):
         nullable=False,
         default=new_public_id,
     )
-    fullname: Mapped[str] = mapped_column(String(150), nullable=False)
-    username: Mapped[str] = mapped_column(String(40), nullable=False)
+    full_name: Mapped[str] = mapped_column(String(150), nullable=False)
+    user_name: Mapped[str] = mapped_column(String(40), nullable=False)
     email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
     phone: Mapped[str] = mapped_column(String(20), unique=True, nullable=False)
     password_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)

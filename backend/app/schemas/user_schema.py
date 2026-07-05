@@ -7,7 +7,7 @@ class UserMeResponse(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     public_id: str = Field(serialization_alias="publicId")
-    full_name: str = Field(serialization_alias="fullName")
+    full_name: str = Field(serialization_alias="full_name")
     email: EmailStr
     phone: str
     avatar_url: str | None = Field(default=None, serialization_alias="avatarUrl")

@@ -1,21 +1,36 @@
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 
-from fastapi import Depends, HTTPException, Request, Response, status
+from fastapi import HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from jwt_service import *
+from jwt_service import create_access_token, create_refresh_token, jwt_token_expires_at
 from models.user import User
-from repositories.user_repositoriy import *
-from repositories.user_session_repository import *
-from schemas.auth_schema import *
+from repositories.user_repositoriy import (
+    create_user,
+    get_user_by_email,
+    get_user_by_id,
+    get_user_by_phone,
+    get_user_by_user_name,
+)
+from repositories.user_session_repository import (
+    create_session,
+    get_session_by_refresh_token_hash,
+    revoke_session,
+)
+from schemas.auth_schema import (
+    LoginReponse,
+    LoginRequest,
+    RegisterRequest,
+    RegisterResponse,
+)
 from schemas.user_schema import UserMeResponse
-from utils.hash_and_verify import *
+from utils.hash_and_verify import hash_password, hash_token, verify_password
 
 
 async def register_user(data: RegisterRequest, db: AsyncSession):
     email = data.email
     phone = data.phone
-    username = data.username
+    user_name = data.user_name
 
     if await get_user_by_email(email=email, db=db) is not None:
         raise HTTPException(
@@ -28,15 +43,16 @@ async def register_user(data: RegisterRequest, db: AsyncSession):
             detail="Số điện thoại này đã được sử dụng.",
         )
 
-    if await get_user_by_username(username=username, db=db) is not None:
+    if await get_user_by_user_name(user_name=user_name, db=db) is not None:
         raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT, detail="Username này đã được sử dụng."
+            status_code=status.HTTP_409_CONFLICT,
+            detail="user_name này đã được sử dụng.",
         )
 
     user = await create_user(
         {
-            "fullname": data.fullname,
-            "username": data.username,
+            "full_name": data.full_name,
+            "user_name": data.user_name,
             "email": data.email,
             "phone": data.phone,
             "password_hash": hash_password(data.password),
@@ -46,8 +62,8 @@ async def register_user(data: RegisterRequest, db: AsyncSession):
     )
 
     return RegisterResponse(
-        fullname=user.fullname,
-        username=user.fullname,
+        full_name=user.full_name,
+        user_name=user.full_name,
         email=user.email,
         phone=user.phone,
     )
@@ -63,7 +79,7 @@ async def login(
     if not user:
         user = await get_user_by_phone(phone=identifier, db=db)
     if not user:
-        user = await get_user_by_username(username=identifier, db=db)
+        user = await get_user_by_user_name(user_name=identifier, db=db)
 
     if not user:
         raise HTTPException(
@@ -141,7 +157,7 @@ async def logout(refresh_token: str, db: AsyncSession):
 def user_to_response(user: User, roles: list[str]) -> UserMeResponse:
     return UserMeResponse(
         public_id=user.public_id,
-        full_name=user.fullname,
+        full_name=user.full_name,
         email=user.email,
         phone=user.phone,
         avatar_url=user.avatar_url,

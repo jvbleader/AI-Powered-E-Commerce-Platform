@@ -1,5 +1,4 @@
 import os
-import secrets
 import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -10,12 +9,8 @@ from fastapi import HTTPException, Response, status
 from jwt.exceptions import ExpiredSignatureError, InvalidTokenError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from core.database import get_db
 from models import user
-from repositories.user_repositoriy import *
-from repositories.user_session_repository import *
-from utils import hash_and_verify
-from utils.hash_and_verify import *
+from repositories.user_repositoriy import get_user_by_public_id
 
 load_dotenv()
 SECRET_KEY = os.getenv("ACCESS_TOKEN_SECRET")
@@ -123,7 +118,7 @@ def set_auth_cookies(
         key="access_token",
         value=access_token,
         path="/",
-        **_cookie_options(max_age=ACCESS_TOKEN_TTL_MINUTES * 60)
+        **_cookie_options(max_age=ACCESS_TOKEN_TTL_MINUTES * 60),
     )
 
     if refresh_token:
@@ -131,7 +126,7 @@ def set_auth_cookies(
             key="refresh_token",
             value=refresh_token,
             path="/auth/refresh",
-            ** _cookie_options(max_age=REFRESH_TOKEN_TTL_DAYS * 24 * 60 * 60),
+            **_cookie_options(max_age=REFRESH_TOKEN_TTL_DAYS * 24 * 60 * 60),
         )
 
 
