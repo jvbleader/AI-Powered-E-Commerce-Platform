@@ -3,7 +3,12 @@ from datetime import UTC, datetime
 from fastapi import HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from jwt_service import create_access_token, create_refresh_token, jwt_token_expires_at
+from jwt_service import (
+    create_access_token,
+    create_refresh_token,
+    decode_jwt_token,
+    jwt_token_expires_at,
+)
 from models.user import User
 from repositories.user_repositoriy import (
     create_user,
@@ -121,7 +126,19 @@ def _request_ip(request: Request) -> str | None:
     return request.client.host if request.client else None
 
 
-async def refresh(refresh_token: str, db: AsyncSession) -> str:
+async def refresh(refresh_token: str | None, db: AsyncSession) -> str:
+    if not refresh_token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Vui lòng đăng nhập."
+        )
+
+    payload = decode_jwt_token(refresh_token)
+    if payload.get("type") != "refresh":
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token không phải là refresh token.",
+        )
+
     session = await get_session_by_refresh_token_hash(hash_token(refresh_token), db)
 
     if session is None:
@@ -134,14 +151,34 @@ async def refresh(refresh_token: str, db: AsyncSession) -> str:
             status_code=status.HTTP_403_FORBIDDEN, detail="Phiên đăng nhập đã hết hạn."
         )
 
-    user = await get_user_by_id(id=session.user_id, db=db)
+    now = datetime.now(UTC).replace(tzinfo=None)
+    expires_at = session.expires_at
+    if expires_at.tzinfo is not None:
+        expires_at = expires_at.astimezone(UTC).replace(tzinfo=None)
+    if expires_at <= now:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Phiên đăng nhập đã hết hạn."
+        )
 
-    new_access_token = create_access_token(id=user.id)
+    user = await get_user_by_id(id=session.user_id, db=db)
+    if user is None or user.public_id != payload.get("sub"):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Refresh token không hợp lệ."
+        )
+
+    new_access_token = create_access_token(public_id=user.public_id)
+    session.last_used_at = now
+    await db.flush()
 
     return new_access_token
 
 
-async def logout(refresh_token: str, db: AsyncSession):
+async def logout(refresh_token: str | None, db: AsyncSession):
+    if not refresh_token:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Vui lòng đăng nhập."
+        )
+
     session = await get_session_by_refresh_token_hash(hash_token(refresh_token), db)
 
     if session is None:

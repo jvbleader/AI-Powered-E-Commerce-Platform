@@ -150,5 +150,5 @@ async def reset_pasword(token: str, data: ResetPasswordRequest, db: AsyncSession
 
     user_id = password_reset_token.user_id
 
-    await change_password_hash_by_user(user_id, hash_password(data.new_password), db)
+    await change_password_hash_by_user_id(user_id, hash_password(data.new_password), db)
     await delete_password_reset_token_by_user_id(user_id=user_id, db=db)

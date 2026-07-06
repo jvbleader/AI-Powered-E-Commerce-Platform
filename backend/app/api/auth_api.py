@@ -127,6 +127,7 @@ async def login(
         await db.rollback()
         raise
 
+    jwt_service.clear_auth_cookies(response)
     jwt_service.set_auth_cookies(response, result.access_token, result.refresh_token)
 
     return MessageResponse(message="Đăng nhập thành công.")

@@ -23,6 +23,12 @@ async def get_current_user(
             )
         payload = jwt_service.decode_jwt_token(token)
 
+    if payload.get("type") != "access":
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token không phải là access token.",
+        )
+
     user = await user_repositoriy.get_user_by_public_id(payload["sub"], db)
     if not user:
         raise HTTPException(

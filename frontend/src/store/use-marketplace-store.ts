@@ -27,6 +27,9 @@ const AUTH_ROUTES = {
   resendEmail: `${AUTH_BASE_PATH}/verify-email/send`,
   verifyPhone: `${AUTH_BASE_PATH}/verify-phone`,
   resendPhone: `${AUTH_BASE_PATH}/verify-phone/send`,
+  requestPasswordReset: `${AUTH_BASE_PATH}/reset-password/send-email`,
+  resetPassword: `${AUTH_BASE_PATH}/reset-password`,
+  changePassword: `${AUTH_BASE_PATH}/change-password`,
   logout: `${AUTH_BASE_PATH}/logout`
 };
 
@@ -56,8 +59,8 @@ type BackendUser = {
 };
 
 type BackendRegisterResponse = {
-  fullname: string;
-  username: string;
+  full_name: string;
+  user_name: string;
   email: string;
   phone: string;
 };
@@ -126,6 +129,15 @@ const validateRegistrationPayload = (
   return { ok: true as const, fullName, email, phone, password, confirmPassword };
 };
 
+const validateNewPasswordPayload = (newPasswordValue: string, confirmPasswordValue: string) => {
+  const newPassword = newPasswordValue.trim();
+  const confirmPassword = confirmPasswordValue.trim();
+
+  if (newPassword.length < 8) return { ok: false as const, message: "Mat khau moi phai co it nhat 8 ky tu." };
+  if (newPassword !== confirmPassword) return { ok: false as const, message: "Mat khau xac nhan khong khop." };
+  return { ok: true as const, newPassword, confirmPassword };
+};
+
 const usernameFromRegistration = (email: string, phone: string) => {
   const localPart = email.split("@")[0]?.toLowerCase() ?? "";
   const cleaned = localPart.replace(/[^a-z0-9_]/g, "").slice(0, 32);
@@ -135,7 +147,7 @@ const usernameFromRegistration = (email: string, phone: string) => {
 
 const backendRegisterToStatus = (result: BackendRegisterResponse): RegistrationStatusResponse => ({
   message: "Dang ky thanh cong. Vui long xac thuc email neu backend da gui ma.",
-  registrationId: result.username,
+  registrationId: result.user_name,
   email: result.email,
   phone: result.phone,
   emailVerified: false,
@@ -367,8 +379,8 @@ export const useMarketplaceStore = () => {
       const result = await apiFetch<BackendRegisterResponse>(AUTH_ROUTES.register, {
         method: "POST",
         body: JSON.stringify({
-          fullname: validation.fullName,
-          username: usernameFromRegistration(validation.email, validation.phone),
+          full_name: validation.fullName,
+          user_name: usernameFromRegistration(validation.email, validation.phone),
           email: validation.email,
           phone: validation.phone,
           password: validation.password,
@@ -535,6 +547,78 @@ export const useMarketplaceStore = () => {
       return { ok: false, message: "Khong the gui lai OTP luc nay." };
     }
   }, [currentUser?.email, currentUser?.emailVerified, currentUser?.phone, verificationContext?.email, verificationContext?.emailVerified, verificationContext?.phone, verificationContext?.registrationId]);
+
+  const requestPasswordReset = useCallback(async (email: string) => {
+    const normalizedEmail = normalizeAuthEmail(email);
+    if (!EMAIL_RE.test(normalizedEmail)) return { ok: false, message: "Email khong hop le." };
+
+    try {
+      const query = new URLSearchParams({ email: normalizedEmail });
+      const result = await apiFetch<MessageResponse>(`${AUTH_ROUTES.requestPasswordReset}?${query.toString()}`, {
+        method: "POST"
+      });
+      return { ok: true, message: result.message };
+    } catch (error) {
+      if (error instanceof ApiError) {
+        return { ok: false, message: error.message };
+      }
+      return { ok: false, message: "Khong the gui email dat lai mat khau luc nay." };
+    }
+  }, []);
+
+  const resetPassword = useCallback(async (token: string, newPasswordValue: string, confirmPasswordValue: string) => {
+    const cleanToken = token.trim();
+    if (!cleanToken) return { ok: false, message: "Vui long nhap token dat lai mat khau." };
+
+    const validation = validateNewPasswordPayload(newPasswordValue, confirmPasswordValue);
+    if (!validation.ok) return { ok: false, message: validation.message };
+
+    try {
+      const query = new URLSearchParams({ token: cleanToken });
+      const result = await apiFetch<MessageResponse>(`${AUTH_ROUTES.resetPassword}?${query.toString()}`, {
+        method: "POST",
+        body: JSON.stringify({
+          new_password: validation.newPassword,
+          new_password_confirm: validation.confirmPassword
+        })
+      });
+      return { ok: true, message: result.message, redirectTo: "/login" };
+    } catch (error) {
+      if (error instanceof ApiError) {
+        return { ok: false, message: error.message };
+      }
+      return { ok: false, message: "Khong the dat lai mat khau luc nay." };
+    }
+  }, []);
+
+  const changePassword = useCallback(async (
+    currentPasswordValue: string,
+    newPasswordValue: string,
+    confirmPasswordValue: string
+  ) => {
+    const currentPassword = currentPasswordValue.trim();
+    if (currentPassword.length < 8) return { ok: false, message: "Mat khau hien tai phai co it nhat 8 ky tu." };
+
+    const validation = validateNewPasswordPayload(newPasswordValue, confirmPasswordValue);
+    if (!validation.ok) return { ok: false, message: validation.message };
+
+    try {
+      const result = await apiFetch<MessageResponse>(AUTH_ROUTES.changePassword, {
+        method: "POST",
+        body: JSON.stringify({
+          current_password: currentPassword,
+          new_password: validation.newPassword,
+          new_password_confirm: validation.confirmPassword
+        })
+      });
+      return { ok: true, message: result.message };
+    } catch (error) {
+      if (error instanceof ApiError) {
+        return { ok: false, message: error.message };
+      }
+      return { ok: false, message: "Khong the doi mat khau luc nay." };
+    }
+  }, []);
 
   const logout = useCallback(async () => {
     try {
@@ -812,6 +896,9 @@ export const useMarketplaceStore = () => {
     verifyPhone,
     resendEmailVerification,
     resendPhoneVerification,
+    requestPasswordReset,
+    resetPassword,
+    changePassword,
     logout,
     switchRole,
     addToCart,
