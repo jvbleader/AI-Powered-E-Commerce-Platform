@@ -1,3 +1,5 @@
+import axios, { AxiosError, AxiosRequestConfig, Method } from "axios";
+
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
 export const AUTH_BASE_PATH = process.env.NEXT_PUBLIC_AUTH_BASE_PATH ?? "/auth";
 const REFRESH_PATH = `${AUTH_BASE_PATH}/refresh`;
@@ -8,9 +10,15 @@ const SKIP_REFRESH_PATHS = new Set([
   `${AUTH_BASE_PATH}/verify-email/send`,
   `${AUTH_BASE_PATH}/verify-phone`,
   `${AUTH_BASE_PATH}/verify-phone/send`,
+  `${AUTH_BASE_PATH}/reset-password`,
+  `${AUTH_BASE_PATH}/reset-password/send-email`,
   `${AUTH_BASE_PATH}/logout`,
   REFRESH_PATH
 ]);
+
+type RetryableAxiosRequestConfig = AxiosRequestConfig & {
+  _retry?: boolean;
+};
 
 type ApiErrorPayload = {
   error?: {
@@ -43,44 +51,97 @@ function detailMessage(detail: unknown) {
   return first?.msg;
 }
 
-function parseResponsePayload<T>(text: string, fallbackMessage: string): T & ApiErrorPayload {
-  if (!text) return { message: fallbackMessage } as T & ApiErrorPayload;
+function normalizeErrorPayload(data: unknown, fallbackMessage: string): ApiErrorPayload {
+  if (!data) return { message: fallbackMessage };
+
+  if (typeof data === "string") {
+    try {
+      return JSON.parse(data) as ApiErrorPayload;
+    } catch {
+      return { message: data || fallbackMessage };
+    }
+  }
+
+  return data as ApiErrorPayload;
+}
+
+function requestPath(url?: string) {
+  if (!url) return "";
 
   try {
-    return JSON.parse(text) as T & ApiErrorPayload;
+    return new URL(url, API_BASE_URL).pathname;
   } catch {
-    return { message: text || fallbackMessage } as T & ApiErrorPayload;
+    return url.split("?")[0];
   }
 }
 
-export async function apiFetch<T>(path: string, options: RequestInit = {}, retryOnUnauthorized = true): Promise<T> {
+function toApiError(error: unknown): unknown {
+  if (error instanceof ApiError) return error;
+
+  if (axios.isAxiosError<ApiErrorPayload>(error)) {
+    const status = error.response?.status ?? 0;
+    const payload = normalizeErrorPayload(
+      error.response?.data,
+      error.response?.statusText || error.message || "Request failed"
+    );
+    return new ApiError(status, payload);
+  }
+
+  return error;
+}
+
+export const apiClient = axios.create({
+  baseURL: API_BASE_URL,
+  withCredentials: true
+});
+
+let refreshRequest: Promise<unknown> | undefined;
+
+apiClient.interceptors.response.use(
+  (response) => response,
+  async (error: AxiosError<ApiErrorPayload>) => {
+    const originalRequest = error.config as RetryableAxiosRequestConfig | undefined;
+    const pathname = requestPath(originalRequest?.url);
+
+    if (
+      error.response?.status === 401 &&
+      originalRequest &&
+      !originalRequest._retry &&
+      !SKIP_REFRESH_PATHS.has(pathname)
+    ) {
+      originalRequest._retry = true;
+
+      try {
+        refreshRequest ??= apiClient.post(REFRESH_PATH);
+        await refreshRequest;
+        return apiClient(originalRequest);
+      } catch (refreshError) {
+        return Promise.reject(toApiError(refreshError));
+      } finally {
+        refreshRequest = undefined;
+      }
+    }
+
+    return Promise.reject(toApiError(error));
+  }
+);
+
+function requestInitToAxiosConfig(path: string, options: RequestInit = {}): AxiosRequestConfig {
   const headers = new Headers(options.headers);
   if (options.body && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
   }
 
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    ...options,
-    headers,
-    credentials: "include"
-  });
-
-  const text = await response.text();
-  const data = parseResponsePayload<T>(text, response.statusText || "Request failed");
-
-  if (response.status === 401 && retryOnUnauthorized && !SKIP_REFRESH_PATHS.has(path)) {
-    await apiFetch<AuthSessionRefreshResponse>(REFRESH_PATH, { method: "POST" }, false);
-    return apiFetch<T>(path, options, false);
-  }
-
-  if (!response.ok) {
-    throw new ApiError(response.status, data);
-  }
-
-  return data as T;
+  return {
+    url: path,
+    method: (options.method ?? "GET") as Method,
+    headers: Object.fromEntries(headers.entries()),
+    data: options.body,
+    signal: options.signal ?? undefined
+  };
 }
 
-type AuthSessionRefreshResponse = {
-  expiresIn: number;
-  tokenType: string;
-};
+export async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
+  const response = await apiClient.request<T>(requestInitToAxiosConfig(path, options));
+  return response.data;
+}

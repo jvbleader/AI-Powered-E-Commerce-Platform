@@ -2,7 +2,6 @@ import re
 
 from pydantic import (
     BaseModel,
-    ConfigDict,
     EmailStr,
     Field,
     field_validator,
@@ -30,8 +29,8 @@ def validate_phone_number(value: str) -> str:
 
 
 class RegisterRequest(BaseModel):
-    fullname: str = Field(min_length=2, max_length=150)
-    username: str = Field(min_length=2, max_length=40)
+    full_name: str = Field(min_length=2, max_length=150)
+    user_name: str = Field(min_length=2, max_length=40)
     email: EmailStr = Field()
     phone: str = Field(min_length=8, max_length=12)
     password: str = Field(min_length=8, max_length=128)
@@ -55,15 +54,15 @@ class RegisterRequest(BaseModel):
 
 
 class RegisterResponse(BaseModel):
-    fullname: str = Field(min_length=2, max_length=150)
-    username: str = Field(min_length=2, max_length=40)
+    full_name: str = Field(min_length=2, max_length=150)
+    user_name: str = Field(min_length=2, max_length=40)
     email: EmailStr = Field()
     phone: str = Field(min_length=8, max_length=12)
 
 
 class LoginRequest(BaseModel):
     identifier: str = Field(
-        min_length=2, description="Username hoặc Email/Số điện thoại"
+        min_length=2, description="user_name hoặc Email/Số điện thoại"
     )
     password: str = Field(min_length=8, max_length=128)
 
@@ -79,3 +78,18 @@ class RouterStatusResponse(BaseModel):
 
 class MessageResponse(BaseModel):
     message: str
+
+
+class ResetPasswordRequest(BaseModel):
+    new_password: str = Field(min_length=8, max_length=128)
+    new_password_confirm: str = Field(min_length=8, max_length=128)
+
+    @model_validator(mode="after")
+    def validate_confirm_password(self) -> "ChangePasswordRequest":
+        if self.new_password != self.new_password_confirm:
+            raise ValueError("Mật khẩu xác nhận không chính xác.")
+        return self
+
+
+class ChangePasswordRequest(ResetPasswordRequest):
+    current_password: str = Field(min_length=8, max_length=128)

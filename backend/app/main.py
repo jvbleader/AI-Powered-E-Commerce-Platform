@@ -19,6 +19,7 @@ for path in (PROJECT_DIR, BACKEND_DIR, APP_DIR, SERVICES_DIR):
         sys.path.insert(0, path_text)
 
 from api.auth_api import router as auth_router
+from middleware.auth_middleware import validate_auth_cookie_middleware
 
 
 def csv_env(name: str, default: str) -> list[str]:
@@ -35,6 +36,8 @@ app = FastAPI(
     title=os.getenv("APP_NAME", "Shepoo Ecommerce API"),
     version=os.getenv("APP_VERSION", "0.1.0"),
 )
+
+app.middleware("http")(validate_auth_cookie_middleware)
 
 app.add_middleware(
     CORSMiddleware,
