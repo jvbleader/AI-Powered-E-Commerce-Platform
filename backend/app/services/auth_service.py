@@ -163,7 +163,8 @@ async def refresh(refresh_token: str | None, db: AsyncSession) -> str:
     user = await get_user_by_id(id=session.user_id, db=db)
     if user is None or user.public_id != payload.get("sub"):
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="Refresh token không hợp lệ."
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Refresh token không hợp lệ.",
         )
 
     new_access_token = create_access_token(public_id=user.public_id)

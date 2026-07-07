@@ -26,6 +26,7 @@ async def get_user_by_public_id(public_id: str, db: AsyncSession) -> User:
     result = await db.execute(select(User).where(User.public_id == public_id))
     return result.scalar_one_or_none()
 
+
 async def get_user_by_id(id: int, db: AsyncSession) -> User:
     result = await db.execute(select(User).where(User.id == id))
     return result.scalar_one_or_none()
@@ -58,12 +59,16 @@ async def set_phone_verified_at(user_id: int, time: datetime, db: AsyncSession):
     await db.flush()
 
 
-async def change_password_hash_by_user(user: User, password_hash: str, db: AsyncSession):
+async def change_password_hash_by_user(
+    user: User, password_hash: str, db: AsyncSession
+):
     user.password_hash = password_hash
     await db.flush()
-    
-    
-async def change_password_hash_by_user_id(user_id: int, password_hash: str, db: AsyncSession):
+
+
+async def change_password_hash_by_user_id(
+    user_id: int, password_hash: str, db: AsyncSession
+):
     user = await get_user_by_id(user_id, db)
     user.password_hash = password_hash
     await db.flush()

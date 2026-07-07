@@ -17,6 +17,8 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from models.base import Base, new_public_id, utc_now
 
 if TYPE_CHECKING:
+    from models.seller_profile import SellerProfile
+    from models.user_address import UserAddress
     from models.user_role import UserRole
 
 
@@ -86,12 +88,12 @@ class User(Base):
         back_populates="user",
         cascade="all, delete-orphan",
     )
-    # addresses: Mapped[list["UserAddress"]] = relationship(
-    #     back_populates="user",
-    #     cascade="all, delete-orphan",
-    # )
-    # seller_profile: Mapped["SellerProfile | None"] = relationship(
-    #     back_populates="user",
-    #     uselist=False,
-    # )
+    addresses: Mapped[list["UserAddress"]] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
+    seller_profile: Mapped["SellerProfile | None"] = relationship(
+        back_populates="user",
+        uselist=False,
+    )
     # cart: Mapped["Cart | None"] = relationship(back_populates="user", uselist=False)
