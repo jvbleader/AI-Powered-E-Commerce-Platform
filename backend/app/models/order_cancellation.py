@@ -44,4 +44,6 @@ class OrderCancellation(Base):
     )
 
     order: Mapped["Order"] = relationship(back_populates="cancellation")
-    cancelled_by_user: Mapped["User | None"] = relationship()
+    cancelled_by_user: Mapped["User | None"] = relationship(
+        back_populates="order_cancellations",
+    )

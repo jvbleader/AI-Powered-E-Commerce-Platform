@@ -105,3 +105,6 @@ class SellerProfile(Base):
     products: Mapped[list["Product"]] = relationship(back_populates="seller")
     orders: Mapped[list["Order"]] = relationship(back_populates="seller")
     payouts: Mapped[list["SellerPayout"]] = relationship(back_populates="seller")
+    moderation_logs: Mapped[list["ModerationLog"]] = relationship(
+        back_populates="seller",
+    )

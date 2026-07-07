@@ -128,3 +128,10 @@ class Product(Base):
         cascade="all, delete-orphan",
     )
     order_items: Mapped[list["OrderItem"]] = relationship(back_populates="product")
+    reviews: Mapped[list["ProductReview"]] = relationship(back_populates="product")
+    violation_reports: Mapped[list["ViolationReport"]] = relationship(
+        back_populates="product",
+    )
+    moderation_logs: Mapped[list["ModerationLog"]] = relationship(
+        back_populates="product",
+    )

@@ -64,3 +64,7 @@ class OrderItem(Base):
     variant: Mapped["ProductVariant | None"] = relationship(
         back_populates="order_items"
     )
+    review: Mapped["ProductReview | None"] = relationship(
+        back_populates="order_item",
+        uselist=False,
+    )

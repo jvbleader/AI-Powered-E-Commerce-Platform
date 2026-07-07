@@ -129,7 +129,7 @@ class Order(Base):
         onupdate=utc_now,
     )
 
-    user: Mapped["User"] = relationship()
+    user: Mapped["User"] = relationship(back_populates="orders")
     seller: Mapped["SellerProfile"] = relationship(back_populates="orders")
     items: Mapped[list["OrderItem"]] = relationship(
         back_populates="order",
@@ -149,6 +149,12 @@ class Order(Base):
         cascade="all, delete-orphan",
         uselist=False,
     )
+    payment_order: Mapped["PaymentOrder | None"] = relationship(
+        back_populates="order",
+        uselist=False,
+    )
+    refunds: Mapped[list["Refund"]] = relationship(back_populates="order")
+    coupon_usages: Mapped[list["CouponUsage"]] = relationship(back_populates="order")
     payout: Mapped["SellerPayout | None"] = relationship(
         back_populates="order",
         uselist=False,
