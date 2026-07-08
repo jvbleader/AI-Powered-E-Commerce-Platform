@@ -33,7 +33,7 @@ export const users: User[] = [
   {
     id: "u-customer",
     fullName: "Nguyễn Minh An",
-    email: "customer@demo.vn",
+    email: "customer@shepoo.vn",
     phone: "0901000001",
     avatarUrl: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=240&q=80",
     gender: "FEMALE",
@@ -46,7 +46,7 @@ export const users: User[] = [
   {
     id: "u-seller",
     fullName: "Trần Quốc Huy",
-    email: "seller@demo.vn",
+    email: "seller@shepoo.vn",
     phone: "0901000002",
     avatarUrl: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=240&q=80",
     gender: "MALE",
@@ -59,7 +59,7 @@ export const users: User[] = [
   {
     id: "u-seller-2",
     fullName: "Lê Hải Yến",
-    email: "yen.shop@demo.vn",
+    email: "yen.shop@shepoo.vn",
     phone: "0901000003",
     avatarUrl: "https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=240&q=80",
     gender: "FEMALE",
@@ -72,7 +72,7 @@ export const users: User[] = [
   {
     id: "u-seller-pending",
     fullName: "Phạm Gia Bảo",
-    email: "pending@demo.vn",
+    email: "pending@shepoo.vn",
     phone: "0901000004",
     avatarUrl: "https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?auto=format&fit=crop&w=240&q=80",
     emailVerified: true,
@@ -83,7 +83,7 @@ export const users: User[] = [
   {
     id: "u-admin",
     fullName: "Admin hệ thống",
-    email: "admin@demo.vn",
+    email: "admin@shepoo.vn",
     phone: "0901000005",
     avatarUrl: "https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&w=240&q=80",
     emailVerified: true,
@@ -94,7 +94,7 @@ export const users: User[] = [
   {
     id: "u-supporter",
     fullName: "Supporter Linh",
-    email: "supporter@demo.vn",
+    email: "supporter@shepoo.vn",
     phone: "0901000006",
     avatarUrl: "https://images.unsplash.com/photo-1551836022-deb4988cc6c0?auto=format&fit=crop&w=240&q=80",
     emailVerified: true,
@@ -105,7 +105,7 @@ export const users: User[] = [
   {
     id: "u-locked",
     fullName: "Tài khoản bị khóa",
-    email: "locked@demo.vn",
+    email: "locked@shepoo.vn",
     phone: "0901000007",
     avatarUrl: "https://images.unsplash.com/photo-1527980965255-d3b416303d12?auto=format&fit=crop&w=240&q=80",
     emailVerified: true,
@@ -118,7 +118,7 @@ export const users: User[] = [
   {
     id: "u-seller-3",
     fullName: "Đỗ Nam Khánh",
-    email: "khanh.tech@demo.vn",
+    email: "khanh.tech@shepoo.vn",
     phone: "0901000008",
     avatarUrl: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=240&q=80",
     emailVerified: true,
@@ -129,7 +129,7 @@ export const users: User[] = [
   {
     id: "u-seller-4",
     fullName: "Mai Phương Thảo",
-    email: "thao.home@demo.vn",
+    email: "thao.home@shepoo.vn",
     phone: "0901000009",
     avatarUrl: "https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=240&q=80",
     emailVerified: true,
@@ -140,7 +140,7 @@ export const users: User[] = [
   {
     id: "u-customer-2",
     fullName: "Hoàng Nhật Minh",
-    email: "minh@demo.vn",
+    email: "minh@shepoo.vn",
     phone: "0901000010",
     avatarUrl: "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=240&q=80",
     emailVerified: false,
@@ -260,7 +260,7 @@ export const shops: Shop[] = [
     logoUrl: "https://images.unsplash.com/photo-1503602642458-232111445657?auto=format&fit=crop&w=240&q=80",
     description: "Hồ sơ thiếu thông tin liên hệ hợp lệ.",
     phone: "0912000107",
-    email: "deal@demo.vn",
+    email: "deal@shepoo.vn",
     pickupAddress: "Không rõ",
     shippingFee: 25000,
     shippingProviderName: "Tự giao",
@@ -291,9 +291,9 @@ export const shops: Shop[] = [
     shopName: "Closed Sample",
     shopSlug: "closed-sample",
     logoUrl: "https://images.unsplash.com/photo-1483985988355-763728e1935b?auto=format&fit=crop&w=240&q=80",
-    description: "Shop đã đóng, chỉ dùng để demo trạng thái.",
+    description: "Shop đã đóng.",
     phone: "0912000109",
-    email: "closed@demo.vn",
+    email: "closed@shepoo.vn",
     pickupAddress: "N/A",
     shippingFee: 0,
     shippingProviderName: "N/A",
@@ -386,9 +386,9 @@ export const products: Product[] = productSeeds.map((seed, index) => {
     sellerId: seed.sellerId,
     name: seed.name,
     slug: slugify(seed.name),
-    shortDescription: "Sản phẩm được chọn lọc từ shop đã duyệt, giá hiển thị theo biến thể hiện tại.",
+    shortDescription: "Sản phẩm được chọn lọc với thông tin giá và tình trạng hàng rõ ràng.",
     description:
-      "Thiết kế dành cho nhu cầu mua sắm thực tế trên marketplace nhiều seller. Thông tin sản phẩm gồm ảnh, biến thể, tồn kho, thương hiệu, xuất xứ và bảo hành nếu có.",
+      "Thông tin chi tiết về chất liệu, công dụng, xuất xứ và chính sách bảo hành của sản phẩm.",
     brand: seed.brand,
     origin: index % 3 === 0 ? "Việt Nam" : index % 3 === 1 ? "Hàn Quốc" : "Trung Quốc",
     warranty: index % 4 === 0 ? "Bảo hành 6 tháng" : undefined,

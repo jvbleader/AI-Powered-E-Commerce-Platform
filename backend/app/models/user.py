@@ -17,7 +17,18 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from models.base import Base, new_public_id, utc_now
 
 if TYPE_CHECKING:
+    from models.cart import Cart
+    from models.coupon_usage import CouponUsage
+    from models.notification import Notification
+    from models.order import Order
+    from models.order_cancellation import OrderCancellation
+    from models.payment import Payment
+    from models.product_review import ProductReview
+    from models.search_log import SearchLog
+    from models.seller_profile import SellerProfile
+    from models.user_address import UserAddress
     from models.user_role import UserRole
+    from models.violation_report import ViolationReport
 
 
 class User(Base):
@@ -86,12 +97,30 @@ class User(Base):
         back_populates="user",
         cascade="all, delete-orphan",
     )
-    # addresses: Mapped[list["UserAddress"]] = relationship(
-    #     back_populates="user",
-    #     cascade="all, delete-orphan",
-    # )
-    # seller_profile: Mapped["SellerProfile | None"] = relationship(
-    #     back_populates="user",
-    #     uselist=False,
-    # )
-    # cart: Mapped["Cart | None"] = relationship(back_populates="user", uselist=False)
+    addresses: Mapped[list["UserAddress"]] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
+    seller_profile: Mapped["SellerProfile | None"] = relationship(
+        back_populates="user",
+        uselist=False,
+    )
+    cart: Mapped["Cart | None"] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan",
+        uselist=False,
+    )
+    orders: Mapped[list["Order"]] = relationship(back_populates="user")
+    payments: Mapped[list["Payment"]] = relationship(back_populates="user")
+    coupon_usages: Mapped[list["CouponUsage"]] = relationship(back_populates="user")
+    product_reviews: Mapped[list["ProductReview"]] = relationship(back_populates="user")
+    violation_reports: Mapped[list["ViolationReport"]] = relationship(
+        back_populates="reporter",
+    )
+    order_cancellations: Mapped[list["OrderCancellation"]] = relationship(
+        back_populates="cancelled_by_user",
+    )
+    notifications: Mapped[list["Notification"]] = relationship(
+        back_populates="recipient",
+    )
+    search_logs: Mapped[list["SearchLog"]] = relationship(back_populates="user")

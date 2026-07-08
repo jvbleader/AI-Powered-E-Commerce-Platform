@@ -29,8 +29,8 @@ def env_bool(name: str, default: bool = False) -> bool:
 
 
 SECRET_KEY = os.getenv("ACCESS_TOKEN_SECRET")
-ACCESS_TOKEN_TTL_MINUTES = int(os.getenv("ACCESS_TOKEN_TTL_MINUTES"))
-REFRESH_TOKEN_TTL_DAYS = int(os.getenv("REFRESH_TOKEN_TTL_DAYS"))
+ACCESS_TOKEN_TTL_MINUTES = int(os.getenv("ACCESS_TOKEN_TTL_MINUTES") or 15)
+REFRESH_TOKEN_TTL_DAYS = int(os.getenv("REFRESH_TOKEN_TTL_DAYS") or 30)
 COOKIE_SECURE = env_bool("COOKIE_SECURE")
 COOKIE_SAME_SITE = os.getenv("COOKIE_SAME_SITE")
 COOKIE_DOMAIN = os.getenv("COOKIE_DOMAIN")
@@ -148,4 +148,3 @@ def set_auth_cookies(
 def clear_auth_cookies(response: Response) -> None:
     response.delete_cookie("access_token", path="/", domain=COOKIE_DOMAIN)
     response.delete_cookie("refresh_token", path="/auth", domain=COOKIE_DOMAIN)
-    response.delete_cookie("refresh_token", path="/", domain=COOKIE_DOMAIN)

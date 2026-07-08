@@ -3,7 +3,7 @@ import "@/styles/globals.css";
 
 export const metadata: Metadata = {
   title: "Shepoo Marketplace",
-  description: "Frontend san thuong mai dien tu nhieu seller"
+  description: "Shepoo Marketplace"
 };
 
 export default function RootLayout({

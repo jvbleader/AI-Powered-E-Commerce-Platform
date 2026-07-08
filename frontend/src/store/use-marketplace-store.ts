@@ -13,12 +13,25 @@ import {
   selectedCheckoutGroups
 } from "@/lib/helpers";
 import { AUTH_BASE_PATH, ApiError, apiFetch } from "@/lib/api";
-import type { Address, AppState, OrderStatus, PaymentMethod, PaymentStatus, Product, Role, SellerStatus, User } from "@/types/models";
+import type {
+  Address,
+  AppState,
+  OrderStatus,
+  PaymentMethod,
+  PaymentStatus,
+  Product,
+  Role,
+  SellerApplication,
+  SellerStatus,
+  Shop,
+  User
+} from "@/types/models";
 
 const STORAGE_KEY = "shepoo-marketplace-state-v2";
 const VERIFICATION_CONTEXT_KEY = "shepoo-verification-context-v2";
 const LEGACY_STORAGE_KEYS = ["shepoo-marketplace-state-v1", "shepoo-verification-context-v1"];
 const DEFAULT_AVATAR = "https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=240&q=80";
+const DEFAULT_SHOP_LOGO = "https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?auto=format&fit=crop&w=240&q=80";
 const AUTH_ROUTES = {
   me: `${AUTH_BASE_PATH}/me`,
   login: `${AUTH_BASE_PATH}/login`,
@@ -31,6 +44,16 @@ const AUTH_ROUTES = {
   resetPassword: `${AUTH_BASE_PATH}/reset-password`,
   changePassword: `${AUTH_BASE_PATH}/change-password`,
   logout: `${AUTH_BASE_PATH}/logout`
+};
+const SELLER_ROUTES = {
+  me: "/seller/me",
+  application: "/seller/application"
+};
+const ADMIN_SELLER_APPLICATION_ROUTES = {
+  list: "/admin/seller-applications",
+  detail: (sellerPublicId: string) => `/admin/seller-applications/${sellerPublicId}`,
+  approve: (sellerPublicId: string) => `/admin/seller-applications/${sellerPublicId}/approve`,
+  reject: (sellerPublicId: string) => `/admin/seller-applications/${sellerPublicId}/reject`
 };
 
 type BackendUser = {
@@ -84,6 +107,53 @@ type BackendStatusResponse = {
   message?: string;
 };
 
+type BackendSellerMeResponse = {
+  has_seller_profile: boolean;
+  status: SellerStatus | null;
+  can_access_seller_dashboard: boolean;
+};
+
+type BackendSellerApplication = {
+  public_id: string;
+  publicId?: string;
+  shop_name: string;
+  shop_slug?: string | null;
+  phone: string;
+  email: string;
+  pickup_address: string;
+  tax_code?: string | null;
+  bank_name?: string | null;
+  bank_account_number?: string | null;
+  bank_account_name?: string | null;
+  shipping_fee?: number | string | null;
+  shipping_provider_name?: string | null;
+  status?: SellerStatus | null;
+  approved_at?: string | null;
+  rejected_reason?: string | null;
+};
+
+type BackendSellerApplicationDetail = {
+  user: BackendUser;
+  seller_profile: BackendSellerApplication;
+};
+
+type SellerApplicationDetail = {
+  user: User;
+  application: SellerApplication;
+};
+
+type SellerApplicationPayload = Pick<
+  SellerApplication,
+  | "shopName"
+  | "phone"
+  | "email"
+  | "pickupAddress"
+  | "taxCode"
+  | "bankName"
+  | "bankAccountNumber"
+  | "bankAccountName"
+>;
+
 type VerificationContext = {
   registrationId?: string | null;
   email: string;
@@ -95,6 +165,22 @@ type VerificationContext = {
 const cloneState = (): AppState => JSON.parse(JSON.stringify(initialState)) as AppState;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PHONE_RE = /^0(3|5|7|8|9)\d{8}$/;
+
+const persistState = (state: AppState) => {
+  if (typeof window !== "undefined") {
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  }
+};
+
+const slugifyShopName = (value: string) =>
+  value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/đ/g, "d")
+    .replace(/Đ/g, "D")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)+/g, "");
 
 const normalizeAuthEmail = (email: string) => email.trim().toLowerCase();
 
@@ -136,6 +222,38 @@ const validateNewPasswordPayload = (newPasswordValue: string, confirmPasswordVal
   if (newPassword.length < 8) return { ok: false as const, message: "Mat khau moi phai co it nhat 8 ky tu." };
   if (newPassword !== confirmPassword) return { ok: false as const, message: "Mat khau xac nhan khong khop." };
   return { ok: true as const, newPassword, confirmPassword };
+};
+
+const validateSellerApplicationPayload = (payload: SellerApplicationPayload) => {
+  const shopName = payload.shopName.trim();
+  const phone = normalizeAuthPhone(payload.phone);
+  const email = normalizeAuthEmail(payload.email);
+  const pickupAddress = payload.pickupAddress.trim();
+  const taxCode = payload.taxCode.trim();
+  const bankName = payload.bankName.trim();
+  const bankAccountNumber = payload.bankAccountNumber.trim();
+  const bankAccountName = payload.bankAccountName.trim();
+
+  if (shopName.length < 4 || shopName.length > 100) return { ok: false as const, message: "Ten shop phai co 4-100 ky tu." };
+  if (!PHONE_RE.test(phone)) return { ok: false as const, message: "So dien thoai shop khong hop le." };
+  if (!EMAIL_RE.test(email)) return { ok: false as const, message: "Email shop khong hop le." };
+  if (pickupAddress.length < 10 || pickupAddress.length > 200) return { ok: false as const, message: "Dia chi lay hang phai co 10-200 ky tu." };
+  if (taxCode.length < 10 || taxCode.length > 14) return { ok: false as const, message: "Ma so thue phai co 10-14 ky tu." };
+  if (bankName.length < 2 || bankName.length > 150) return { ok: false as const, message: "Ten ngan hang phai co 2-150 ky tu." };
+  if (bankAccountNumber.length < 3 || bankAccountNumber.length > 30) return { ok: false as const, message: "So tai khoan phai co 3-30 ky tu." };
+  if (bankAccountName.length < 8 || bankAccountName.length > 100) return { ok: false as const, message: "Ten chu tai khoan phai co 8-100 ky tu." };
+
+  return {
+    ok: true as const,
+    shopName,
+    phone,
+    email,
+    pickupAddress,
+    taxCode,
+    bankName,
+    bankAccountNumber,
+    bankAccountName
+  };
 };
 
 const usernameFromRegistration = (email: string, phone: string) => {
@@ -221,6 +339,12 @@ const preferredRoleFor = (user: User) =>
         ? "SELLER"
         : "CUSTOMER";
 
+const activeRoleForUser = (user: User, currentRole: Role | "GUEST") => {
+  if (currentRole === "CUSTOMER") return "CUSTOMER";
+  if (currentRole !== "GUEST" && user.roles.includes(currentRole)) return currentRole;
+  return preferredRoleFor(user);
+};
+
 const normalizeBackendUser = (user: BackendUser): User => ({
   id: user.publicId ?? user.public_id ?? user.email,
   fullName: user.fullName ?? user.full_name ?? user.fullname ?? user.email,
@@ -237,17 +361,171 @@ const normalizeBackendUser = (user: BackendUser): User => ({
   roles: user.roles ?? ["CUSTOMER"]
 });
 
-const applyBackendUser = (prev: AppState, backendUser: BackendUser): AppState => {
+const sameUserSnapshot = (left: User, right: User) =>
+  left.id === right.id &&
+  left.fullName === right.fullName &&
+  left.email === right.email &&
+  left.phone === right.phone &&
+  left.avatarUrl === right.avatarUrl &&
+  left.gender === right.gender &&
+  left.birthday === right.birthday &&
+  left.emailVerified === right.emailVerified &&
+  left.phoneVerified === right.phoneVerified &&
+  left.status === right.status &&
+  left.lockedUntil === right.lockedUntil &&
+  left.lockReason === right.lockReason &&
+  left.roles.length === right.roles.length &&
+  left.roles.every((role) => right.roles.includes(role));
+
+const applyBackendUser = (
+  prev: AppState,
+  backendUser: BackendUser,
+  preserveActiveRole = true
+): AppState => {
   const user = normalizeBackendUser(backendUser);
-  const users = prev.users.some((entry) => entry.id === user.id)
-    ? prev.users.map((entry) => (entry.id === user.id ? { ...entry, ...user } : entry))
+  const existingUser = prev.users.find((entry) => entry.id === user.id);
+  const users = existingUser
+    ? sameUserSnapshot(existingUser, user)
+      ? prev.users
+      : prev.users.map((entry) => (entry.id === user.id ? user : entry))
     : [...prev.users, user];
+  const activeRole = preserveActiveRole
+    ? activeRoleForUser(user, prev.activeRole)
+    : preferredRoleFor(user);
+
+  if (users === prev.users && prev.sessionUserId === user.id && prev.activeRole === activeRole) {
+    return prev;
+  }
 
   return {
     ...prev,
     users,
     sessionUserId: user.id,
-    activeRole: preferredRoleFor(user)
+    activeRole
+  };
+};
+
+const upsertBackendUser = (prev: AppState, backendUser: BackendUser): { state: AppState; user: User } => {
+  const user = normalizeBackendUser(backendUser);
+  const existingUser = prev.users.find((entry) => entry.id === user.id);
+  const users = existingUser
+    ? sameUserSnapshot(existingUser, user)
+      ? prev.users
+      : prev.users.map((entry) => (entry.id === user.id ? user : entry))
+    : [...prev.users, user];
+
+  return {
+    state: users === prev.users ? prev : { ...prev, users },
+    user
+  };
+};
+
+const normalizeBackendSellerApplication = (
+  application: BackendSellerApplication,
+  status?: SellerStatus | null
+): SellerApplication => ({
+  publicId: application.publicId ?? application.public_id,
+  shopName: application.shop_name,
+  shopSlug: application.shop_slug ?? undefined,
+  phone: application.phone,
+  email: application.email,
+  pickupAddress: application.pickup_address,
+  taxCode: application.tax_code ?? "",
+  bankName: application.bank_name ?? "",
+  bankAccountNumber: application.bank_account_number ?? "",
+  bankAccountName: application.bank_account_name ?? "",
+  status: application.status ?? status ?? undefined,
+  rejectedReason: application.rejected_reason ?? undefined,
+  approvedAt: application.approved_at ?? undefined
+});
+
+const sellerApplicationToShop = (
+  application: SellerApplication,
+  backendApplication: BackendSellerApplication,
+  user: User,
+  fallbackStatus: SellerStatus = "PENDING"
+): Shop => ({
+  id: application.publicId ?? backendApplication.publicId ?? backendApplication.public_id,
+  userId: user.id,
+  shopName: application.shopName,
+  shopSlug: (application.shopSlug ?? slugifyShopName(application.shopName)) || `seller-${user.id}`,
+  logoUrl: DEFAULT_SHOP_LOGO,
+  description: "Ho so shop duoc dong bo tu backend seller application.",
+  phone: application.phone,
+  email: application.email,
+  pickupAddress: application.pickupAddress,
+  shippingFee: Number(backendApplication.shipping_fee ?? 0),
+  shippingProviderName: backendApplication.shipping_provider_name ?? "Chua cau hinh",
+  status: application.status ?? fallbackStatus,
+  rejectedReason: application.rejectedReason,
+  totalSold: 0,
+  totalRevenue: 0,
+  approvedAt: application.approvedAt
+});
+
+const sameShopSnapshot = (left: Shop, right: Shop) =>
+  left.id === right.id &&
+  left.userId === right.userId &&
+  left.shopName === right.shopName &&
+  left.shopSlug === right.shopSlug &&
+  left.logoUrl === right.logoUrl &&
+  left.description === right.description &&
+  left.phone === right.phone &&
+  left.email === right.email &&
+  left.pickupAddress === right.pickupAddress &&
+  left.shippingFee === right.shippingFee &&
+  left.shippingProviderName === right.shippingProviderName &&
+  left.status === right.status &&
+  left.rejectedReason === right.rejectedReason &&
+  left.totalSold === right.totalSold &&
+  left.totalRevenue === right.totalRevenue &&
+  left.approvedAt === right.approvedAt &&
+  left.closedAt === right.closedAt;
+
+const upsertSellerApplicationShop = (
+  prev: AppState,
+  user: User,
+  application: SellerApplication,
+  backendApplication: BackendSellerApplication,
+  fallbackStatus?: SellerStatus
+): AppState => {
+  const incomingShop = sellerApplicationToShop(application, backendApplication, user, fallbackStatus);
+  const existingShop = prev.shops.find((shop) => shop.id === incomingShop.id || shop.userId === user.id);
+  const nextShop = existingShop
+    ? {
+        ...existingShop,
+        ...incomingShop,
+        totalSold: existingShop.totalSold,
+        totalRevenue: existingShop.totalRevenue
+      }
+    : incomingShop;
+
+  const shops = existingShop
+    ? sameShopSnapshot(existingShop, nextShop)
+      ? prev.shops
+      : prev.shops.map((shop) => (shop.id === existingShop.id ? nextShop : shop))
+    : [incomingShop, ...prev.shops];
+
+  const shouldAddSellerRole =
+    incomingShop.status === "APPROVED" &&
+    prev.users.some((entry) => entry.id === user.id && !entry.roles.includes("SELLER"));
+
+  const users = shouldAddSellerRole
+    ? prev.users.map((entry) =>
+        entry.id === user.id && !entry.roles.includes("SELLER")
+          ? { ...entry, roles: [...entry.roles, "SELLER" as Role] }
+          : entry
+      )
+    : prev.users;
+
+  if (shops === prev.shops && users === prev.users) {
+    return prev;
+  }
+
+  return {
+    ...prev,
+    shops,
+    users
   };
 };
 
@@ -285,7 +563,7 @@ export const useMarketplaceStore = () => {
 
   useEffect(() => {
     if (ready) {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      persistState(state);
     }
   }, [ready, state]);
 
@@ -316,7 +594,7 @@ export const useMarketplaceStore = () => {
       });
       const backendUser = await apiFetch<BackendUser>(AUTH_ROUTES.me);
       const user = normalizeBackendUser(backendUser);
-      setState((prev) => applyBackendUser(prev, backendUser));
+      setState((prev) => applyBackendUser(prev, backendUser, false));
       const preferredRole = preferredRoleFor(user);
       const message =
         "message" in loginResult && loginResult.message
@@ -630,14 +908,208 @@ export const useMarketplaceStore = () => {
     }
   }, []);
 
-  const switchRole = useCallback((role: Role | "GUEST") => {
-    setState((prev) => {
-      const user = prev.users.find((entry) => entry.id === prev.sessionUserId);
-      if (role === "GUEST") return { ...prev, activeRole: "GUEST" };
-      if (!user?.roles.includes(role)) return prev;
-      return { ...prev, activeRole: role };
-    });
+  const getSellerApplication = useCallback(async () => {
+    if (!currentUser) {
+      return { ok: false as const, message: "Ban can dang nhap de xem ho so shop." };
+    }
+
+    try {
+      const sellerMe = await apiFetch<BackendSellerMeResponse>(SELLER_ROUTES.me);
+
+      if (!sellerMe.has_seller_profile) {
+        return {
+          ok: true as const,
+          sellerMe,
+          application: undefined,
+          message: "Ban chua gui ho so shop."
+        };
+      }
+
+      const backendApplication = await apiFetch<BackendSellerApplication>(SELLER_ROUTES.application);
+      const application = normalizeBackendSellerApplication(backendApplication, sellerMe.status);
+      setState((prev) =>
+        upsertSellerApplicationShop(prev, currentUser, application, backendApplication, sellerMe.status ?? "PENDING")
+      );
+
+      return {
+        ok: true as const,
+        sellerMe,
+        application
+      };
+    } catch (error) {
+      if (error instanceof ApiError) {
+        return { ok: false as const, message: error.message };
+      }
+
+      return { ok: false as const, message: "Khong the ket noi backend seller application luc nay." };
+    }
+  }, [currentUser]);
+
+  const saveSellerApplication = useCallback(async (
+    payload: SellerApplicationPayload,
+    mode: "create" | "update" = "create"
+  ) => {
+    if (!currentUser) {
+      return { ok: false as const, message: "Ban can dang nhap de gui ho so shop." };
+    }
+
+    const validation = validateSellerApplicationPayload(payload);
+    if (!validation.ok) {
+      return { ok: false as const, message: validation.message };
+    }
+
+    try {
+      const backendApplication = await apiFetch<BackendSellerApplication>(SELLER_ROUTES.application, {
+        method: mode === "update" ? "PUT" : "POST",
+        body: JSON.stringify({
+          shop_name: validation.shopName,
+          phone: validation.phone,
+          email: validation.email,
+          pickup_address: validation.pickupAddress,
+          tax_code: validation.taxCode,
+          bank_name: validation.bankName,
+          bank_account_number: validation.bankAccountNumber,
+          bank_account_name: validation.bankAccountName
+        })
+      });
+      const application = normalizeBackendSellerApplication(backendApplication, "PENDING");
+      setState((prev) => upsertSellerApplicationShop(prev, currentUser, application, backendApplication, "PENDING"));
+
+      return {
+        ok: true as const,
+        message: mode === "update" ? "Da cap nhat ho so shop va chuyen ve cho duyet." : "Da gui ho so shop, vui long cho admin duyet.",
+        application,
+        redirectTo: "/seller/pending"
+      };
+    } catch (error) {
+      if (error instanceof ApiError) {
+        return { ok: false as const, message: error.message };
+      }
+
+      return { ok: false as const, message: "Khong the gui ho so shop len backend luc nay." };
+    }
+  }, [currentUser]);
+
+  const listSellerApplications = useCallback(async (status?: SellerStatus | "") => {
+    try {
+      const query = new URLSearchParams({ page: "1", limit: "50" });
+      if (status) query.set("status", status);
+
+      const applications = await apiFetch<BackendSellerApplication[]>(
+        `${ADMIN_SELLER_APPLICATION_ROUTES.list}?${query.toString()}`
+      );
+
+      return {
+        ok: true as const,
+        applications: applications.map((application) => normalizeBackendSellerApplication(application))
+      };
+    } catch (error) {
+      if (error instanceof ApiError) {
+        return { ok: false as const, message: error.message };
+      }
+
+      return { ok: false as const, message: "Khong the tai danh sach ho so seller luc nay." };
+    }
   }, []);
+
+  const getSellerApplicationDetail = useCallback(async (sellerPublicId: string) => {
+    try {
+      const result = await apiFetch<BackendSellerApplicationDetail>(
+        ADMIN_SELLER_APPLICATION_ROUTES.detail(sellerPublicId)
+      );
+      const user = normalizeBackendUser(result.user);
+      const application = normalizeBackendSellerApplication(result.seller_profile);
+
+      setState((prev) => {
+        const upsertedUser = upsertBackendUser(prev, result.user);
+        return upsertSellerApplicationShop(
+          upsertedUser.state,
+          upsertedUser.user,
+          application,
+          result.seller_profile,
+          application.status ?? "PENDING"
+        );
+      });
+
+      return {
+        ok: true as const,
+        detail: {
+          user,
+          application
+        } satisfies SellerApplicationDetail
+      };
+    } catch (error) {
+      if (error instanceof ApiError) {
+        return { ok: false as const, message: error.message };
+      }
+
+      return { ok: false as const, message: "Khong the tai chi tiet ho so seller luc nay." };
+    }
+  }, []);
+
+  const reviewSellerApplication = useCallback(async (
+    sellerPublicId: string,
+    action: "approve" | "reject",
+    rejectedReason?: string
+  ) => {
+    const cleanReason = rejectedReason?.trim();
+    if (action === "reject" && !cleanReason) {
+      return { ok: false as const, message: "Vui long nhap ly do tu choi ho so." };
+    }
+
+    try {
+      const application = await apiFetch<BackendSellerApplication>(
+        action === "approve"
+          ? ADMIN_SELLER_APPLICATION_ROUTES.approve(sellerPublicId)
+          : ADMIN_SELLER_APPLICATION_ROUTES.reject(sellerPublicId),
+        {
+          method: "PATCH",
+          ...(action === "reject"
+            ? { body: JSON.stringify({ rejected_reason: cleanReason }) }
+            : {})
+        }
+      );
+
+      const normalizedApplication = normalizeBackendSellerApplication(application);
+      setState((prev) => ({
+        ...prev,
+        shops: prev.shops.map((shop) =>
+          shop.id === sellerPublicId
+            ? {
+                ...shop,
+                status: normalizedApplication.status ?? shop.status,
+                rejectedReason: normalizedApplication.rejectedReason,
+                approvedAt: normalizedApplication.approvedAt
+              }
+            : shop
+        )
+      }));
+
+      return {
+        ok: true as const,
+        message: action === "approve" ? "Da duyet ho so seller." : "Da tu choi ho so seller.",
+        application: normalizedApplication
+      };
+    } catch (error) {
+      if (error instanceof ApiError) {
+        return { ok: false as const, message: error.message };
+      }
+
+      return { ok: false as const, message: "Khong the cap nhat trang thai ho so seller luc nay." };
+    }
+  }, []);
+
+  const switchRole = useCallback((role: Role | "GUEST") => {
+    const user = state.users.find((entry) => entry.id === state.sessionUserId);
+    if (role !== "GUEST" && role !== "CUSTOMER" && !user?.roles.includes(role)) {
+      return false;
+    }
+
+    const nextState = { ...state, activeRole: role };
+    setState(nextState);
+    persistState(nextState);
+    return true;
+  }, [state]);
 
   const addToCart = useCallback((variantId: string, quantity: number) => {
     if (!state.sessionUserId) {
@@ -900,6 +1372,11 @@ export const useMarketplaceStore = () => {
     resetPassword,
     changePassword,
     logout,
+    getSellerApplication,
+    saveSellerApplication,
+    listSellerApplications,
+    getSellerApplicationDetail,
+    reviewSellerApplication,
     switchRole,
     addToCart,
     updateCartItem,

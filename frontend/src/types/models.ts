@@ -71,6 +71,22 @@ export interface Shop {
   closedAt?: string;
 }
 
+export interface SellerApplication {
+  publicId?: string;
+  shopName: string;
+  shopSlug?: string;
+  phone: string;
+  email: string;
+  pickupAddress: string;
+  taxCode: string;
+  bankName: string;
+  bankAccountNumber: string;
+  bankAccountName: string;
+  status?: SellerStatus;
+  rejectedReason?: string;
+  approvedAt?: string;
+}
+
 export interface Category {
   id: string;
   name: string;

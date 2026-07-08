@@ -237,14 +237,14 @@ export function EmptyState({
   action
 }: {
   title: string;
-  description: string;
+  description?: string;
   action?: ReactNode;
 }) {
   return (
     <div className="rounded-panel border border-dashed border-line bg-white p-8 text-center">
       <Info className="mx-auto h-9 w-9 text-sky" aria-hidden="true" />
       <h3 className="mt-3 text-base font-bold text-ink">{title}</h3>
-      <p className="mx-auto mt-1 max-w-md text-sm leading-6 text-muted">{description}</p>
+      {description ? <p className="mx-auto mt-1 max-w-md text-sm leading-6 text-muted">{description}</p> : null}
       {action ? <div className="mt-4">{action}</div> : null}
     </div>
   );
@@ -256,7 +256,7 @@ export function ErrorState({
   action
 }: {
   title: string;
-  description: string;
+  description?: string;
   action?: ReactNode;
 }) {
   return (
@@ -265,7 +265,7 @@ export function ErrorState({
         <AlertCircle className="mt-0.5 h-5 w-5 text-coral" aria-hidden="true" />
         <div>
           <h3 className="font-bold text-ink">{title}</h3>
-          <p className="mt-1 text-sm text-muted">{description}</p>
+          {description ? <p className="mt-1 text-sm text-muted">{description}</p> : null}
           {action ? <div className="mt-3">{action}</div> : null}
         </div>
       </div>

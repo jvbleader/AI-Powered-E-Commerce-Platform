@@ -11,7 +11,7 @@ async def validate_auth_cookie_middleware(
 ) -> Response:
     if request.url.path == "/auth/refresh":
         return await call_next(request)
-    
+
     token = request.cookies.get("access_token")
     if not token:
         return await call_next(request)

@@ -161,8 +161,7 @@ async def get_me(
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
-    roles = await user_role_repository.get_role_list_by_user_id(current_user.id, db=db)
-    return auth_service.user_to_response(current_user, roles)
+    return await auth_service.user_to_response(current_user, db)
 
 
 @router.post(

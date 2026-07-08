@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { ReactNode } from "react";
+import type { ChangeEvent, FormEvent, ReactNode } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 import {
   Bell,
@@ -85,7 +85,7 @@ import {
   sellerStatusLabel
 } from "@/lib/helpers";
 import { useMarketplaceStore } from "@/store/use-marketplace-store";
-import type { AddressType, Order, PaymentMethod, Product, ProductVariant, SellerStatus, Shop } from "@/types/models";
+import type { AddressType, Order, PaymentMethod, Product, ProductVariant, SellerApplication, SellerStatus, Shop } from "@/types/models";
 
 type ToastTone = "success" | "danger" | "info";
 type ToastState = { message: string; tone: ToastTone } | undefined;
@@ -149,11 +149,11 @@ export function AppShell() {
   const isDashboardRoute = ["seller", "admin", "supporter"].includes(segments[0] ?? "");
   const currentRoles = store.currentUser?.roles ?? [];
   const forcedDashboardPath = !isDashboardRoute
-    ? currentRoles.includes("ADMIN")
+    ? store.state.activeRole === "ADMIN" && currentRoles.includes("ADMIN")
       ? "/admin"
-      : currentRoles.includes("SUPPORTER")
+      : store.state.activeRole === "SUPPORTER" && currentRoles.includes("SUPPORTER")
         ? "/supporter"
-        : store.currentUser && store.state.activeRole === "SELLER"
+        : store.state.activeRole === "SELLER" && currentRoles.includes("SELLER")
           ? "/seller"
           : ""
     : "";
@@ -186,7 +186,7 @@ export function AppShell() {
         <Panel className="w-full max-w-md text-center">
           <Sparkles className="mx-auto h-8 w-8 text-primary" aria-hidden="true" />
           <h1 className="mt-3 text-xl font-bold">Đang mở Shepoo</h1>
-          <p className="mt-1 text-sm text-muted">Khởi tạo mock store và giao diện frontend.</p>
+          <p className="mt-1 text-sm text-muted">Đang chuẩn bị giao diện mua sắm.</p>
         </Panel>
       </main>
     );
@@ -347,10 +347,10 @@ export function AppShell() {
       <footer className="mt-8 border-t border-line bg-white">
         <div className="mx-auto grid max-w-7xl gap-6 px-4 py-8 sm:grid-cols-2 lg:grid-cols-4">
           {[
-            ["Chính sách mua hàng", "Thanh toán online, không COD, không return request trong rule hiện tại."],
-            ["Hỗ trợ", "Chat AI, supporter, theo dõi payment và order trên cùng tài khoản."],
-            ["Marketplace", "Nhiều seller, mỗi order thuộc một shop, payment có thể nối nhiều order."],
-            ["Người bán", "Shop cần admin duyệt; sản phẩm public sau khi shop được duyệt."]
+            ["Chính sách mua hàng", "Thanh toán an toàn và theo dõi đơn hàng rõ ràng."],
+            ["Hỗ trợ", "Liên hệ hỗ trợ khi bạn cần thêm thông tin."],
+            ["Marketplace", "Khám phá sản phẩm từ nhiều cửa hàng trên Shepoo."],
+            ["Người bán", "Quản lý sản phẩm và đơn hàng trong kênh người bán."]
           ].map(([title, text]) => (
             <div key={title}>
               <h3 className="font-bold text-ink">{title}</h3>
@@ -397,11 +397,8 @@ export function AppShell() {
           <div className="overflow-hidden rounded-panel border border-line bg-white">
             <div className="grid gap-0 md:grid-cols-[0.95fr_1.05fr]">
               <div className="p-5 sm:p-7">
-                <StatusBadge status="APPROVED" label="Marketplace nhiều seller" />
+                <StatusBadge status="APPROVED" label="Shepoo Marketplace" />
                 <h1 className="mt-4 text-3xl font-black tracking-normal text-ink sm:text-5xl">{brandName}</h1>
-                <p className="mt-3 max-w-xl text-base leading-7 text-muted">
-                  Mua sắm theo sản phẩm, shop và category. Checkout nhiều shop sẽ tự tách thành nhiều đơn nhưng chỉ có một payment chung.
-                </p>
                 <div className="mt-5 flex flex-wrap gap-2">
                   {hotKeywords.map((keyword) => (
                     <a
@@ -436,7 +433,7 @@ export function AppShell() {
                 <WalletCards className="h-9 w-9 text-primary" aria-hidden="true" />
                 <div>
                   <p className="text-sm text-muted">Thanh toán</p>
-                  <p className="font-bold">MOCK, chuyển khoản, MoMo, thẻ tín dụng</p>
+                  <p className="font-bold">Chuyển khoản, MoMo, thẻ tín dụng</p>
                 </div>
               </div>
             </Panel>
@@ -444,8 +441,8 @@ export function AppShell() {
               <div className="flex items-center gap-3">
                 <Truck className="h-9 w-9 text-coral" aria-hidden="true" />
                 <div>
-                  <p className="text-sm text-muted">Vận hành marketplace</p>
-                  <p className="font-bold">Mỗi shop tự xác nhận và cập nhật giao hàng</p>
+                  <p className="text-sm text-muted">Giao hàng</p>
+                  <p className="font-bold">Theo dõi trạng thái đơn hàng</p>
                 </div>
               </div>
             </Panel>
@@ -453,8 +450,8 @@ export function AppShell() {
               <div className="flex items-center gap-3">
                 <Bot className="h-9 w-9 text-sky" aria-hidden="true" />
                 <div>
-                  <p className="text-sm text-muted">AI & supporter</p>
-                  <p className="font-bold">Chat sản phẩm, order info, chuyển người hỗ trợ</p>
+                  <p className="text-sm text-muted">Hỗ trợ</p>
+                  <p className="font-bold">Chat với Shepoo khi cần hỗ trợ</p>
                 </div>
               </div>
             </Panel>
@@ -582,7 +579,6 @@ export function AppShell() {
       <main className="mx-auto max-w-7xl px-4 py-5">
         <Section
           title={title}
-          description="Filter theo giá, category, rating, seller; không filter theo thuộc tính variant như màu/size/RAM."
           action={
             <div className="flex gap-2">
               <IconButton aria-label="Mở filter" className="lg:hidden" onClick={() => setFiltersOpen((value) => !value)}>
@@ -792,18 +788,17 @@ export function AppShell() {
                     <span className="text-sm font-semibold text-ink">Đánh giá đã mua hàng</span>
                   </div>
                   <p className="mt-2 text-sm leading-6 text-muted">
-                    Sản phẩm {item.productNameSnapshot} đúng mô tả, đóng gói cẩn thận. Review chỉ mở cho order completed.
+                    Sản phẩm {item.productNameSnapshot} đúng mô tả, đóng gói cẩn thận.
                   </p>
                 </div>
               ))}
             </div>
           ) : (
-            <EmptyState title="Chưa có đánh giá" description="Review chỉ hiển thị khi đơn đã hoàn thành và item chưa từng được đánh giá." />
+            <EmptyState title="Chưa có đánh giá" />
           )}
         </Panel>
         <Panel>
           <h3 className="font-bold text-ink">Viết đánh giá</h3>
-          <p className="mt-1 text-sm text-muted">Form mock đầy đủ cho module review sau khi order completed.</p>
           <div className="mt-4 grid gap-3">
             <Field label="Rating">
               <Select>
@@ -820,7 +815,7 @@ export function AppShell() {
             <Field label="Ảnh đánh giá">
               <Input type="file" multiple />
             </Field>
-            <Button onClick={() => showToast("Đã lưu đánh giá mock.", "success")}>Gửi đánh giá</Button>
+            <Button onClick={() => showToast("Đã lưu đánh giá.", "success")}>Gửi đánh giá</Button>
           </div>
         </Panel>
       </div>
@@ -868,11 +863,8 @@ export function AppShell() {
     return (
       <main className="mx-auto grid min-h-[70vh] max-w-5xl items-center gap-5 px-4 py-8 lg:grid-cols-[1fr_420px]">
         <div>
-          <StatusBadge status="ACTIVE" label="Backend auth/cookie" />
+          <StatusBadge status="ACTIVE" label="Tài khoản Shepoo" />
           <h1 className="mt-4 text-4xl font-black text-ink">{mode === "login" ? "Đăng nhập Shepoo" : "Tạo tài khoản khách hàng"}</h1>
-          <p className="mt-3 text-sm leading-6 text-muted">
-            Admin và supporter vào dashboard riêng sau đăng nhập. Seller chỉ có quyền sau khi shop được admin duyệt.
-          </p>
         </div>
         <Panel>
           <div className="grid gap-4">
@@ -1124,7 +1116,7 @@ export function AppShell() {
                   type="email"
                   value={email}
                   onChange={(event) => setEmail(event.target.value)}
-                  placeholder="email@demo.vn"
+                  placeholder="email@example.com"
                   autoComplete="email"
                   className={formErrors.email ? "border-coral" : undefined}
                 />
@@ -1177,19 +1169,19 @@ export function AppShell() {
 
   function CartPage() {
     if (!store.currentUser) {
-      return <Unauthorized title="Giỏ hàng cần đăng nhập" description="Guest chỉ được xem và tìm kiếm sản phẩm, không có cart." />;
+      return <Unauthorized title="Giỏ hàng cần đăng nhập" description="Vui lòng đăng nhập để xem giỏ hàng." />;
     }
     const groups = Object.values(groupCartByShop(store.cartRows));
     const selectedTotal = store.cartRows.filter((row) => row.item.isSelected && !row.unavailable).reduce((sum, row) => sum + row.subtotal, 0);
     return (
       <main className="mx-auto max-w-7xl px-4 py-5">
-        <Section title="Giỏ hàng" description="Cart item lưu theo variant, group theo shop và không có wishlist.">
+        <Section title="Giỏ hàng">
           {groups.length ? (
             <div className="grid gap-4 lg:grid-cols-[1fr_340px]">
               <div className="space-y-4">
                 <Panel className="flex items-center justify-between gap-3">
                   <Checkbox label="Chọn tất cả" checked={store.cartRows.every((row) => row.item.isSelected)} onChange={(event) => store.selectAllCart(event.target.checked)} />
-                  <Button variant="secondary" onClick={() => showToast("Đã đồng bộ giá hiện tại từ mock variants.", "success")}>
+                  <Button variant="secondary" onClick={() => showToast("Đã cập nhật giá hiện tại.", "success")}>
                     Cập nhật giá
                   </Button>
                 </Panel>
@@ -1230,7 +1222,7 @@ export function AppShell() {
               </Panel>
             </div>
           ) : (
-            <EmptyState title="Giỏ hàng trống" description="Hãy thêm sản phẩm từ các shop đã duyệt để demo checkout nhiều seller." action={<Button onClick={() => (window.location.href = "/products")}>Mua sắm</Button>} />
+            <EmptyState title="Giỏ hàng trống" description="Bạn chưa có sản phẩm nào trong giỏ hàng." action={<Button onClick={() => (window.location.href = "/products")}>Mua sắm</Button>} />
           )}
         </Section>
       </main>
@@ -1243,14 +1235,14 @@ export function AppShell() {
     const [note, setNote] = useState("");
     const [coupon, setCoupon] = useState("");
     const [shipCoupon, setShipCoupon] = useState("");
-    if (!store.currentUser) return <Unauthorized title="Checkout cần đăng nhập" description="Guest không có cart và không được checkout." />;
+    if (!store.currentUser) return <Unauthorized title="Checkout cần đăng nhập" description="Vui lòng đăng nhập để đặt hàng." />;
     const rows = store.cartRows;
     const groups = selectedCheckoutGroups(rows);
     const total = groups.reduce((sum, group) => sum + group.total, 0);
     const addresses = store.state.addresses.filter((address) => address.userId === store.currentUser?.id);
     return (
       <main className="mx-auto max-w-7xl px-4 py-5">
-        <Section title="Checkout" description="Nhiều shop tạo nhiều orders, nhưng chỉ một payment cho toàn bộ lần checkout. Không hỗ trợ COD.">
+        <Section title="Checkout">
           {groups.length ? (
             <div className="grid gap-4 lg:grid-cols-[1fr_360px]">
               <div className="space-y-4">
@@ -1266,9 +1258,9 @@ export function AppShell() {
                         label={`${address.receiverName} - ${address.phone} - ${address.detailAddress}, ${address.ward}, ${address.district}, ${address.province}`}
                       />
                     ))}
-                    <Button variant="secondary" onClick={() => store.addAddress({ receiverName: "Địa chỉ mới", phone: "0909999999", province: "TP.HCM", district: "Quận 2", ward: "Thảo Điền", detailAddress: "Mock address API-ready", addressType: "HOME" as AddressType, isDefault: false })}>
+                    <Button variant="secondary" onClick={() => store.addAddress({ receiverName: "Địa chỉ mới", phone: "0909999999", province: "TP.HCM", district: "Quận 2", ward: "Thảo Điền", detailAddress: "Địa chỉ mới", addressType: "HOME" as AddressType, isDefault: false })}>
                       <Plus className="h-4 w-4" aria-hidden="true" />
-                      Thêm địa chỉ mock
+                      Thêm địa chỉ
                     </Button>
                   </div>
                 </Panel>
@@ -1276,7 +1268,7 @@ export function AppShell() {
                   <Panel key={group.shop.id}>
                     <div className="flex items-center justify-between gap-3">
                       <h3 className="font-bold">{group.shop.shopName}</h3>
-                      <span className="text-sm text-muted">Order riêng của shop này</span>
+                      <span className="text-sm text-muted">Đơn hàng của shop này</span>
                     </div>
                     <div className="mt-3 space-y-3">
                       {group.rows.map((row) => (
@@ -1299,7 +1291,7 @@ export function AppShell() {
                 ))}
               </div>
               <Panel className="h-fit">
-                <h2 className="font-bold">Payment chung</h2>
+                <h2 className="font-bold">Thanh toán</h2>
                 <div className="mt-3 grid gap-3">
                   <Field label="Ghi chú khách hàng">
                     <Textarea value={note} onChange={(event) => setNote(event.target.value)} placeholder="Ghi chú giao hàng" />
@@ -1317,8 +1309,8 @@ export function AppShell() {
                       ))}
                     </Select>
                   </Field>
-                  <InfoRow label="Số order sẽ tạo" value={`${groups.length}`} />
-                  <InfoRow label="Tổng payment" value={formatVnd(total)} />
+                  <InfoRow label="Số đơn hàng" value={`${groups.length}`} />
+                  <InfoRow label="Tổng thanh toán" value={formatVnd(total)} />
                   <Button
                     onClick={() => {
                       const result = store.checkout(addressId, method, note);
@@ -1346,11 +1338,11 @@ export function AppShell() {
         <Panel className="text-center">
           <PackageCheck className="mx-auto h-12 w-12 text-primary" aria-hidden="true" />
           <h1 className="mt-3 text-3xl font-black text-ink">Đặt hàng thành công</h1>
-          <p className="mt-2 text-sm text-muted">Một payment chung đã được tạo và liên kết với các order theo từng shop.</p>
+          <p className="mt-2 text-sm text-muted">Bạn có thể tiếp tục thanh toán hoặc xem đơn hàng.</p>
           {payment ? (
             <div className="mt-5 grid gap-2 text-left">
-              <InfoRow label="Payment code" value={payment.paymentCode} />
-              <InfoRow label="Order codes" value={payment.orderCodes.join(", ")} />
+              <InfoRow label="Mã thanh toán" value={payment.paymentCode} />
+              <InfoRow label="Mã đơn hàng" value={payment.orderCodes.join(", ")} />
               <InfoRow label="Tổng tiền" value={formatVnd(payment.amount)} />
             </div>
           ) : null}
@@ -1373,7 +1365,7 @@ export function AppShell() {
     const canPayPayment = payment.paymentStatus === "PENDING" || payment.paymentStatus === "FAILED";
     return (
       <main className="mx-auto max-w-5xl px-4 py-6">
-        <Section title={`Payment ${payment.paymentCode}`} description="Payment có thể nối nhiều orders qua payment_orders. Hạn thanh toán mock là 1 ngày.">
+        <Section title={`Thanh toán ${payment.paymentCode}`}>
           <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
             <Panel>
               <div className="grid gap-3 sm:grid-cols-2">
@@ -1381,10 +1373,10 @@ export function AppShell() {
                 <InfoRow label="Số tiền" value={formatVnd(payment.amount)} />
                 <InfoRow label="Phương thức" value={paymentMethodLabel[payment.paymentMethod]} />
                 <InfoRow label="Hạn thanh toán" value={formatDate(payment.expiresAt)} />
-                <InfoRow label="Transaction code" value={payment.transactionCode ?? "Chưa có"} />
-                <InfoRow label="Gateway" value={payment.paymentGateway ?? "Mock"} />
+                <InfoRow label="Mã giao dịch" value={payment.transactionCode ?? "Chưa có"} />
+                <InfoRow label="Cổng thanh toán" value={payment.paymentGateway ?? "Chưa có"} />
               </div>
-              <h3 className="mt-5 font-bold">Orders liên kết</h3>
+              <h3 className="mt-5 font-bold">Đơn hàng</h3>
               <div className="mt-3 space-y-2">
                 {linkedOrders.map((order) => (
                   <a key={order.id} href={`/account/orders/${order.orderCode}`} className="flex items-center justify-between rounded-panel border border-line p-3 hover:border-primary/40">
@@ -1395,18 +1387,18 @@ export function AppShell() {
               </div>
             </Panel>
             <Panel className="h-fit">
-              <h3 className="font-bold">Hành động mock</h3>
+              <h3 className="font-bold">Hành động</h3>
               <div className="mt-3 grid gap-2">
                 <Button disabled={!canPayPayment} onClick={() => { store.updatePaymentStatus(payment.paymentCode, "PAID"); showToast("Đã thanh toán đơn hàng.", "success"); }}>
                   <CreditCard className="h-4 w-4" aria-hidden="true" />
                   {payment.paymentStatus === "PAID" ? "Đã thanh toán" : "Thanh toán ngay"}
                 </Button>
-                <Button variant="danger" onClick={() => { store.updatePaymentStatus(payment.paymentCode, "FAILED"); showToast("Đã đánh dấu payment failed.", "danger"); }}>Mark failed</Button>
-                <Button variant="secondary" onClick={() => { store.retryPayment(payment.paymentCode); showToast("Đã retry payment.", "success"); }}>
+                <Button variant="danger" onClick={() => { store.updatePaymentStatus(payment.paymentCode, "FAILED"); showToast("Đã đánh dấu thanh toán lỗi.", "danger"); }}>Đánh dấu lỗi</Button>
+                <Button variant="secondary" onClick={() => { store.retryPayment(payment.paymentCode); showToast("Đã thử lại thanh toán.", "success"); }}>
                   <RefreshCcw className="h-4 w-4" aria-hidden="true" />
-                  Retry payment
+                  Thử lại
                 </Button>
-                <Button variant="ghost" onClick={() => { store.updatePaymentStatus(payment.paymentCode, "CANCELLED"); showToast("Đã hủy payment.", "info"); }}>Cancel</Button>
+                <Button variant="ghost" onClick={() => { store.updatePaymentStatus(payment.paymentCode, "CANCELLED"); showToast("Đã hủy thanh toán.", "info"); }}>Hủy</Button>
                 <div className="my-1 border-t border-line" />
                 <Button variant="secondary" onClick={() => (window.location.href = "/")}>
                   <Home className="h-4 w-4" aria-hidden="true" />
@@ -1498,7 +1490,7 @@ export function AppShell() {
             <Field label="Ngày sinh"><Input type="date" defaultValue={user.birthday} /></Field>
             <Field label="Avatar"><Input type="file" /></Field>
           </div>
-          <Button className="mt-4" onClick={() => showToast("Đã lưu hồ sơ mock.", "success")}>Lưu hồ sơ</Button>
+          <Button className="mt-4" onClick={() => showToast("Đã lưu hồ sơ.", "success")}>Lưu hồ sơ</Button>
         </Panel>
       </Section>
     );
@@ -1587,10 +1579,10 @@ export function AppShell() {
           </Panel>
           <Panel>
             <h3 className="font-bold">Phiên đăng nhập</h3>
-            <p className="mt-2 text-sm text-muted">Mock user_sessions hỗ trợ logout current và logout all devices.</p>
+            <p className="mt-2 text-sm text-muted">Quản lý các phiên đăng nhập của tài khoản.</p>
             <div className="mt-3 flex flex-wrap gap-2">
-              <Button variant="secondary" onClick={store.logout}>Logout current</Button>
-              <Button variant="danger" onClick={store.logout}>Logout all devices</Button>
+              <Button variant="secondary" onClick={store.logout}>Đăng xuất thiết bị này</Button>
+              <Button variant="danger" onClick={store.logout}>Đăng xuất tất cả</Button>
             </div>
           </Panel>
         </div>
@@ -1626,7 +1618,7 @@ export function AppShell() {
               <Input placeholder="Phường/xã" />
               <Textarea placeholder="Địa chỉ chi tiết" />
               <Select><option>HOME</option><option>OFFICE</option></Select>
-              <Button onClick={() => showToast("Đã thêm địa chỉ mock.", "success")}>Thêm</Button>
+              <Button onClick={() => showToast("Đã thêm địa chỉ.", "success")}>Thêm</Button>
             </div>
           </Panel>
         </div>
@@ -1689,7 +1681,7 @@ export function AppShell() {
     if (!order) return <NotFoundPage />;
     const shop = shopById(order.sellerId);
     return (
-      <Section title={`Chi tiết đơn ${order.orderCode}`} description="Order item và shipment hiển thị snapshot tại thời điểm mua.">
+      <Section title={`Chi tiết đơn ${order.orderCode}`}>
         <div className="grid gap-4 lg:grid-cols-[1fr_360px]">
           <div className="space-y-4">
             <Panel>
@@ -1770,7 +1762,7 @@ export function AppShell() {
               </div>
             </Panel>
           ))}
-          {!notifications.length ? <EmptyState title="Chưa có thông báo" description="Các notification về order, payment, report, chat sẽ hiển thị tại đây." /> : null}
+          {!notifications.length ? <EmptyState title="Chưa có thông báo" description="Bạn chưa có thông báo mới." /> : null}
         </div>
       </Section>
     );
@@ -1781,7 +1773,7 @@ export function AppShell() {
     const conversation = store.state.conversations[0];
     return (
       <main className="mx-auto max-w-7xl px-4 py-5">
-        <Section title="Chat AI / Supporter" description="User được chọn chat AI hoặc supporter, có thể yêu cầu gặp nhân viên, hỗ trợ ảnh/file và trạng thái đã đọc.">
+        <Section title="Chat hỗ trợ">
           <div className="grid gap-4 lg:grid-cols-[320px_1fr]">
             <Panel>
               <div className="grid gap-2">
@@ -1813,7 +1805,7 @@ export function AppShell() {
             <h3 className="font-bold">{conversation.title}</h3>
             <p className="text-sm text-muted">{mode ?? conversation.mode} - {conversation.status}</p>
           </div>
-          <Button variant="secondary" onClick={() => showToast("Đã yêu cầu chuyển/tóm tắt AI mock.", "success")}>Transfer</Button>
+          <Button variant="secondary" onClick={() => showToast("Đã gửi yêu cầu hỗ trợ.", "success")}>Chuyển hỗ trợ</Button>
         </div>
         <div className="mt-4 space-y-3">
           {conversation.messages.map((message) => (
@@ -1829,13 +1821,22 @@ export function AppShell() {
         <div className="mt-4 grid gap-2 border-t border-line pt-3 sm:grid-cols-[1fr_auto_auto]">
           <Input placeholder="Nhập tin nhắn" />
           <Input type="file" aria-label="Đính kèm ảnh hoặc file" />
-          <Button onClick={() => showToast("Đã gửi tin nhắn mock.", "success")}>Gửi</Button>
+          <Button onClick={() => showToast("Đã gửi tin nhắn.", "success")}>Gửi</Button>
         </div>
       </Panel>
     );
   }
 
   function renderSellerRoutes() {
+    if (!store.currentUser) {
+      return (
+        <Unauthorized
+          title="Cần đăng nhập"
+          description="Bạn cần đăng nhập trước khi gửi hoặc theo dõi hồ sơ mở shop."
+        />
+      );
+    }
+
     if (segments[1] === "register") return <SellerRegisterPage />;
     if (segments[1] === "pending") return <SellerStatusPage status="PENDING" />;
     if (segments[1] === "rejected") return <SellerStatusPage status="REJECTED" />;
@@ -1887,7 +1888,7 @@ export function AppShell() {
               ["/supporter/conversations", "Conversations", MessageSquare]
             ];
     const homeHref = roleHomePath(kind.toUpperCase());
-    const canSwitchToBuyer = kind === "seller" && (store.currentUser?.roles.includes("CUSTOMER") ?? false);
+    const canSwitchToBuyer = Boolean(store.currentUser);
 
     return (
       <div className="min-h-screen bg-canvas">
@@ -1898,7 +1899,7 @@ export function AppShell() {
               {brandName} {kind}
             </a>
             <div className="flex items-center gap-2">
-              <span className="text-sm text-muted">{store.currentUser?.fullName ?? "Guest"}</span>
+              <span className="text-sm text-muted">{store.currentUser?.fullName ?? "Khách"}</span>
               {canSwitchToBuyer ? (
                 <Button
                   variant="secondary"
@@ -1941,18 +1942,218 @@ export function AppShell() {
   }
 
   function SellerRegisterPage() {
+    const [form, setForm] = useState<SellerApplication>({
+      shopName: "",
+      phone: store.currentUser?.phone ?? "",
+      email: store.currentUser?.email ?? "",
+      pickupAddress: "",
+      taxCode: "",
+      bankName: "",
+      bankAccountNumber: "",
+      bankAccountName: store.currentUser?.fullName ?? ""
+    });
+    const [mode, setMode] = useState<"create" | "update">("create");
+    const [applicationStatus, setApplicationStatus] = useState<SellerStatus | undefined>();
+    const [loadingApplication, setLoadingApplication] = useState(true);
+    const [savingApplication, setSavingApplication] = useState(false);
+    const [formError, setFormError] = useState("");
+
+    useEffect(() => {
+      let cancelled = false;
+
+      if (!store.currentUser) {
+        setLoadingApplication(false);
+        return () => {
+          cancelled = true;
+        };
+      }
+
+      setForm((prev) => ({
+        ...prev,
+        phone: prev.phone || store.currentUser?.phone || "",
+        email: prev.email || store.currentUser?.email || "",
+        bankAccountName: prev.bankAccountName || store.currentUser?.fullName || ""
+      }));
+
+      store.getSellerApplication()
+        .then((result) => {
+          if (cancelled) return;
+
+          if (!result.ok) {
+            setFormError(result.message);
+            return;
+          }
+
+          const application = result.application;
+          const status = application?.status ?? result.sellerMe.status ?? undefined;
+          setApplicationStatus(status);
+
+          if (application) {
+            setMode("update");
+            setForm({
+              shopName: application.shopName,
+              phone: application.phone,
+              email: application.email,
+              pickupAddress: application.pickupAddress,
+              taxCode: application.taxCode,
+              bankName: application.bankName,
+              bankAccountNumber: application.bankAccountNumber,
+              bankAccountName: application.bankAccountName,
+              shopSlug: application.shopSlug,
+              status
+            });
+          } else {
+            setMode("create");
+          }
+        })
+        .finally(() => {
+          if (!cancelled) setLoadingApplication(false);
+        });
+
+      return () => {
+        cancelled = true;
+      };
+    }, [store.currentUser?.id, store.currentUser?.email, store.currentUser?.phone, store.currentUser?.fullName, store.getSellerApplication]);
+
+    const updateField = (field: keyof SellerApplication) => (event: ChangeEvent<HTMLInputElement>) => {
+      setForm((prev) => ({ ...prev, [field]: event.target.value }));
+    };
+
+    const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+      event.preventDefault();
+      setSavingApplication(true);
+      setFormError("");
+
+      const result = await store.saveSellerApplication(form, mode);
+      setSavingApplication(false);
+
+      if (!result.ok) {
+        setFormError(result.message);
+        showToast(result.message, "danger");
+        return;
+      }
+
+      showToast(result.message, "success");
+      window.location.href = result.redirectTo;
+    };
+
+    if (!store.currentUser) {
+      return <Unauthorized title="Cần đăng nhập" description="Bạn cần đăng nhập trước khi gửi hồ sơ mở shop." />;
+    }
+
+    if (loadingApplication) {
+      return (
+        <main className="mx-auto max-w-4xl px-4 py-8">
+          <Panel>
+            <div className="flex items-center gap-3">
+              <RefreshCcw className="h-5 w-5 animate-spin text-primary" aria-hidden="true" />
+              <p className="text-sm font-semibold text-muted">Đang tải hồ sơ shop...</p>
+            </div>
+          </Panel>
+        </main>
+      );
+    }
+
+    if (applicationStatus === "APPROVED") {
+      return (
+        <main className="mx-auto max-w-3xl px-4 py-10">
+          <Panel>
+            <StatusBadge status="APPROVED" label={sellerStatusLabel.APPROVED} />
+            <h1 className="mt-3 text-2xl font-black text-ink">Shop đã được duyệt</h1>
+            <p className="mt-2 text-sm leading-6 text-muted">Hồ sơ đã được duyệt.</p>
+            <Button className="mt-4" onClick={() => (window.location.href = "/seller")}>
+              Vào kênh người bán
+            </Button>
+          </Panel>
+        </main>
+      );
+    }
+
+    return (
+      <main className="mx-auto max-w-6xl px-4 py-8">
+        <Section title={mode === "update" ? "Cập nhật hồ sơ mở shop" : "Đăng ký trở thành người bán"}>
+          <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
+            <Panel>
+              {formError ? (
+                <div className="mb-4">
+                  <ErrorState title="Chưa gửi được hồ sơ" description={formError} />
+                </div>
+              ) : null}
+              <form onSubmit={handleSubmit} className="grid gap-4 md:grid-cols-2">
+                <Field label="Tên shop" hint="4-100 ký tự">
+                  <Input value={form.shopName} onChange={updateField("shopName")} placeholder="Shepoo Store" />
+                </Field>
+                <Field label="Email shop">
+                  <Input value={form.email} onChange={updateField("email")} placeholder="shop@example.com" />
+                </Field>
+                <Field label="Số điện thoại shop">
+                  <Input value={form.phone} onChange={updateField("phone")} placeholder="0901234567" />
+                </Field>
+                <Field label="Mã số thuế" hint="10-14 ký tự">
+                  <Input value={form.taxCode} onChange={updateField("taxCode")} placeholder="0312345678" />
+                </Field>
+                <div className="md:col-span-2">
+                  <Field label="Địa chỉ lấy hàng" hint="10-200 ký tự">
+                    <Input value={form.pickupAddress} onChange={updateField("pickupAddress")} placeholder="Số nhà, phường/xã, quận/huyện, tỉnh/thành" />
+                  </Field>
+                </div>
+                <Field label="Ngân hàng">
+                  <Input value={form.bankName} onChange={updateField("bankName")} placeholder="VCB, ACB, BIDV..." />
+                </Field>
+                <Field label="Số tài khoản">
+                  <Input value={form.bankAccountNumber} onChange={updateField("bankAccountNumber")} placeholder="0123456789" />
+                </Field>
+                <div className="md:col-span-2">
+                  <Field label="Tên chủ tài khoản">
+                    <Input value={form.bankAccountName} onChange={updateField("bankAccountName")} placeholder={store.currentUser.fullName} />
+                  </Field>
+                </div>
+                <div className="md:col-span-2 flex flex-wrap gap-2">
+                  <Button type="submit" disabled={savingApplication}>
+                    {savingApplication ? "Đang gửi..." : mode === "update" ? "Cập nhật và gửi duyệt lại" : "Gửi yêu cầu"}
+                  </Button>
+                  {applicationStatus === "REJECTED" ? (
+                    <Button type="button" variant="secondary" onClick={() => (window.location.href = "/seller/rejected")}>
+                      Xem trạng thái từ chối
+                    </Button>
+                  ) : null}
+                </div>
+              </form>
+            </Panel>
+            <Panel className="h-fit">
+              <div className="flex items-center gap-3">
+                <Store className="h-9 w-9 text-primary" aria-hidden="true" />
+                <div>
+                  <p className="text-sm text-muted">Trạng thái hồ sơ</p>
+                  <div className="mt-1">
+                    <StatusBadge status={applicationStatus ?? "PENDING"} label={applicationStatus ? sellerStatusLabel[applicationStatus] : "Chưa gửi"} />
+                  </div>
+                </div>
+              </div>
+              <div className="mt-4 space-y-3 text-sm leading-6 text-muted">
+                {applicationStatus === "PENDING" ? <p>Hồ sơ đang chờ admin duyệt.</p> : null}
+                {applicationStatus === "REJECTED" ? <p>Hồ sơ bị từ chối có thể sửa và gửi duyệt lại.</p> : null}
+              </div>
+            </Panel>
+          </div>
+        </Section>
+      </main>
+    );
+  }
+
+  function SellerRegisterPageLegacy() {
     return (
       <main className="mx-auto max-w-4xl px-4 py-8">
-        <Section title="Đăng ký trở thành người bán" description="Một user chỉ có một shop. Submit tạo hồ sơ PENDING để admin duyệt.">
+        <Section title="Đăng ký trở thành người bán">
           <Panel>
             <div className="grid gap-4 md:grid-cols-2">
               <Field label="Tên shop"><Input placeholder="Shepoo Store" /></Field>
               <Field label="Slug"><Input placeholder="shepoo-store" /></Field>
               <Field label="Logo"><Input type="file" /></Field>
-              <Field label="Email shop"><Input placeholder="shop@demo.vn" /></Field>
+              <Field label="Email shop"><Input placeholder="shop@example.com" /></Field>
               <Field label="Phone shop"><Input placeholder="090..." /></Field>
               <Field label="Phí ship cố định"><Input type="number" placeholder="30000" /></Field>
-              <Field label="Đơn vị vận chuyển"><Input placeholder="Tự giao / GHN mock" /></Field>
+              <Field label="Đơn vị vận chuyển"><Input placeholder="Tự giao / GHN" /></Field>
               <Field label="Địa chỉ kho"><Input placeholder="Địa chỉ lấy hàng" /></Field>
               <div className="md:col-span-2"><Field label="Mô tả shop"><Textarea /></Field></div>
             </div>
@@ -1964,6 +2165,95 @@ export function AppShell() {
   }
 
   function SellerStatusPage({ status }: { status: SellerStatus }) {
+    const [application, setApplication] = useState<SellerApplication | undefined>();
+    const [actualStatus, setActualStatus] = useState<SellerStatus>(status);
+    const [hasProfile, setHasProfile] = useState(true);
+    const [loadingStatus, setLoadingStatus] = useState(true);
+    const [statusError, setStatusError] = useState("");
+
+    useEffect(() => {
+      let cancelled = false;
+
+      store.getSellerApplication()
+        .then((result) => {
+          if (cancelled) return;
+
+          if (!result.ok) {
+            setStatusError(result.message);
+            return;
+          }
+
+          setHasProfile(result.sellerMe.has_seller_profile);
+          const nextStatus = result.application?.status ?? result.sellerMe.status ?? status;
+          setActualStatus(nextStatus);
+          setApplication(result.application);
+        })
+        .finally(() => {
+          if (!cancelled) setLoadingStatus(false);
+        });
+
+      return () => {
+        cancelled = true;
+      };
+    }, [status, store.getSellerApplication]);
+
+    if (loadingStatus) {
+      return (
+        <main className="mx-auto max-w-3xl px-4 py-10">
+          <Panel>
+            <div className="flex items-center gap-3">
+              <RefreshCcw className="h-5 w-5 animate-spin text-primary" aria-hidden="true" />
+              <p className="text-sm font-semibold text-muted">Đang kiểm tra trạng thái hồ sơ...</p>
+            </div>
+          </Panel>
+        </main>
+      );
+    }
+
+    if (statusError) {
+      return (
+        <main className="mx-auto max-w-3xl px-4 py-10">
+          <ErrorState title="Không tải được trạng thái seller" description={statusError} />
+        </main>
+      );
+    }
+
+    if (!hasProfile) {
+      return (
+        <main className="mx-auto max-w-3xl px-4 py-10">
+          <EmptyState
+            title="Chưa có hồ sơ mở shop"
+            description="Bạn cần gửi hồ sơ seller trước khi theo dõi trạng thái xét duyệt."
+            action={<Button onClick={() => (window.location.href = "/seller/register")}>Gửi hồ sơ</Button>}
+          />
+        </main>
+      );
+    }
+
+    return (
+      <main className="mx-auto max-w-3xl px-4 py-10">
+        <Panel>
+          <StatusBadge status={actualStatus} label={sellerStatusLabel[actualStatus]} />
+          <h1 className="mt-3 text-3xl font-black text-ink">Trạng thái shop: {sellerStatusLabel[actualStatus]}</h1>
+          {application?.shopName ? <p className="mt-1 text-sm font-semibold text-muted">{application.shopName}</p> : null}
+          <p className="mt-2 text-sm leading-6 text-muted">
+            {actualStatus === "PENDING" && "Hồ sơ đang chờ admin duyệt."}
+            {actualStatus === "REJECTED" && `Hồ sơ bị từ chối.${application?.rejectedReason ? ` Lý do: ${application.rejectedReason}.` : ""}`}
+            {actualStatus === "SUSPENDED" && "Shop bị tạm ngưng, không được truy cập dashboard bán hàng."}
+            {actualStatus === "APPROVED" && "Shop đã được duyệt. Bạn có thể vào kênh người bán."}
+            {actualStatus === "CLOSED" && "Shop đã đóng."}
+          </p>
+          <div className="mt-4 flex flex-wrap gap-2">
+            {actualStatus === "APPROVED" ? <Button onClick={() => (window.location.href = "/seller")}>Vào kênh người bán</Button> : null}
+            {actualStatus === "REJECTED" ? <Button onClick={() => (window.location.href = "/seller/register")}>Sửa hồ sơ</Button> : null}
+            <Button variant="secondary" onClick={() => (window.location.href = "/")}>Về marketplace</Button>
+          </div>
+        </Panel>
+      </main>
+    );
+  }
+
+  function SellerStatusPageLegacy({ status }: { status: SellerStatus }) {
     const shop = store.currentShop ?? store.state.shops.find((item) => item.status === status);
     return (
       <main className="mx-auto max-w-3xl px-4 py-10">
@@ -1971,7 +2261,7 @@ export function AppShell() {
           <StatusBadge status={status} label={sellerStatusLabel[status]} />
           <h1 className="mt-3 text-3xl font-black text-ink">Trạng thái shop: {sellerStatusLabel[status]}</h1>
           <p className="mt-2 text-sm leading-6 text-muted">
-            {status === "PENDING" && "Hồ sơ đang chờ admin duyệt. Sau khi duyệt, user được cấp role SELLER."}
+            {status === "PENDING" && "Hồ sơ đang chờ admin duyệt."}
             {status === "REJECTED" && `Hồ sơ bị từ chối. Lý do: ${shop?.rejectedReason ?? "Chưa rõ"}.`}
             {status === "SUSPENDED" && "Shop bị tạm ngưng, không được truy cập dashboard bán hàng."}
           </p>
@@ -1982,12 +2272,38 @@ export function AppShell() {
   }
 
   function SellerDashboard() {
-    const shop = store.currentShop ?? store.state.shops.find((item) => item.status === "APPROVED");
+    const shop = store.currentShop;
+    if (!shop) {
+      return (
+        <Section title="Kênh người bán">
+          <EmptyState
+            title="Chưa có hồ sơ shop"
+            description="Bạn cần gửi hồ sơ mở shop trước khi truy cập dashboard người bán."
+            action={<Button onClick={() => (window.location.href = "/seller/register")}>Gửi hồ sơ</Button>}
+          />
+        </Section>
+      );
+    }
+
+    if (shop.status !== "APPROVED") {
+      return (
+        <Section title="Trạng thái shop">
+          <Panel>
+            <StatusBadge status={shop.status} label={sellerStatusLabel[shop.status]} />
+            <p className="mt-2 text-sm leading-6 text-muted">Shop hiện chưa ở trạng thái được duyệt.</p>
+            <Button className="mt-4" variant="secondary" onClick={() => (window.location.href = `/seller/${shop.status.toLowerCase()}`)}>
+              Xem trạng thái
+            </Button>
+          </Panel>
+        </Section>
+      );
+    }
+
     const sellerOrders = store.state.orders.filter((order) => order.sellerId === shop?.id);
     const revenue = sellerOrders.filter((order) => order.orderStatus === "COMPLETED").reduce((sum, order) => sum + order.totalAmount, 0);
     const waiting = sellerOrders.filter((order) => !order.sellerConfirmed && order.orderStatus === "PLACED").length;
     return (
-      <Section title="Seller dashboard" description="Doanh thu chỉ tính order COMPLETED; không có low stock alert và không có best sellers theo rule hiện tại.">
+      <Section title="Seller dashboard">
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <MetricCard label="Doanh thu hoàn thành" value={formatVnd(revenue)} />
           <MetricCard label="Tổng đã bán" value={`${shop?.totalSold ?? 0}`} />
@@ -2004,7 +2320,7 @@ export function AppShell() {
           </Panel>
           <Panel>
             <h3 className="font-bold">Nhắc hạn xác nhận</h3>
-            <p className="mt-2 text-sm text-muted">Các đơn PLACED cần seller xác nhận trước `seller_confirm_expires_at`.</p>
+            <p className="mt-2 text-sm text-muted">{waiting} đơn đang chờ xác nhận.</p>
           </Panel>
         </div>
       </Section>
@@ -2012,7 +2328,7 @@ export function AppShell() {
   }
 
   function SellerProfilePage() {
-    const shop = store.currentShop ?? store.state.shops.find((item) => item.status === "APPROVED");
+    const shop = store.currentShop;
     if (!shop) return <SellerRegisterPage />;
     return (
       <Section title="Hồ sơ shop">
@@ -2027,14 +2343,14 @@ export function AppShell() {
             <div className="md:col-span-2"><Field label="Địa chỉ kho"><Input defaultValue={shop.pickupAddress} /></Field></div>
             <div className="md:col-span-2"><Field label="Mô tả"><Textarea defaultValue={shop.description} /></Field></div>
           </div>
-          <Button className="mt-4" onClick={() => showToast("Đã lưu hồ sơ shop mock.", "success")}>Lưu</Button>
+          <Button className="mt-4" onClick={() => showToast("Đã lưu hồ sơ shop.", "success")}>Lưu</Button>
         </Panel>
       </Section>
     );
   }
 
   function SellerProductsPage() {
-    const shop = store.currentShop ?? store.state.shops.find((item) => item.status === "APPROVED");
+    const shop = store.currentShop;
     const products = store.state.products.filter((product) => product.sellerId === shop?.id);
     return (
       <Section title="Quản lý sản phẩm" action={<Button onClick={() => (window.location.href = "/seller/products/new")}><Plus className="h-4 w-4" />Tạo sản phẩm</Button>}>
@@ -2061,7 +2377,7 @@ export function AppShell() {
 
   function ProductFormPage({ productId }: { productId?: string }) {
     const editing = store.state.products.find((product) => product.id === productId);
-    const shop = store.currentShop ?? store.state.shops.find((item) => item.status === "APPROVED")!;
+    const shop = store.currentShop;
     const [name, setName] = useState(editing?.name ?? "");
     const [status, setStatus] = useState<Product["status"]>(editing?.status ?? "ACTIVE");
     const [categoryIds, setCategoryIds] = useState<string[]>(editing?.categoryIds ?? []);
@@ -2070,7 +2386,7 @@ export function AppShell() {
     const [quantity, setQuantity] = useState("20");
     const slug = slugify(name || "san-pham-moi");
     return (
-      <Section title={editing ? "Sửa sản phẩm" : "Tạo sản phẩm"} description="Seller tạo sản phẩm public luôn sau khi shop approved; admin không duyệt từng sản phẩm.">
+      <Section title={editing ? "Sửa sản phẩm" : "Tạo sản phẩm"}>
         <Panel>
           <div className="grid gap-4 lg:grid-cols-[1fr_360px]">
             <div className="grid gap-4">
@@ -2124,6 +2440,11 @@ export function AppShell() {
               </Field>
               <Button
                 onClick={() => {
+                  if (!shop) {
+                    showToast("Shop của bạn chưa sẵn sàng để tạo sản phẩm.", "danger");
+                    return;
+                  }
+
                   const product: Product = {
                     id: editing?.id ?? `p-new-${store.state.products.length + 1}`,
                     sellerId: shop.id,
@@ -2153,7 +2474,7 @@ export function AppShell() {
                     inventory: { quantity: Number(quantity) || 0, reservedQuantity: 0 }
                   };
                   store.saveProduct(product, [variant]);
-                  showToast("Đã lưu sản phẩm và variant mock.", "success");
+                  showToast("Đã lưu sản phẩm.", "success");
                   window.location.href = "/seller/products";
                 }}
               >
@@ -2167,12 +2488,12 @@ export function AppShell() {
   }
 
   function SellerInventoryPage() {
-    const shop = store.currentShop ?? store.state.shops.find((item) => item.status === "APPROVED");
+    const shop = store.currentShop;
     const products = store.state.products.filter((product) => product.sellerId === shop?.id);
     const productIds = new Set(products.map((product) => product.id));
     const variants = store.state.variants.filter((variant) => productIds.has(variant.productId));
     return (
-      <Section title="Tồn kho theo variant" description="Không có low stock threshold; reserved quantity chỉ đọc.">
+      <Section title="Tồn kho theo variant">
         <DataTable
           columns={["Variant", "SKU", "Sản phẩm", "Quantity", "Reserved", "Status", "Điều chỉnh"]}
           rows={variants.map((variant) => {
@@ -2184,7 +2505,7 @@ export function AppShell() {
               `${variant.inventory.quantity}`,
               `${variant.inventory.reservedQuantity}`,
               <StatusBadge key="st" status={variant.status} label={variant.status} />,
-              <div key="adjust" className="flex items-center gap-2"><Input className="w-24" type="number" defaultValue={variant.inventory.quantity} /><Button variant="secondary" onClick={() => showToast("Đã điều chỉnh tồn kho mock.", "success")}>Lưu</Button></div>
+              <div key="adjust" className="flex items-center gap-2"><Input className="w-24" type="number" defaultValue={variant.inventory.quantity} /><Button variant="secondary" onClick={() => showToast("Đã điều chỉnh tồn kho.", "success")}>Lưu</Button></div>
             ];
           })}
         />
@@ -2193,11 +2514,11 @@ export function AppShell() {
   }
 
   function SellerRevenuePage() {
-    const shop = store.currentShop ?? store.state.shops.find((item) => item.status === "APPROVED");
+    const shop = store.currentShop;
     const completed = store.state.orders.filter((order) => order.sellerId === shop?.id && order.orderStatus === "COMPLETED");
     const revenue = completed.reduce((sum, order) => sum + order.totalAmount, 0);
     return (
-      <Section title="Doanh thu" description="Doanh thu chỉ tính đơn COMPLETED, cancelled không tính; không cần export Excel/PDF.">
+      <Section title="Doanh thu">
         <div className="grid gap-4 lg:grid-cols-[280px_1fr]">
           <Panel>
             <Field label="Khoảng thời gian">
@@ -2207,9 +2528,9 @@ export function AppShell() {
             <Field label="Đến ngày"><Input type="date" /></Field>
           </Panel>
           <div className="grid gap-3 sm:grid-cols-3">
-            <MetricCard label="Revenue" value={formatVnd(revenue)} />
-            <MetricCard label="Completed orders" value={`${completed.length}`} />
-            <MetricCard label="Cancelled ignored" value={`${store.state.orders.filter((order) => order.sellerId === shop?.id && order.orderStatus === "CANCELLED").length}`} />
+            <MetricCard label="Doanh thu" value={formatVnd(revenue)} />
+            <MetricCard label="Đơn hoàn thành" value={`${completed.length}`} />
+            <MetricCard label="Đơn đã hủy" value={`${store.state.orders.filter((order) => order.sellerId === shop?.id && order.orderStatus === "CANCELLED").length}`} />
           </div>
         </div>
       </Section>
@@ -2256,10 +2577,10 @@ export function AppShell() {
     return (
       <Section title="Admin dashboard">
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <MetricCard label="Revenue toàn sàn" value={formatVnd(completed.reduce((sum, order) => sum + order.totalAmount, 0))} />
-          <MetricCard label="New users" value={`${store.state.users.length}`} />
-          <MetricCard label="New sellers" value={`${store.state.shops.length}`} />
-          <MetricCard label="Pending sellers" value={`${store.state.shops.filter((shop) => shop.status === "PENDING").length}`} />
+          <MetricCard label="Doanh thu toàn sàn" value={formatVnd(completed.reduce((sum, order) => sum + order.totalAmount, 0))} />
+          <MetricCard label="Người dùng" value={`${store.state.users.length}`} />
+          <MetricCard label="Người bán" value={`${store.state.shops.length}`} />
+          <MetricCard label="Hồ sơ chờ duyệt" value={`${store.state.shops.filter((shop) => shop.status === "PENDING").length}`} />
         </div>
       </Section>
     );
@@ -2302,6 +2623,125 @@ export function AppShell() {
   }
 
   function AdminSellersPage() {
+    const [status, setStatus] = useState<SellerStatus | "">("");
+    const [applications, setApplications] = useState<SellerApplication[]>([]);
+    const [loadingApplications, setLoadingApplications] = useState(true);
+    const [applicationsError, setApplicationsError] = useState("");
+    const [busyApplicationId, setBusyApplicationId] = useState("");
+
+    useEffect(() => {
+      let cancelled = false;
+      setLoadingApplications(true);
+      setApplicationsError("");
+
+      store.listSellerApplications(status)
+        .then((result) => {
+          if (cancelled) return;
+
+          if (!result.ok) {
+            setApplicationsError(result.message);
+            setApplications([]);
+            return;
+          }
+
+          setApplications(result.applications);
+        })
+        .finally(() => {
+          if (!cancelled) setLoadingApplications(false);
+        });
+
+      return () => {
+        cancelled = true;
+      };
+    }, [status, store.listSellerApplications]);
+
+    const reviewApplication = async (application: SellerApplication, action: "approve" | "reject") => {
+      if (!application.publicId) return;
+
+      setBusyApplicationId(application.publicId);
+      const result = await store.reviewSellerApplication(
+        application.publicId,
+        action,
+        action === "reject" ? "Hồ sơ thiếu thông tin." : undefined
+      );
+      setBusyApplicationId("");
+
+      if (!result.ok) {
+        showToast(result.message, "danger");
+        return;
+      }
+
+      showToast(result.message, "success");
+      setApplications((prev) =>
+        prev.map((item) =>
+          item.publicId === application.publicId
+            ? {
+                ...item,
+                status: result.application.status,
+                rejectedReason: result.application.rejectedReason,
+                approvedAt: result.application.approvedAt
+              }
+            : item
+        )
+      );
+    };
+
+    return (
+      <Section
+        title="Duyệt seller"
+        action={
+          <Select value={status} onChange={(event) => setStatus(event.target.value as SellerStatus | "")} className="w-44">
+            <option value="">Tất cả</option>
+            {Object.entries(sellerStatusLabel).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+          </Select>
+        }
+      >
+        {loadingApplications ? (
+          <Panel>
+            <div className="flex items-center gap-3">
+              <RefreshCcw className="h-5 w-5 animate-spin text-primary" aria-hidden="true" />
+              <p className="text-sm font-semibold text-muted">Đang tải hồ sơ seller...</p>
+            </div>
+          </Panel>
+        ) : applicationsError ? (
+          <ErrorState title="Không tải được hồ sơ seller" description={applicationsError} />
+        ) : (
+          <DataTable
+            columns={["Shop", "Slug", "Status", "Tax", "Bank", "Action"]}
+            rows={applications.map((application) => {
+              const applicationStatus = application.status ?? "PENDING";
+              const busy = busyApplicationId === application.publicId;
+              return [
+                <a key="shop" className="font-bold text-primary" href={`/admin/sellers/${application.publicId}`}>{application.shopName}</a>,
+                application.shopSlug ?? "-",
+                <StatusBadge key="st" status={applicationStatus} label={sellerStatusLabel[applicationStatus]} />,
+                application.taxCode,
+                application.bankName,
+                <div key="act" className="flex flex-wrap gap-2">
+                  <Button
+                    variant="secondary"
+                    disabled={busy || applicationStatus !== "PENDING"}
+                    onClick={() => reviewApplication(application, "approve")}
+                  >
+                    Approve
+                  </Button>
+                  <Button
+                    variant="danger"
+                    disabled={busy || applicationStatus !== "PENDING"}
+                    onClick={() => reviewApplication(application, "reject")}
+                  >
+                    Reject
+                  </Button>
+                </div>
+              ];
+            })}
+          />
+        )}
+      </Section>
+    );
+  }
+
+  function AdminSellersPageLegacy() {
     const [status, setStatus] = useState("");
     const sellers = store.state.shops.filter((shop) => !status || shop.status === status);
     return (
@@ -2322,10 +2762,148 @@ export function AppShell() {
   }
 
   function AdminSellerDetail({ sellerId }: { sellerId?: string }) {
+    const [detail, setDetail] = useState<{ user: typeof store.currentUser; application: SellerApplication } | undefined>();
+    const [loadingDetail, setLoadingDetail] = useState(true);
+    const [detailError, setDetailError] = useState("");
+    const [rejectReason, setRejectReason] = useState("");
+    const [reviewing, setReviewing] = useState(false);
+
+    useEffect(() => {
+      let cancelled = false;
+
+      if (!sellerId) {
+        setLoadingDetail(false);
+        return () => {
+          cancelled = true;
+        };
+      }
+
+      setLoadingDetail(true);
+      setDetailError("");
+
+      store.getSellerApplicationDetail(sellerId)
+        .then((result) => {
+          if (cancelled) return;
+
+          if (!result.ok) {
+            setDetailError(result.message);
+            return;
+          }
+
+          setDetail(result.detail);
+          setRejectReason(result.detail.application.rejectedReason ?? "");
+        })
+        .finally(() => {
+          if (!cancelled) setLoadingDetail(false);
+        });
+
+      return () => {
+        cancelled = true;
+      };
+    }, [sellerId, store.getSellerApplicationDetail]);
+
+    const reviewApplication = async (action: "approve" | "reject") => {
+      if (!sellerId) return;
+
+      setReviewing(true);
+      const result = await store.reviewSellerApplication(
+        sellerId,
+        action,
+        action === "reject" ? rejectReason : undefined
+      );
+      setReviewing(false);
+
+      if (!result.ok) {
+        showToast(result.message, "danger");
+        return;
+      }
+
+      showToast(result.message, "success");
+      setDetail((prev) =>
+        prev
+          ? {
+              ...prev,
+              application: {
+                ...prev.application,
+                status: result.application.status,
+                rejectedReason: result.application.rejectedReason,
+                approvedAt: result.application.approvedAt
+              }
+            }
+          : prev
+      );
+    };
+
+    if (loadingDetail) {
+      return (
+        <Section title="Seller detail">
+          <Panel>
+            <div className="flex items-center gap-3">
+              <RefreshCcw className="h-5 w-5 animate-spin text-primary" aria-hidden="true" />
+              <p className="text-sm font-semibold text-muted">Đang tải chi tiết seller...</p>
+            </div>
+          </Panel>
+        </Section>
+      );
+    }
+
+    if (detailError) {
+      return (
+        <Section title="Seller detail">
+          <ErrorState title="Không tải được chi tiết seller" description={detailError} />
+        </Section>
+      );
+    }
+
+    if (!detail) return <NotFoundPage />;
+
+    const application = detail.application;
+    const applicationStatus = application.status ?? "PENDING";
+
+    return (
+      <Section title={`Seller ${application.shopName}`}>
+        <div className="grid gap-4 lg:grid-cols-[1fr_360px]">
+          <Panel>
+            <div className="grid gap-3 md:grid-cols-2">
+              <InfoRow label="Status" value={sellerStatusLabel[applicationStatus]} />
+              <InfoRow label="Owner" value={detail.user?.fullName ?? "-"} />
+              <InfoRow label="Email owner" value={detail.user?.email ?? "-"} />
+              <InfoRow label="Phone owner" value={detail.user?.phone ?? "-"} />
+              <InfoRow label="Shop email" value={application.email} />
+              <InfoRow label="Shop phone" value={application.phone} />
+              <InfoRow label="Slug" value={application.shopSlug ?? "-"} />
+              <InfoRow label="Tax code" value={application.taxCode} />
+              <InfoRow label="Bank" value={application.bankName} />
+              <InfoRow label="Bank account" value={application.bankAccountNumber} />
+              <InfoRow label="Account name" value={application.bankAccountName} />
+              <InfoRow label="Pickup" value={application.pickupAddress} />
+              <InfoRow label="Rejected reason" value={application.rejectedReason ?? "Không có"} />
+            </div>
+          </Panel>
+          <Panel className="h-fit">
+            <h3 className="font-bold">Review</h3>
+            <div className="mt-3 grid gap-3">
+              <Field label="Lý do từ chối">
+                <Textarea value={rejectReason} onChange={(event) => setRejectReason(event.target.value)} />
+              </Field>
+              <Button disabled={reviewing || applicationStatus !== "PENDING"} onClick={() => reviewApplication("approve")}>
+                Approve
+              </Button>
+              <Button variant="danger" disabled={reviewing || applicationStatus !== "PENDING"} onClick={() => reviewApplication("reject")}>
+                Reject
+              </Button>
+            </div>
+          </Panel>
+        </div>
+      </Section>
+    );
+  }
+
+  function AdminSellerDetailLegacy({ sellerId }: { sellerId?: string }) {
     const shop = store.state.shops.find((item) => item.id === sellerId);
     if (!shop) return <NotFoundPage />;
     return (
-      <Section title={`Seller ${shop.shopName}`} description="Admin không sửa hồ sơ shop, chỉ duyệt/từ chối/suspend/close.">
+      <Section title={`Seller ${shop.shopName}`}>
         <Panel>
           <div className="grid gap-3 md:grid-cols-2">
             <InfoRow label="Status" value={sellerStatusLabel[shop.status]} />
@@ -2361,7 +2939,7 @@ export function AppShell() {
               <Input placeholder="Slug" />
               <Input type="number" placeholder="Sort order" />
               <Checkbox label="is_default_other" />
-              <Button onClick={() => showToast("Đã lưu category mock.", "success")}>Lưu</Button>
+              <Button onClick={() => showToast("Đã lưu category.", "success")}>Lưu</Button>
             </div>
           </Panel>
         </div>
@@ -2371,7 +2949,7 @@ export function AppShell() {
 
   function AdminProductsPage() {
     return (
-      <Section title="Readonly products toàn sàn" description="Admin không sửa trực tiếp sản phẩm seller; action hide/delete chỉ dùng khi xử lý report.">
+      <Section title="Sản phẩm toàn sàn">
         <DataTable
           columns={["Product", "Shop", "Category", "Status", "Sold", "Action"]}
           rows={store.state.products.map((product) => [
@@ -2380,7 +2958,7 @@ export function AppShell() {
             getCategoryNames(store.state.categories, product) || "-",
             <StatusBadge key="st" status={product.status} label={productStatusLabel[product.status]} />,
             `${product.soldCount}`,
-            <span key="act" className="text-muted">Readonly</span>
+            <span key="act" className="text-muted">Chỉ xem</span>
           ])}
         />
       </Section>
@@ -2391,18 +2969,18 @@ export function AppShell() {
     const product = store.state.products.find((item) => item.id === productId);
     if (!product) return <NotFoundPage />;
     return (
-      <Section title={product.name} description="Chi tiết readonly, có panel xử lý report.">
+      <Section title={product.name}>
         <div className="grid gap-4 lg:grid-cols-[1fr_360px]">
           <Panel>
             <img src={product.thumbnailUrl} alt={product.name} className="aspect-[16/9] w-full rounded-panel object-cover" />
             <p className="mt-3 text-sm leading-6 text-muted">{product.description}</p>
           </Panel>
           <Panel>
-            <h3 className="font-bold">Moderation action</h3>
+            <h3 className="font-bold">Thao tác kiểm duyệt</h3>
             <div className="mt-3 grid gap-2">
-              <Button variant="secondary" onClick={() => showToast("Đã ẩn sản phẩm mock.", "success")}>Hide product</Button>
-              <Button variant="danger" onClick={() => showToast("Đã xóa mềm sản phẩm mock.", "danger")}>Delete product</Button>
-              <Button variant="secondary" onClick={() => showToast("Đã khóa user seller mock.", "success")}>Lock seller user</Button>
+              <Button variant="secondary" onClick={() => showToast("Đã ẩn sản phẩm.", "success")}>Ẩn sản phẩm</Button>
+              <Button variant="danger" onClick={() => showToast("Đã xóa sản phẩm.", "danger")}>Xóa sản phẩm</Button>
+              <Button variant="secondary" onClick={() => showToast("Đã khóa người bán.", "success")}>Khóa người bán</Button>
             </div>
           </Panel>
         </div>
@@ -2429,7 +3007,7 @@ export function AppShell() {
       ["VR-003", "Máy khuếch tán tinh dầu", "Nội dung không phù hợp", "RESOLVED"]
     ];
     return (
-      <Section title="Violation reports" description="User chỉ report product; admin xử lý hide/delete product, lock user hoặc reject report.">
+      <Section title="Violation reports">
         <DataTable
           columns={["Report", "Product", "Reason", "Status", "Actions"]}
           rows={reports.map((report) => [
@@ -2437,7 +3015,7 @@ export function AppShell() {
             report[1],
             report[2],
             <StatusBadge key="st" status={report[3]} label={report[3]} />,
-            <div key="actions" className="flex gap-2"><Button variant="secondary" onClick={() => showToast("Đã xử lý report mock.", "success")}>Resolve</Button><Button variant="ghost" onClick={() => showToast("Đã reject report mock.", "info")}>Reject</Button></div>
+            <div key="actions" className="flex gap-2"><Button variant="secondary" onClick={() => showToast("Đã xử lý báo cáo.", "success")}>Xử lý</Button><Button variant="ghost" onClick={() => showToast("Đã từ chối báo cáo.", "info")}>Từ chối</Button></div>
           ])}
         />
       </Section>
@@ -2456,7 +3034,7 @@ export function AppShell() {
               <Input placeholder="Họ tên" />
               <Input placeholder="Email" />
               <Input placeholder="Phone" />
-              <Button onClick={() => showToast("Đã tạo supporter mock.", "success")}>Tạo</Button>
+              <Button onClick={() => showToast("Đã tạo supporter.", "success")}>Tạo</Button>
             </div>
           </Panel>
         </div>
@@ -2466,7 +3044,7 @@ export function AppShell() {
 
   function AdminChatsPage() {
     return (
-      <Section title="Admin xem chat" description="Admin chỉ xem nội dung chat, không can thiệp.">
+      <Section title="Admin xem chat">
         <DataTable
           columns={["Conversation", "Customer", "Supporter", "Status", "Mode"]}
           rows={store.state.conversations.map((conv) => [conv.title, conv.customerName, conv.assignedSupporter, conv.status, conv.mode])}
@@ -2481,7 +3059,7 @@ export function AppShell() {
         <DataTable
           columns={["Code", "Severity", "Module", "Status"]}
           rows={[
-            ["SYS-001", "LOW", "payment mock", "OPEN"],
+            ["SYS-001", "LOW", "payment", "OPEN"],
             ["SYS-002", "MEDIUM", "image upload", "WATCHING"]
           ]}
         />
@@ -2491,7 +3069,7 @@ export function AppShell() {
 
   function AiKnowledgePage() {
     return (
-      <Section title="AI knowledge/RAG" description="Module đầy đủ frontend để quản lý documents/chunks sau này, nguồn nghiệp vụ RAG còn chờ backend chốt.">
+      <Section title="AI knowledge/RAG">
         <div className="grid gap-4 lg:grid-cols-[1fr_360px]">
           <DataTable
             columns={["Document", "Type", "Status", "Chunks", "Updated"]}
@@ -2507,7 +3085,7 @@ export function AppShell() {
               <Input placeholder="Tên tài liệu" />
               <Select><option>POLICY</option><option>FAQ</option><option>PRODUCT_GUIDE</option></Select>
               <Input type="file" />
-              <Button onClick={() => showToast("Đã upload knowledge mock.", "success")}>Upload</Button>
+              <Button onClick={() => showToast("Đã upload knowledge.", "success")}>Upload</Button>
             </div>
           </Panel>
         </div>
@@ -2565,7 +3143,7 @@ export function AppShell() {
   function NotFoundPage() {
     return (
       <main className="mx-auto max-w-2xl px-4 py-10">
-        <EmptyState title="Không tìm thấy route" description="Route này chưa có dữ liệu mock hoặc đường dẫn không đúng." action={<Button onClick={() => (window.location.href = "/")}>Về trang chủ</Button>} />
+        <EmptyState title="Không tìm thấy route" description="Đường dẫn không đúng hoặc không còn tồn tại." action={<Button onClick={() => (window.location.href = "/")}>Về trang chủ</Button>} />
       </main>
     );
   }

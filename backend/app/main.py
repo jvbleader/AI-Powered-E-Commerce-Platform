@@ -19,6 +19,8 @@ for path in (PROJECT_DIR, BACKEND_DIR, APP_DIR, SERVICES_DIR):
         sys.path.insert(0, path_text)
 
 from api.auth_api import router as auth_router
+from api.seller_api import router as seller_router
+from api.admin_api import router as admin_router
 from middleware.auth_middleware import validate_auth_cookie_middleware
 
 
@@ -50,6 +52,8 @@ app.add_middleware(
 )
 
 app.include_router(auth_router)
+app.include_router(seller_router)
+app.include_router(admin_router)
 
 
 @app.get("/health", tags=["Health"])

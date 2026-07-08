@@ -15,3 +15,18 @@ async def get_role_list_by_user_id(user_id: int, db: AsyncSession) -> list[str]:
     )
 
     return list(result.scalars().all())
+
+
+async def add_role_by_user_id(role: str, user_id: int, db: AsyncSession):
+    user_role = await db.execute(
+        select(UserRole)
+        .where(UserRole.user_id == user_id, 
+               UserRole.role_name == role)
+    )
+    user_role = user_role.scalar_one_or_none()
+
+    if not user_role:
+        db.add(UserRole(user_id = user_id, role_name = role))
+        await db.flush()
+    
+    return user_role
