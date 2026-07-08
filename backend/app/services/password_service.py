@@ -22,13 +22,16 @@ SMTP_FROM_EMAIL = os.getenv("SMTP_FROM_EMAIL")
 SMTP_USERNAME = os.getenv("SMTP_USERNAME")
 FRONTEND_URL = os.getenv("FRONTEND_URL")
 SMTP_FROM_NAME = os.getenv("SMTP_FROM_NAME")
-SMTP_TIMEOUT_SECONDS = int(os.getenv("SMTP_TIMEOUT_SECONDS"))
+SMTP_TIMEOUT_SECONDS = int(os.getenv("SMTP_TIMEOUT_SECONDS") or 10)
 SMTP_HOST = os.getenv("SMTP_HOST")
 SMTP_PORT = os.getenv("SMTP_PORT")
 SMTP_PASSWORD = os.getenv("SMTP_PASSWORD")
 SMTP_USE_TLS = os.getenv("SMTP_USE_TLS")
 EMAIL_VERIFYCATION_TOKEN_EXPIRE_MINUTES = int(
-    os.getenv("EMAIL_VERIFYCATION_TOKEN_EXPIRE_MINUTES")
+    os.getenv("EMAIL_VERIFYCATION_TOKEN_EXPIRE_MINUTES") or 10
+)
+PASSWORD_RESET_TOKEN_TTL_MINUTES = int(
+    os.getenv("PASSWORD_RESET_TOKEN_TTL_MINUTES") or 30
 )
 
 
@@ -93,7 +96,7 @@ async def send_reset_password_email(email: str, db: AsyncSession):
     await create_password_reset_token(
         user_id=user.id,
         token_hash=hash_token(token),
-        expires_at=now + timedelta(minutes=EMAIL_VERIFYCATION_TOKEN_EXPIRE_MINUTES),
+        expires_at=now + timedelta(minutes=PASSWORD_RESET_TOKEN_TTL_MINUTES),
         created_at=now,
         db=db,
     )

@@ -19,8 +19,8 @@ logger = logging.getLogger(__name__)
 
 
 load_dotenv()
-PHONE_OTP_MAX_ATTEMPTS = int(os.getenv("PHONE_OTP_MAX_ATTEMPTS"))
-PHONE_OTP_TTL_MINUTES = int(os.getenv("PHONE_OTP_TTL_MINUTES"))
+PHONE_OTP_MAX_ATTEMPTS = int(os.getenv("PHONE_OTP_MAX_ATTEMPTS") or 5)
+PHONE_OTP_TTL_MINUTES = int(os.getenv("PHONE_OTP_TTL_MINUTES") or 5)
 
 
 def generate_otp(length: int = 6) -> str:
@@ -37,6 +37,8 @@ async def verify_phone(phone: str, otp: str, db: AsyncSession):
         )
 
     phone_verifycation.attempts += 1
+    await db.flush()
+    await db.commit()
 
     if not verify_password(otp, phone_verifycation.otp_hash):
         raise HTTPException(

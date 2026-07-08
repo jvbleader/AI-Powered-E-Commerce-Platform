@@ -10,12 +10,13 @@ from jwt_service import (
     jwt_token_expires_at,
 )
 from models.user import User
+from repositories.user_role_repository import get_role_list_by_user_id
 from repositories.user_repositoriy import (
     create_user,
     get_user_by_email,
     get_user_by_id,
     get_user_by_phone,
-    get_user_by_user_name,
+    get_user_by_user_name
 )
 from repositories.user_session_repository import (
     create_session,
@@ -68,7 +69,7 @@ async def register_user(data: RegisterRequest, db: AsyncSession):
 
     return RegisterResponse(
         full_name=user.full_name,
-        user_name=user.full_name,
+        user_name=user.user_name,
         email=user.email,
         phone=user.phone,
     )
@@ -192,7 +193,8 @@ async def logout(refresh_token: str | None, db: AsyncSession):
     )
 
 
-def user_to_response(user: User, roles: list[str]) -> UserMeResponse:
+async def user_to_response(user: User, db: AsyncSession) -> UserMeResponse:
+    roles = await get_role_list_by_user_id(user.id, db)
     return UserMeResponse(
         public_id=user.public_id,
         full_name=user.full_name,

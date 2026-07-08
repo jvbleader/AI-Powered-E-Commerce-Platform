@@ -57,6 +57,13 @@ class SellerProfile(Base):
     phone: Mapped[str] = mapped_column(String(20), nullable=False)
     email: Mapped[str] = mapped_column(String(255), nullable=False)
     pickup_address: Mapped[str] = mapped_column(String(500), nullable=False)
+    tax_code: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    bank_name: Mapped[str | None] = mapped_column(String(150), nullable=True)
+    bank_account_number: Mapped[str | None] = mapped_column(
+        String(50),
+        nullable=True,
+    )
+    bank_account_name: Mapped[str | None] = mapped_column(String(150), nullable=True)
     shipping_fee: Mapped[Decimal] = mapped_column(
         Numeric(12, 2),
         nullable=False,

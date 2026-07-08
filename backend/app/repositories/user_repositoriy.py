@@ -72,3 +72,4 @@ async def change_password_hash_by_user_id(
     user = await get_user_by_id(user_id, db)
     user.password_hash = password_hash
     await db.flush()
+
