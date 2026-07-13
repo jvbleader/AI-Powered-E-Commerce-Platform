@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { initialState } from "@/data/mock";
 import {
   canCustomerCancel,
@@ -24,7 +24,9 @@ import type {
   SellerApplication,
   SellerStatus,
   Shop,
-  User
+  User,
+  ProductVariant,
+  Order
 } from "@/types/models";
 
 const STORAGE_KEY = "shepoo-marketplace-state-v2";
@@ -55,6 +57,18 @@ const ADMIN_SELLER_APPLICATION_ROUTES = {
   detail: (sellerPublicId: string) => `/admin/seller-applications/${sellerPublicId}`,
   approve: (sellerPublicId: string) => `/admin/seller-applications/${sellerPublicId}/approve`,
   reject: (sellerPublicId: string) => `/admin/seller-applications/${sellerPublicId}/reject`
+};
+const SELLER_PRODUCT_ROUTES = {
+  list: "/seller/products",
+  create: "/seller/products",
+  update: (productId: string) => `/seller/products/${productId}`,
+  hide: (productId: string) => `/seller/products/${productId}/hide`,
+  delete: (productId: string) => `/seller/products/${productId}`
+};
+const SELLER_ORDER_ROUTES = {
+  list: "/seller/orders",
+  confirm: (orderId: string) => `/seller/orders/${orderId}/confirm`,
+  shipping: (orderId: string) => `/seller/orders/${orderId}/shipping`
 };
 
 type BackendUser = {
@@ -141,6 +155,75 @@ type BackendSellerApplicationDetail = {
 type SellerApplicationDetail = {
   user: User;
   application: SellerApplication;
+};
+
+type BackendImageResponse = {
+  image_url: string;
+  is_thumbnail: boolean;
+  sort_order: number;
+};
+
+type BackendVariantResponse = {
+  public_id: string;
+  sku: string;
+  variant_name: string;
+  price: string | number;
+  sale_price?: string | number | null;
+  sale_start_at?: string | null;
+  sale_end_at?: string | null;
+  image_url?: string | null;
+  status: Product["status"];
+};
+
+type BackendProductResponse = {
+  public_id: string;
+  name: string;
+  slug: string;
+  short_description?: string | null;
+  description?: string | null;
+  brand?: string | null;
+  origin?: string | null;
+  warranty_info?: string | null;
+  status: Product["status"];
+  average_rating: number;
+  review_count: number;
+  sold_count: number;
+  view_count: number;
+  created_at: string;
+  updated_at?: string | null;
+  images: BackendImageResponse[];
+  variants: BackendVariantResponse[];
+};
+
+type BackendProductListResponse = {
+  items: BackendProductResponse[];
+  total: number;
+};
+
+type BackendOrderResponse = {
+  public_id: string;
+  order_code: string;
+  order_status: OrderStatus;
+  payment_status: PaymentStatus;
+  seller_confirmed: boolean;
+  seller_confirmed_at?: string | null;
+  subtotal_amount: string | number;
+  shipping_fee: string | number;
+  product_discount_amount: string | number;
+  shipping_discount_amount: string | number;
+  total_amount: string | number;
+  customer_note?: string | null;
+  payment_expires_at: string;
+  seller_confirm_expires_at: string;
+  completed_at?: string | null;
+  cancelled_at?: string | null;
+  created_at: string;
+  updated_at?: string | null;
+};
+
+type BackendOrderListResponse = {
+  items: BackendOrderResponse[];
+  total: number;
 };
 
 type SellerApplicationPayload = Pick<
@@ -440,6 +523,89 @@ const normalizeBackendSellerApplication = (
   approvedAt: application.approved_at ?? undefined
 });
 
+const normalizeBackendProduct = (
+  backendProduct: BackendProductResponse,
+  sellerId: string
+): { product: Product; variants: ProductVariant[] } => {
+  const product: Product = {
+    id: backendProduct.public_id,
+    sellerId: sellerId,
+    name: backendProduct.name,
+    slug: backendProduct.slug,
+    shortDescription: backendProduct.short_description ?? "",
+    description: backendProduct.description ?? "",
+    brand: backendProduct.brand ?? undefined,
+    origin: backendProduct.origin ?? "Việt Nam",
+    warranty: backendProduct.warranty_info ?? undefined,
+    status: backendProduct.status,
+    averageRating: backendProduct.average_rating,
+    reviewCount: backendProduct.review_count,
+    soldCount: backendProduct.sold_count,
+    viewCount: backendProduct.view_count,
+    categoryIds: [], // Not returning category from backend yet
+    imageUrls: backendProduct.images.map((img) => img.image_url),
+    thumbnailUrl:
+      backendProduct.images.find((img) => img.is_thumbnail)?.image_url ??
+      backendProduct.images[0]?.image_url ??
+      "https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=900&q=80",
+    createdAt: backendProduct.created_at
+  };
+
+  const variants: ProductVariant[] = backendProduct.variants.map((variant) => ({
+    id: variant.public_id,
+    productId: product.id,
+    sku: variant.sku,
+    variantName: variant.variant_name,
+    price: Number(variant.price),
+    salePrice: variant.sale_price != null ? Number(variant.sale_price) : undefined,
+    saleStartAt: variant.sale_start_at ?? undefined,
+    saleEndAt: variant.sale_end_at ?? undefined,
+    imageUrl: variant.image_url ?? product.thumbnailUrl,
+    status: variant.status,
+    inventory: { quantity: 0, reservedQuantity: 0 } // Not tracking inventory in variant response yet
+  }));
+
+  return { product, variants };
+};
+
+const normalizeBackendOrder = (
+  backendOrder: BackendOrderResponse,
+  sellerId: string,
+  userId: string
+): Order => ({
+  id: backendOrder.public_id,
+  orderCode: backendOrder.order_code,
+  userId: userId,
+  sellerId: sellerId,
+  orderStatus: backendOrder.order_status,
+  paymentStatus: backendOrder.payment_status,
+  sellerConfirmed: backendOrder.seller_confirmed,
+  sellerConfirmedAt: backendOrder.seller_confirmed_at ?? undefined,
+  subtotalAmount: Number(backendOrder.subtotal_amount),
+  shippingFee: Number(backendOrder.shipping_fee),
+  productDiscountAmount: Number(backendOrder.product_discount_amount),
+  shippingDiscountAmount: Number(backendOrder.shipping_discount_amount),
+  totalAmount: Number(backendOrder.total_amount),
+  customerNote: backendOrder.customer_note ?? undefined,
+  paymentExpiresAt: backendOrder.payment_expires_at,
+  sellerConfirmExpiresAt: backendOrder.seller_confirm_expires_at,
+  completedAt: backendOrder.completed_at ?? undefined,
+  cancelledAt: backendOrder.cancelled_at ?? undefined,
+  items: [], // Details not in list response yet
+  shipment: {
+    shippingProviderName: "Chưa có thông tin",
+    receiverName: "-",
+    receiverPhone: "-",
+    province: "-",
+    district: "-",
+    ward: "-",
+    detailAddress: "-",
+    addressType: "HOME"
+  },
+  timeline: [],
+  createdAt: backendOrder.created_at
+});
+
 const sellerApplicationToShop = (
   application: SellerApplication,
   backendApplication: BackendSellerApplication,
@@ -535,6 +701,9 @@ export const useMarketplaceStore = () => {
   const [verificationContext, setVerificationContext] = useState<VerificationContext | undefined>();
   const [ready, setReady] = useState(false);
 
+  const fetchedSellerProductsRef = useRef(false);
+  const fetchedSellerOrdersStatusRef = useRef<string | null>(null);
+
   useEffect(() => {
     let cancelled = false;
     LEGACY_STORAGE_KEYS.forEach((key) => window.localStorage.removeItem(key));
@@ -553,12 +722,26 @@ export const useMarketplaceStore = () => {
       })
       .catch((error) => {
         if (!cancelled && error instanceof ApiError && ["NOT_AUTHENTICATED", "USER_NOT_VERIFIED"].includes(error.code ?? "")) {
-          setState((prev) => ({ ...prev, sessionUserId: undefined, activeRole: "GUEST" }));
+          setState((prev) => {
+            const nextState = { ...prev, sessionUserId: undefined, activeRole: "GUEST" as const };
+            if (prev.sessionUserId) {
+              persistState(nextState);
+              window.location.href = "/login";
+            }
+            return nextState;
+          });
         }
       });
 
     const handleUnauthorized = () => {
-      setState((prev) => ({ ...prev, sessionUserId: undefined, activeRole: "GUEST" }));
+      setState((prev) => {
+        const nextState = { ...prev, sessionUserId: undefined, activeRole: "GUEST" as const };
+        if (prev.sessionUserId) {
+          persistState(nextState);
+          window.location.href = "/login";
+        }
+        return nextState;
+      });
     };
     window.addEventListener("auth:unauthorized", handleUnauthorized);
 
@@ -1341,6 +1524,162 @@ export const useMarketplaceStore = () => {
     }));
   }, []);
 
+  const fetchSellerProducts = useCallback(async (force = false) => {
+    if (!currentShop) return { ok: false, message: "Shop không tồn tại." };
+    if (!force && fetchedSellerProductsRef.current) return { ok: true, products: [] };
+    fetchedSellerProductsRef.current = true;
+    try {
+      const response = await apiFetch<BackendProductListResponse>(SELLER_PRODUCT_ROUTES.list);
+      const normalized = response.items.map((item) => normalizeBackendProduct(item, currentShop.id));
+      const products = normalized.map((n) => n.product);
+      const variants = normalized.flatMap((n) => n.variants);
+      
+      setState((prev) => {
+        const productIds = new Set(products.map((p) => p.id));
+        return {
+          ...prev,
+          products: [...prev.products.filter((p) => p.sellerId !== currentShop.id), ...products],
+          variants: [...prev.variants.filter((v) => !productIds.has(v.productId)), ...variants]
+        };
+      });
+      return { ok: true, products };
+    } catch (error) {
+      return { ok: false, message: error instanceof ApiError ? error.message : "Lỗi khi tải sản phẩm." };
+    }
+  }, [currentShop]);
+
+  const createSellerProduct = useCallback(async (payload: any) => {
+    if (!currentShop) return { ok: false, message: "Shop không tồn tại." };
+    try {
+      const response = await apiFetch<BackendProductResponse>(SELLER_PRODUCT_ROUTES.create, {
+        method: "POST",
+        body: JSON.stringify(payload)
+      });
+      const { product, variants } = normalizeBackendProduct(response, currentShop.id);
+      setState((prev) => ({
+        ...prev,
+        products: [product, ...prev.products.filter((p) => p.id !== product.id)],
+        variants: [...variants, ...prev.variants.filter((v) => v.productId !== product.id)]
+      }));
+      return { ok: true, product };
+    } catch (error) {
+      return { ok: false, message: error instanceof ApiError ? error.message : "Lỗi khi tạo sản phẩm." };
+    }
+  }, [currentShop]);
+
+  const updateSellerProduct = useCallback(async (productId: string, payload: any) => {
+    if (!currentShop) return { ok: false, message: "Shop không tồn tại." };
+    try {
+      const response = await apiFetch<BackendProductResponse>(SELLER_PRODUCT_ROUTES.update(productId), {
+        method: "PUT",
+        body: JSON.stringify(payload)
+      });
+      const { product, variants } = normalizeBackendProduct(response, currentShop.id);
+      setState((prev) => ({
+        ...prev,
+        products: prev.products.map((p) => p.id === product.id ? product : p),
+        variants: [...variants, ...prev.variants.filter((v) => v.productId !== product.id)]
+      }));
+      return { ok: true, product };
+    } catch (error) {
+      return { ok: false, message: error instanceof ApiError ? error.message : "Lỗi khi cập nhật sản phẩm." };
+    }
+  }, [currentShop]);
+
+  const hideSellerProduct = useCallback(async (productId: string) => {
+    if (!currentShop) return { ok: false, message: "Shop không tồn tại." };
+    try {
+      const response = await apiFetch<BackendProductResponse>(SELLER_PRODUCT_ROUTES.hide(productId), {
+        method: "PATCH"
+      });
+      const { product, variants } = normalizeBackendProduct(response, currentShop.id);
+      setState((prev) => ({
+        ...prev,
+        products: prev.products.map((p) => p.id === product.id ? product : p),
+        variants: [...variants, ...prev.variants.filter((v) => v.productId !== product.id)]
+      }));
+      return { ok: true, product };
+    } catch (error) {
+      return { ok: false, message: error instanceof ApiError ? error.message : "Lỗi khi ẩn sản phẩm." };
+    }
+  }, [currentShop]);
+
+  const deleteSellerProduct = useCallback(async (productId: string) => {
+    try {
+      await apiFetch(SELLER_PRODUCT_ROUTES.delete(productId), { method: "DELETE" });
+      setState((prev) => ({
+        ...prev,
+        products: prev.products.filter((p) => p.id !== productId),
+        variants: prev.variants.filter((v) => v.productId !== productId)
+      }));
+      return { ok: true };
+    } catch (error) {
+      return { ok: false, message: error instanceof ApiError ? error.message : "Lỗi khi xóa sản phẩm." };
+    }
+  }, []);
+
+  const fetchSellerOrders = useCallback(async (status?: OrderStatus | "", force = false) => {
+    if (!currentShop || !currentUser) return { ok: false, message: "Shop không tồn tại." };
+    const queryStatus = status || "";
+    if (!force && fetchedSellerOrdersStatusRef.current === queryStatus) return { ok: true, orders: [] };
+    fetchedSellerOrdersStatusRef.current = queryStatus;
+    try {
+      const query = new URLSearchParams({ page: "1", limit: "100" });
+      if (status) query.set("status", status);
+      const response = await apiFetch<BackendOrderListResponse>(`${SELLER_ORDER_ROUTES.list}?${query.toString()}`);
+      
+      const orders = response.items.map((item) => normalizeBackendOrder(item, currentShop.id, currentUser.id));
+      
+      setState((prev) => {
+        const incomingIds = new Set(orders.map((o) => o.id));
+        return {
+          ...prev,
+          orders: [
+            ...orders,
+            ...prev.orders.filter((o) => o.sellerId !== currentShop.id || !incomingIds.has(o.id))
+          ]
+        };
+      });
+      return { ok: true, orders };
+    } catch (error) {
+      return { ok: false, message: error instanceof ApiError ? error.message : "Lỗi khi tải đơn hàng." };
+    }
+  }, [currentShop, currentUser]);
+
+  const confirmSellerOrder = useCallback(async (orderId: string) => {
+    if (!currentShop || !currentUser) return { ok: false, message: "Shop không tồn tại." };
+    try {
+      const response = await apiFetch<BackendOrderResponse>(SELLER_ORDER_ROUTES.confirm(orderId), {
+        method: "PATCH"
+      });
+      const order = normalizeBackendOrder(response, currentShop.id, currentUser.id);
+      setState((prev) => ({
+        ...prev,
+        orders: prev.orders.map((o) => (o.id === order.id ? { ...o, ...order } : o))
+      }));
+      return { ok: true, order };
+    } catch (error) {
+      return { ok: false, message: error instanceof ApiError ? error.message : "Lỗi khi xác nhận đơn hàng." };
+    }
+  }, [currentShop, currentUser]);
+
+  const shippingSellerOrder = useCallback(async (orderId: string) => {
+    if (!currentShop || !currentUser) return { ok: false, message: "Shop không tồn tại." };
+    try {
+      const response = await apiFetch<BackendOrderResponse>(SELLER_ORDER_ROUTES.shipping(orderId), {
+        method: "PATCH"
+      });
+      const order = normalizeBackendOrder(response, currentShop.id, currentUser.id);
+      setState((prev) => ({
+        ...prev,
+        orders: prev.orders.map((o) => (o.id === order.id ? { ...o, ...order } : o))
+      }));
+      return { ok: true, order };
+    } catch (error) {
+      return { ok: false, message: error instanceof ApiError ? error.message : "Lỗi khi chuyển trạng thái shipping." };
+    }
+  }, [currentShop, currentUser]);
+
   const saveProduct = useCallback((product: Product, productVariants = state.variants.filter((variant) => variant.productId === product.id)) => {
     setState((prev) => {
       const exists = prev.products.some((item) => item.id === product.id);
@@ -1410,6 +1749,14 @@ export const useMarketplaceStore = () => {
     updateSellerOrder,
     updateSellerStatus,
     toggleUserLock,
+    fetchSellerProducts,
+    createSellerProduct,
+    updateSellerProduct,
+    hideSellerProduct,
+    deleteSellerProduct,
+    fetchSellerOrders,
+    confirmSellerOrder,
+    shippingSellerOrder,
     saveProduct,
     addAddress,
     resetDemo
