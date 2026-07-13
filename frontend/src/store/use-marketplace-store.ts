@@ -43,7 +43,8 @@ const AUTH_ROUTES = {
   requestPasswordReset: `${AUTH_BASE_PATH}/reset-password/send-email`,
   resetPassword: `${AUTH_BASE_PATH}/reset-password`,
   changePassword: `${AUTH_BASE_PATH}/change-password`,
-  logout: `${AUTH_BASE_PATH}/logout`
+  logout: `${AUTH_BASE_PATH}/logout`,
+  logoutAll: `${AUTH_BASE_PATH}/logout-all`
 };
 const SELLER_ROUTES = {
   me: "/seller/me",
@@ -556,8 +557,14 @@ export const useMarketplaceStore = () => {
         }
       });
 
+    const handleUnauthorized = () => {
+      setState((prev) => ({ ...prev, sessionUserId: undefined, activeRole: "GUEST" }));
+    };
+    window.addEventListener("auth:unauthorized", handleUnauthorized);
+
     return () => {
       cancelled = true;
+      window.removeEventListener("auth:unauthorized", handleUnauthorized);
     };
   }, []);
 
@@ -905,6 +912,19 @@ export const useMarketplaceStore = () => {
       // Keep logout local even if the backend is offline.
     } finally {
       setState((prev) => ({ ...prev, sessionUserId: undefined, activeRole: "GUEST" }));
+    }
+  }, []);
+
+  const logoutAll = useCallback(async () => {
+    try {
+      const result = await apiFetch<MessageResponse>(AUTH_ROUTES.logoutAll, { method: "POST" });
+      setState((prev) => ({ ...prev, sessionUserId: undefined, activeRole: "GUEST" }));
+      return { ok: true, message: result.message };
+    } catch (error) {
+      if (error instanceof ApiError) {
+        return { ok: false, message: error.message };
+      }
+      return { ok: false, message: "Khong the dang xuat tat ca thiet bi luc nay." };
     }
   }, []);
 
@@ -1372,6 +1392,7 @@ export const useMarketplaceStore = () => {
     resetPassword,
     changePassword,
     logout,
+    logoutAll,
     getSellerApplication,
     saveSellerApplication,
     listSellerApplications,

@@ -1536,6 +1536,11 @@ export function AppShell() {
       }
     };
 
+    const submitLogoutAll = async () => {
+      const result = await store.logoutAll();
+      showToast(result.message, result.ok ? "success" : "danger");
+    };
+
     return (
       <Section title="Bảo mật">
         <div className="grid gap-4 lg:grid-cols-2">
@@ -1582,7 +1587,7 @@ export function AppShell() {
             <p className="mt-2 text-sm text-muted">Quản lý các phiên đăng nhập của tài khoản.</p>
             <div className="mt-3 flex flex-wrap gap-2">
               <Button variant="secondary" onClick={store.logout}>Đăng xuất thiết bị này</Button>
-              <Button variant="danger" onClick={store.logout}>Đăng xuất tất cả</Button>
+              <Button variant="danger" onClick={submitLogoutAll}>Đăng xuất tất cả</Button>
             </div>
           </Panel>
         </div>

@@ -116,6 +116,9 @@ apiClient.interceptors.response.use(
         await refreshRequest;
         return apiClient(originalRequest);
       } catch (refreshError) {
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new Event("auth:unauthorized"));
+        }
         return Promise.reject(toApiError(refreshError));
       } finally {
         refreshRequest = undefined;

@@ -2,7 +2,7 @@ name: AI-POWERED-E-COMMERCE-PLATFORM
 
 services:
   mysql:
-    image: mysql:8.4
+    image: mysql:latest
     restart: unless-stopped
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root_password}

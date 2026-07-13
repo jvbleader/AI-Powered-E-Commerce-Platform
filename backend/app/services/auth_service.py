@@ -16,11 +16,12 @@ from repositories.user_repositoriy import (
     get_user_by_email,
     get_user_by_id,
     get_user_by_phone,
-    get_user_by_user_name
+    get_user_by_user_name,
 )
 from repositories.user_session_repository import (
     create_session,
     get_session_by_refresh_token_hash,
+    revoke_all_user_sessions,
     revoke_session,
 )
 from schemas.auth_schema import (
@@ -190,6 +191,12 @@ async def logout(refresh_token: str | None, db: AsyncSession):
 
     await revoke_session(
         session.id, datetime.now(UTC).replace(tzinfo=None), "logout", db
+    )
+
+
+async def logout_all(user: User, db: AsyncSession):
+    await revoke_all_user_sessions(
+        user.id, datetime.now(UTC).replace(tzinfo=None), "LOGOUT_ALL", db
     )
 
 
