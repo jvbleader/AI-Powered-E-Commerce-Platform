@@ -176,6 +176,10 @@ type BackendVariantResponse = {
   image_url?: string | null;
   status: Product["status"];
   tier_index?: number[] | null;
+  inventory?: {
+    quantity: number;
+    reserved_quantity: number;
+  } | null;
 };
 
 type BackendProductResponse = {
@@ -409,7 +413,7 @@ const hydrateSavedState = (saved: AppState): AppState => {
     categories: mergeById(seed.categories, saved.categories),
     products: mergeById(seed.products, saved.products),
     variants: mergeById(seed.variants, saved.variants),
-    addresses: mergeById(seed.addresses, saved.addresses),
+    addresses: [],
     orders: mergeById(seed.orders, saved.orders),
     payments: mergeById(seed.payments, saved.payments),
     notifications: mergeById(seed.notifications, saved.notifications),
@@ -557,20 +561,24 @@ const normalizeBackendProduct = (
     variantOptions: backendProduct.variant_options ?? undefined
   };
 
-  const variants: ProductVariant[] = backendProduct.variants.map((variant) => ({
-    id: variant.public_id,
-    productId: product.id,
-    sku: variant.sku,
-    variantName: variant.variant_name,
-    price: Number(variant.price),
-    salePrice: variant.sale_price != null ? Number(variant.sale_price) : undefined,
-    saleStartAt: variant.sale_start_at ?? undefined,
-    saleEndAt: variant.sale_end_at ?? undefined,
-    imageUrl: variant.image_url ?? product.thumbnailUrl,
-    status: variant.status,
-    inventory: { quantity: 0, reservedQuantity: 0 }, // Not tracking inventory in variant response yet
-    tierIndex: variant.tier_index ?? undefined
-  }));
+  const variants: ProductVariant[] = backendProduct.variants
+    .filter(v => v.status !== "DELETED")
+    .map((variant) => ({
+      id: variant.public_id,
+      productId: product.id,
+      sku: variant.sku,
+      variantName: variant.variant_name,
+      price: Number(variant.price),
+      salePrice: variant.sale_price != null ? Number(variant.sale_price) : undefined,
+      saleStartAt: variant.sale_start_at ?? undefined,
+      saleEndAt: variant.sale_end_at ?? undefined,
+      imageUrl: variant.image_url ?? product.thumbnailUrl,
+      status: variant.status,
+      inventory: variant.inventory 
+        ? { quantity: variant.inventory.quantity, reservedQuantity: variant.inventory.reserved_quantity } 
+        : { quantity: 0, reservedQuantity: 0 },
+      tierIndex: variant.tier_index ?? undefined
+    }));
 
   return { product, variants };
 };
@@ -1756,17 +1764,72 @@ export const useMarketplaceStore = () => {
     });
   }, [state.variants]);
 
-  const addAddress = useCallback((address: Omit<Address, "id" | "userId">) => {
+  const fetchAddresses = useCallback(async () => {
     if (!currentUser) return;
-    setState((prev) => ({
-      ...prev,
-      addresses: [
-        ...prev.addresses.map((item) =>
-          item.userId === currentUser.id && address.isDefault ? { ...item, isDefault: false } : item
-        ),
-        { ...address, id: `addr-${prev.addresses.length + 1}`, userId: currentUser.id }
-      ]
-    }));
+    try {
+      const { fetchAddressesApi } = await import("@/lib/address-api");
+      const data = await fetchAddressesApi();
+      setState((prev) => ({
+        ...prev,
+        addresses: data.map((item) => ({
+          id: String(item.id),
+          userId: currentUser.id, // Use current user's public ID
+          receiverName: item.receiver_name,
+          phone: item.phone,
+          province: item.province,
+          district: item.district,
+          ward: item.ward,
+          detailAddress: item.detail_address,
+          addressType: item.address_type as "HOME" | "OFFICE",
+          isDefault: item.is_default
+        }))
+      }));
+    } catch (error) {
+      console.error("Failed to fetch addresses", error);
+    }
+  }, [currentUser]);
+
+  const addAddress = useCallback(async (address: Omit<Address, "id" | "userId">): Promise<boolean> => {
+    if (!currentUser) return false;
+    try {
+      const { createAddressApi } = await import("@/lib/address-api");
+      const resp = await createAddressApi({
+        receiver_name: address.receiverName,
+        phone: address.phone,
+        province: address.province,
+        district: address.district,
+        ward: address.ward,
+        detail_address: address.detailAddress,
+        address_type: address.addressType,
+        is_default: address.isDefault
+      });
+      const newAddr: Address = {
+        id: String(resp.id),
+        userId: currentUser.id, // Use current user's public ID
+        receiverName: resp.receiver_name,
+        phone: resp.phone,
+        province: resp.province,
+        district: resp.district,
+        ward: resp.ward,
+        detailAddress: resp.detail_address,
+        addressType: resp.address_type as "HOME" | "OFFICE",
+        isDefault: resp.is_default
+      };
+      
+      setState((prev) => ({
+        ...prev,
+        addresses: [
+          ...prev.addresses.map((item) =>
+            item.userId === currentUser.id && newAddr.isDefault ? { ...item, isDefault: false } : item
+          ),
+          newAddr
+        ]
+      }));
+      return true;
+    } catch (error) {
+      console.error("Failed to add address", error);
+      return false;
+    }
   }, [currentUser]);
 
   const resetDemo = useCallback(() => {
@@ -1820,6 +1883,7 @@ export const useMarketplaceStore = () => {
     confirmSellerOrder,
     shippingSellerOrder,
     saveProduct,
+    fetchAddresses,
     addAddress,
     resetDemo
   };

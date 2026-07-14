@@ -88,3 +88,7 @@ class Payment(Base):
         cascade="all, delete-orphan",
     )
     refunds: Mapped[list["Refund"]] = relationship(back_populates="payment")
+
+    @property
+    def order_codes(self) -> list[str]:
+        return [link.order.order_code for link in self.order_links if link.order]

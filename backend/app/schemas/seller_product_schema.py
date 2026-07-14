@@ -63,6 +63,14 @@ class ImageResponse(BaseModel):
         from_attributes = True
 
 
+class InventoryResponse(BaseModel):
+    quantity: int
+    reserved_quantity: int
+
+    class Config:
+        from_attributes = True
+
+
 class VariantResponse(BaseModel):
     public_id: str
     sku: str
@@ -74,6 +82,7 @@ class VariantResponse(BaseModel):
     image_url: Optional[str]
     status: str
     tier_index: Optional[List[int]] = None
+    inventory: Optional[InventoryResponse] = None
 
     class Config:
         from_attributes = True

@@ -81,3 +81,57 @@ async def update_order_status_to_shipping(db: AsyncSession, order: Order) -> Ord
     await db.flush()
     await db.refresh(order)
     return order
+
+
+async def create_order(db: AsyncSession, order: Order) -> Order:
+    db.add(order)
+    await db.flush()
+    return order
+
+
+async def add_order_status_log(db: AsyncSession, log: OrderStatusLog) -> OrderStatusLog:
+    db.add(log)
+    await db.flush()
+    return log
+
+
+async def add_order_cancellation(db: AsyncSession, cancellation) -> None:
+    db.add(cancellation)
+    await db.flush()
+
+
+async def get_user_orders(db: AsyncSession, user_id: int) -> list[Order]:
+    from sqlalchemy.orm import selectinload
+
+    stmt = (
+        select(Order)
+        .options(selectinload(Order.items), selectinload(Order.seller))
+        .where(Order.user_id == user_id)
+        .order_by(Order.created_at.desc())
+    )
+    res = await db.execute(stmt)
+    return list(res.scalars().all())
+
+
+async def get_order_by_code_and_user(
+    db: AsyncSession, order_code: str, user_id: int
+) -> Order | None:
+    from sqlalchemy.orm import selectinload
+
+    stmt = (
+        select(Order)
+        .options(selectinload(Order.items), selectinload(Order.seller))
+        .where(Order.order_code == order_code, Order.user_id == user_id)
+    )
+    res = await db.execute(stmt)
+    return res.scalar_one_or_none()
+
+
+async def get_orders_by_codes_and_user(
+    db: AsyncSession, order_codes: list[str], user_id: int
+) -> list[Order]:
+    stmt = select(Order).where(
+        Order.order_code.in_(order_codes), Order.user_id == user_id
+    )
+    res = await db.execute(stmt)
+    return list(res.scalars().all())

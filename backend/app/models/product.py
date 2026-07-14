@@ -129,6 +129,7 @@ class Product(Base):
         cascade="all, delete-orphan",
     )
     variants: Mapped[list["ProductVariant"]] = relationship(
+        primaryjoin="and_(Product.id==ProductVariant.product_id, ProductVariant.status != 'DELETED')",
         back_populates="product",
         cascade="all, delete-orphan",
     )
