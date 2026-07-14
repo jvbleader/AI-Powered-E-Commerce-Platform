@@ -5,6 +5,7 @@ from decimal import Decimal
 
 from sqlalchemy import (
     CHAR,
+    JSON,
     CheckConstraint,
     DateTime,
     ForeignKey,
@@ -68,6 +69,7 @@ class ProductVariant(Base):
         default="ACTIVE",
         server_default=text("'ACTIVE'"),
     )
+    tier_index: Mapped[list | dict | None] = mapped_column(JSON, nullable=True)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime,

@@ -8,10 +8,11 @@ from schemas.seller_order_schema import OrderListResponse, OrderResponse
 from services.seller_order_service import (
     get_seller_orders,
     confirm_seller_order,
-    update_order_to_shipping
+    update_order_to_shipping,
 )
 
 router = APIRouter(prefix="/seller/orders", tags=["Seller Orders"])
+
 
 @router.get("", response_model=OrderListResponse)
 async def get_orders_api(
@@ -19,7 +20,7 @@ async def get_orders_api(
     db: Annotated[AsyncSession, Depends(get_db)],
     status: Optional[str] = Query(None),
     page: int = Query(1, ge=1),
-    limit: int = Query(10, ge=1, le=100)
+    limit: int = Query(10, ge=1, le=100),
 ) -> OrderListResponse:
     skip = (page - 1) * limit
     result = None
@@ -30,6 +31,7 @@ async def get_orders_api(
         await db.rollback()
         raise
     return result
+
 
 @router.patch("/{order_id}/confirm", response_model=OrderResponse)
 async def confirm_order_api(
@@ -45,6 +47,7 @@ async def confirm_order_api(
         await db.rollback()
         raise
     return result
+
 
 @router.patch("/{order_id}/shipping", response_model=OrderResponse)
 async def update_order_to_shipping_api(

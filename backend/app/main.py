@@ -23,6 +23,7 @@ from api.seller_api import router as seller_router
 from api.seller_product_api import router as seller_product_router
 from api.seller_order_api import router as seller_order_router
 from api.admin_api import router as admin_router
+from api.product_api import router as product_router
 from middleware.auth_middleware import validate_auth_cookie_middleware
 
 
@@ -53,11 +54,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+from api.category_api import router as category_router
+
 app.include_router(auth_router)
 app.include_router(seller_router)
 app.include_router(seller_product_router)
 app.include_router(seller_order_router)
 app.include_router(admin_router)
+app.include_router(product_router)
+app.include_router(category_router)
 
 
 @app.get("/health", tags=["Health"])
