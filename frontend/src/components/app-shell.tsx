@@ -85,7 +85,7 @@ import {
   sellerStatusLabel
 } from "@/lib/helpers";
 import { useMarketplaceStore } from "@/store/use-marketplace-store";
-import type { AddressType, Order, PaymentMethod, Product, ProductVariant, SellerApplication, SellerStatus, Shop } from "@/types/models";
+import type { AddressType, Order, OrderStatus, PaymentMethod, Product, ProductVariant, SellerApplication, SellerStatus, Shop } from "@/types/models";
 
 type ToastTone = "success" | "danger" | "info";
 type ToastState = { message: string; tone: ToastTone } | undefined;
@@ -1536,6 +1536,11 @@ export function AppShell() {
       }
     };
 
+    const submitLogoutAll = async () => {
+      const result = await store.logoutAll();
+      showToast(result.message, result.ok ? "success" : "danger");
+    };
+
     return (
       <Section title="Bảo mật">
         <div className="grid gap-4 lg:grid-cols-2">
@@ -1582,7 +1587,7 @@ export function AppShell() {
             <p className="mt-2 text-sm text-muted">Quản lý các phiên đăng nhập của tài khoản.</p>
             <div className="mt-3 flex flex-wrap gap-2">
               <Button variant="secondary" onClick={store.logout}>Đăng xuất thiết bị này</Button>
-              <Button variant="danger" onClick={store.logout}>Đăng xuất tất cả</Button>
+              <Button variant="danger" onClick={submitLogoutAll}>Đăng xuất tất cả</Button>
             </div>
           </Panel>
         </div>
@@ -1628,6 +1633,14 @@ export function AppShell() {
 
   function OrdersList({ audience }: { audience: "customer" | "seller" }) {
     const [status, setStatus] = useState("");
+    
+    useEffect(() => {
+      if (audience === "seller") {
+        store.fetchSellerOrders(status as OrderStatus | "");
+      }
+    }, [audience, status, store.fetchSellerOrders]);
+
+
     const orders = store.state.orders.filter((order) => {
       const belongs = audience === "customer" ? order.userId === store.currentUser?.id : order.sellerId === store.currentShop?.id;
       return belongs && (!status || order.orderStatus === status);
@@ -1733,10 +1746,10 @@ export function AppShell() {
             ) : null}
             {audience === "seller" ? (
               <div className="mt-4 grid gap-2">
-                <Button disabled={order.paymentStatus !== "PAID"} onClick={() => store.updateSellerOrder(order.orderCode, "READY_TO_SHIP")}>Xác nhận đơn</Button>
-                <Button variant="secondary" disabled={order.paymentStatus !== "PAID" || !order.sellerConfirmed} onClick={() => store.updateSellerOrder(order.orderCode, "SHIPPING")}>Chuyển shipping</Button>
-                <Button variant="secondary" onClick={() => store.updateSellerOrder(order.orderCode, "COMPLETED")}>Hoàn thành</Button>
-                <Button variant="danger" onClick={() => store.updateSellerOrder(order.orderCode, "DELIVERY_FAILED")}>Giao thất bại</Button>
+                <Button disabled={order.paymentStatus !== "PAID" || order.orderStatus !== "PLACED"} onClick={() => store.confirmSellerOrder(order.id).then((res) => { if (res.ok) showToast("Đã xác nhận đơn hàng.", "success"); else showToast(res.message || "Lỗi xác nhận", "danger"); })}>Xác nhận đơn</Button>
+                <Button variant="secondary" disabled={order.paymentStatus !== "PAID" || !order.sellerConfirmed || order.orderStatus !== "READY_TO_SHIP"} onClick={() => store.shippingSellerOrder(order.id).then((res) => { if (res.ok) showToast("Đã chuyển shipping.", "success"); else showToast(res.message || "Lỗi chuyển shipping", "danger"); })}>Chuyển shipping</Button>
+                <Button variant="secondary" onClick={() => store.updateSellerOrder(order.orderCode, "COMPLETED")}>Hoàn thành (Mock)</Button>
+                <Button variant="danger" onClick={() => store.updateSellerOrder(order.orderCode, "DELIVERY_FAILED")}>Giao thất bại (Mock)</Button>
               </div>
             ) : null}
           </Panel>
@@ -2273,6 +2286,14 @@ export function AppShell() {
 
   function SellerDashboard() {
     const shop = store.currentShop;
+    
+    useEffect(() => {
+      if (shop?.status === "APPROVED") {
+        store.fetchSellerOrders();
+        store.fetchSellerProducts();
+      }
+    }, [shop?.status, store.fetchSellerOrders, store.fetchSellerProducts]);
+
     if (!shop) {
       return (
         <Section title="Kênh người bán">
@@ -2351,6 +2372,11 @@ export function AppShell() {
 
   function SellerProductsPage() {
     const shop = store.currentShop;
+    
+    useEffect(() => {
+      if (shop) store.fetchSellerProducts();
+    }, [shop, store.fetchSellerProducts]);
+
     const products = store.state.products.filter((product) => product.sellerId === shop?.id);
     return (
       <Section title="Quản lý sản phẩm" action={<Button onClick={() => (window.location.href = "/seller/products/new")}><Plus className="h-4 w-4" />Tạo sản phẩm</Button>}>
@@ -2367,7 +2393,13 @@ export function AppShell() {
               `${product.soldCount}`,
               product.averageRating.toFixed(1),
               <StatusBadge key="st" status={product.status} label={productStatusLabel[product.status]} />,
-              <a key="edit" className="font-bold text-primary" href={`/seller/products/${product.id}/edit`}>Edit</a>
+              <div key="actions" className="flex gap-3 text-sm">
+                <a className="font-bold text-primary" href={`/seller/products/${product.id}/edit`}>Sửa</a>
+                {product.status !== "HIDDEN" && (
+                  <button className="text-muted hover:text-primary" onClick={() => store.hideSellerProduct(product.id).then((r) => { if(!r.ok) showToast(r.message||"", "danger") })}>Ẩn</button>
+                )}
+                <button className="text-danger hover:text-danger/80" onClick={() => { if(confirm("Xóa sản phẩm?")) store.deleteSellerProduct(product.id).then((r) => { if(!r.ok) showToast(r.message||"", "danger") }) }}>Xóa</button>
+              </div>
             ];
           })}
         />
@@ -2439,43 +2471,46 @@ export function AppShell() {
                 </Select>
               </Field>
               <Button
-                onClick={() => {
+                onClick={async () => {
                   if (!shop) {
                     showToast("Shop của bạn chưa sẵn sàng để tạo sản phẩm.", "danger");
                     return;
                   }
 
-                  const product: Product = {
-                    id: editing?.id ?? `p-new-${store.state.products.length + 1}`,
-                    sellerId: shop.id,
+                  const payload = {
                     name: name || "Sản phẩm mới",
                     slug,
-                    shortDescription: "Sản phẩm tạo từ form seller.",
+                    short_description: "Sản phẩm tạo từ form seller.",
                     description: "Mô tả dài của sản phẩm. Có thể nối API upload ảnh và variant sau.",
                     origin: "Việt Nam",
-                    status,
-                    averageRating: editing?.averageRating ?? 0,
-                    reviewCount: editing?.reviewCount ?? 0,
-                    soldCount: editing?.soldCount ?? 0,
-                    viewCount: editing?.viewCount ?? 0,
-                    categoryIds,
-                    imageUrls: editing?.imageUrls ?? ["https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=900&q=80"],
-                    thumbnailUrl: editing?.thumbnailUrl ?? "https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=900&q=80",
-                    createdAt: editing?.createdAt ?? "2026-06-29T09:00:00.000Z"
+                    category_ids: [],
+                    images: [
+                      { image_url: "https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=900&q=80", is_thumbnail: true, sort_order: 1 }
+                    ],
+                    variants: [
+                      {
+                        sku: `${shop.shopSlug}-${slug}-1`,
+                        variant_name: variantName || "Default",
+                        price: Number(price) || 0,
+                        quantity: Number(quantity) || 0,
+                        image_url: "https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=900&q=80"
+                      }
+                    ]
                   };
-                  const variant: ProductVariant = {
-                    id: `${product.id}-v-1`,
-                    productId: product.id,
-                    sku: `${shop.shopSlug}-${slug}-1`,
-                    variantName: variantName || "Default",
-                    price: Number(price) || 0,
-                    imageUrl: product.thumbnailUrl,
-                    status,
-                    inventory: { quantity: Number(quantity) || 0, reservedQuantity: 0 }
-                  };
-                  store.saveProduct(product, [variant]);
-                  showToast("Đã lưu sản phẩm.", "success");
-                  window.location.href = "/seller/products";
+
+                  let res;
+                  if (editing) {
+                    res = await store.updateSellerProduct(editing.id, payload);
+                  } else {
+                    res = await store.createSellerProduct(payload);
+                  }
+
+                  if (res.ok) {
+                    showToast("Đã lưu sản phẩm.", "success");
+                    window.location.href = "/seller/products";
+                  } else {
+                    showToast(res.message || "Lỗi lưu sản phẩm", "danger");
+                  }
                 }}
               >
                 Lưu sản phẩm

@@ -11,8 +11,7 @@ from repositories.user_role_repository import get_role_list_by_user_id
 
 
 async def get_current_user(
-    request: Request, 
-    db: Annotated[AsyncSession, Depends(get_db)]
+    request: Request, db: Annotated[AsyncSession, Depends(get_db)]
 ) -> User:
     payload = getattr(request.state, "auth_payload", None)
 
@@ -48,7 +47,7 @@ async def get_current_user(
 
 async def get_current_admin(
     user: Annotated[User, Depends(get_current_user)],
-    db: Annotated[AsyncSession, Depends(get_db)]
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> User:
     if "ADMIN" not in await get_role_list_by_user_id(user.id, db):
         raise HTTPException(
@@ -61,7 +60,7 @@ async def get_current_admin(
 
 async def get_current_seller(
     user: Annotated[User, Depends(get_current_user)],
-    db: Annotated[AsyncSession, Depends(get_db)]
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> User:
     if "SELLER" not in await get_role_list_by_user_id(user.id, db):
         raise HTTPException(

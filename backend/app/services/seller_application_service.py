@@ -100,7 +100,7 @@ async def submit_seller_application(
         bank_name=data.bank_name,
         bank_account_number=data.bank_account_number,
         bank_account_name=data.bank_account_name,
-        db=db
+        db=db,
     )
 
     return seller_profile
@@ -135,15 +135,17 @@ async def update_my_seller_application(
             detail="Bạn không thể thực hiện thao tác này.",
         )
 
-    if (data.shop_name != seller_profile.shop_name 
-        and await get_seller_profile_by_shop_name(data.shop_name, db)):
+    if (
+        data.shop_name != seller_profile.shop_name
+        and await get_seller_profile_by_shop_name(data.shop_name, db)
+    ):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Tên shop này đã tồn tại, vui lòng chọn tên khác.",
         )
 
     shop_slug = seller_profile.shop_slug
-    if (data.shop_name != seller_profile.shop_name):
+    if data.shop_name != seller_profile.shop_name:
         shop_slug = await _create_unique_shop_slug(data.shop_name, db)
 
     if seller_profile.status == "REJECTED":
@@ -183,16 +185,15 @@ async def get_seller_application_detail(
         )
 
     user = await get_user_by_id(seller_profile.user_id, db)
-    
+
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Không tìm thấy user tạo yêu cầu mở shop này."
+            detail="Không tìm thấy user tạo yêu cầu mở shop này.",
         )
 
     return SellerApplicationDetailResponse(
-        user=await user_to_response(user, db), 
-        seller_profile=seller_profile
+        user=await user_to_response(user, db), seller_profile=seller_profile
     )
 
 

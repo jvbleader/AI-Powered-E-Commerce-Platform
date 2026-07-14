@@ -184,6 +184,26 @@ async def logout(
     return MessageResponse(message="Đăng xuất thành công.")
 
 
+@router.post(
+    "/logout-all",
+    response_model=MessageResponse,
+)
+async def logout_all(
+    user: Annotated[User, Depends(get_current_user)],
+    response: Response,
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    try:
+        await auth_service.logout_all(user, db)
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        raise
+
+    jwt_service.clear_auth_cookies(response)
+    return MessageResponse(message="Đăng xuất tất cả thiết bị thành công.")
+
+
 @router.post("/change-password", response_model=MessageResponse)
 async def change_password(
     user: Annotated[User, Depends(get_current_user)],

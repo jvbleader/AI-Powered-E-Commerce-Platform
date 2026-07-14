@@ -106,20 +106,32 @@ apiClient.interceptors.response.use(
     if (
       error.response?.status === 401 &&
       originalRequest &&
-      !originalRequest._retry &&
+      !originalRequest.headers?.["X-Retry"] &&
       !SKIP_REFRESH_PATHS.has(pathname)
     ) {
-      originalRequest._retry = true;
+      if (!originalRequest.headers) {
+        originalRequest.headers = {};
+      }
+      originalRequest.headers["X-Retry"] = "true";
 
       try {
         refreshRequest ??= apiClient.post(REFRESH_PATH);
         await refreshRequest;
         return apiClient(originalRequest);
       } catch (refreshError) {
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new Event("auth:unauthorized"));
+        }
         return Promise.reject(toApiError(refreshError));
       } finally {
         refreshRequest = undefined;
       }
+    }
+
+    if (error.response?.status === 401 && originalRequest?.headers?.["X-Retry"]) {
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new Event("auth:unauthorized"));
+        }
     }
 
     return Promise.reject(toApiError(error));

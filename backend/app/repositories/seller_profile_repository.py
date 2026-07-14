@@ -70,7 +70,7 @@ async def create_seller_profile(
 
     db.add(seller_profile)
     await db.flush()
-    
+
     return seller_profile
 
 

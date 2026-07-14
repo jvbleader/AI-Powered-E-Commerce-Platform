@@ -24,9 +24,7 @@ from services.seller_application_service import (
 router = APIRouter(prefix="/admin", tags=["Admin"])
 
 
-@router.get(
-    path="/seller-applications", response_model=list[SellerApplicationResponse]
-)
+@router.get(path="/seller-applications", response_model=list[SellerApplicationResponse])
 async def list_seller_applications_api(
     data: Annotated[ListSellerApplicationsRequest, Depends()],
     user: Annotated[User, Depends(get_current_admin)],

@@ -1,6 +1,7 @@
 from datetime import datetime
 
 from sqlalchemy import and_, or_, select
+from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.user_session import UserSession
@@ -32,3 +33,21 @@ async def revoke_session(
     session.revoke_reason = revoke_reason
     await db.flush()
     return session
+
+
+async def revoke_all_user_sessions(
+    user_id: int, revoked_at: datetime, revoke_reason: str, db: AsyncSession
+):
+    await db.execute(
+        update(UserSession)
+        .where(
+            UserSession.user_id == user_id,
+            UserSession.revoked_at.is_(None),
+        )
+        .values(
+            is_active=False,
+            revoked_at=revoked_at,
+            revoke_reason=revoke_reason,
+        )
+    )
+    await db.flush()
