@@ -26,12 +26,13 @@ import type {
   Shop,
   User,
   ProductVariant,
-  Order
+  Order,
+  Category
 } from "@/types/models";
 
-const STORAGE_KEY = "shepoo-marketplace-state-v2";
-const VERIFICATION_CONTEXT_KEY = "shepoo-verification-context-v2";
-const LEGACY_STORAGE_KEYS = ["shepoo-marketplace-state-v1", "shepoo-verification-context-v1"];
+const STORAGE_KEY = "shepoo-marketplace-state-v4";
+const VERIFICATION_CONTEXT_KEY = "shepoo-verification-context-v4";
+const LEGACY_STORAGE_KEYS = ["shepoo-marketplace-state-v1", "shepoo-marketplace-state-v2", "shepoo-marketplace-state-v3", "shepoo-verification-context-v1", "shepoo-verification-context-v2", "shepoo-verification-context-v3"];
 const DEFAULT_AVATAR = "https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=240&q=80";
 const DEFAULT_SHOP_LOGO = "https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?auto=format&fit=crop&w=240&q=80";
 const AUTH_ROUTES = {
@@ -173,6 +174,7 @@ type BackendVariantResponse = {
   sale_end_at?: string | null;
   image_url?: string | null;
   status: Product["status"];
+  tier_index?: number[] | null;
 };
 
 type BackendProductResponse = {
@@ -193,6 +195,8 @@ type BackendProductResponse = {
   updated_at?: string | null;
   images: BackendImageResponse[];
   variants: BackendVariantResponse[];
+  categories?: { id: number; name: string }[];
+  variant_options?: any[] | null;
 };
 
 type BackendProductListResponse = {
@@ -542,13 +546,14 @@ const normalizeBackendProduct = (
     reviewCount: backendProduct.review_count,
     soldCount: backendProduct.sold_count,
     viewCount: backendProduct.view_count,
-    categoryIds: [], // Not returning category from backend yet
+    categoryIds: backendProduct.categories ? backendProduct.categories.map((c) => c.id.toString()) : [],
     imageUrls: backendProduct.images.map((img) => img.image_url),
     thumbnailUrl:
       backendProduct.images.find((img) => img.is_thumbnail)?.image_url ??
       backendProduct.images[0]?.image_url ??
       "https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=900&q=80",
-    createdAt: backendProduct.created_at
+    createdAt: backendProduct.created_at,
+    variantOptions: backendProduct.variant_options ?? undefined
   };
 
   const variants: ProductVariant[] = backendProduct.variants.map((variant) => ({
@@ -562,7 +567,8 @@ const normalizeBackendProduct = (
     saleEndAt: variant.sale_end_at ?? undefined,
     imageUrl: variant.image_url ?? product.thumbnailUrl,
     status: variant.status,
-    inventory: { quantity: 0, reservedQuantity: 0 } // Not tracking inventory in variant response yet
+    inventory: { quantity: 0, reservedQuantity: 0 }, // Not tracking inventory in variant response yet
+    tierIndex: variant.tier_index ?? undefined
   }));
 
   return { product, variants };
@@ -834,6 +840,10 @@ export const useMarketplaceStore = () => {
     setState({ ...hydrated, sessionUserId: user.id, activeRole: preferredRole });
     return { ok: true, message: `Đã đăng nhập bằng ${user.fullName}.`, redirectTo: roleHomePath(preferredRole) };
   }, [state]);
+
+  const setCategories = useCallback((categories: Category[]) => {
+    setState((prev) => ({ ...prev, categories }));
+  }, []);
 
   const register = useCallback(async (
     payload: Pick<User, "fullName" | "email" | "phone"> & { password: string; confirmPassword: string }
@@ -1754,6 +1764,7 @@ export const useMarketplaceStore = () => {
     updateSellerProduct,
     hideSellerProduct,
     deleteSellerProduct,
+    setCategories,
     fetchSellerOrders,
     confirmSellerOrder,
     shippingSellerOrder,

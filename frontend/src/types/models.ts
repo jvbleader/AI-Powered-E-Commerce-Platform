@@ -112,6 +112,7 @@ export interface ProductVariant {
   imageUrl: string;
   status: VariantStatus;
   inventory: Inventory;
+  tierIndex?: number[];
 }
 
 export interface Product {
@@ -133,6 +134,7 @@ export interface Product {
   imageUrls: string[];
   thumbnailUrl: string;
   createdAt: string;
+  variantOptions?: any[];
 }
 
 export interface CartItem {

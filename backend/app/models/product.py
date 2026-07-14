@@ -5,6 +5,7 @@ from decimal import Decimal
 
 from sqlalchemy import (
     CHAR,
+    JSON,
     CheckConstraint,
     DateTime,
     ForeignKey,
@@ -102,6 +103,7 @@ class Product(Base):
         default=0,
         server_default=text("0"),
     )
+    variant_options: Mapped[list | dict | None] = mapped_column(JSON, nullable=True)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime,
@@ -118,6 +120,9 @@ class Product(Base):
     product_categories: Mapped[list["ProductCategory"]] = relationship(
         back_populates="product",
         cascade="all, delete-orphan",
+    )
+    categories: Mapped[list["Category"]] = relationship(
+        secondary="product_categories", viewonly=True
     )
     images: Mapped[list["ProductImage"]] = relationship(
         back_populates="product",

@@ -68,7 +68,6 @@ import {
 } from "@/components/marketplace/cards";
 import {
   canCustomerCancel,
-  filterProducts,
   formatDate,
   formatVnd,
   getCategoryNames,
@@ -84,6 +83,7 @@ import {
   selectedCheckoutGroups,
   sellerStatusLabel
 } from "@/lib/helpers";
+import { fetchPublicProducts, fetchRecommendedProducts, fetchProductDetail, fetchCategories } from "@/lib/product-api";
 import { useMarketplaceStore } from "@/store/use-marketplace-store";
 import type { AddressType, Order, OrderStatus, PaymentMethod, Product, ProductVariant, SellerApplication, SellerStatus, Shop } from "@/types/models";
 
@@ -162,6 +162,18 @@ export function AppShell() {
     setToast({ message, tone });
     window.setTimeout(() => setToast(undefined), 2600);
   };
+
+  useEffect(() => {
+    let active = true;
+    if (store.state.categories.length === 0) {
+      fetchCategories().then((res) => {
+        if (active && res.ok && res.categories) {
+          store.setCategories(res.categories);
+        }
+      });
+    }
+    return () => { active = false; };
+  }, [store.setCategories]);
 
   const findPaymentForOrder = (orderCode: string) =>
     store.state.payments.find((payment) => payment.orderCodes.includes(orderCode));
@@ -386,11 +398,42 @@ export function AppShell() {
   }
 
   function HomePage() {
+    const [bestSellers, setBestSellers] = useState<Product[]>([]);
+    const [newest, setNewest] = useState<Product[]>([]);
+    const [localVariants, setLocalVariants] = useState<ProductVariant[]>([]);
+    const [localShops, setLocalShops] = useState<Shop[]>([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+      let isMounted = true;
+      const loadHomeData = async () => {
+        setLoading(true);
+        const [recommendRes, newestRes] = await Promise.all([
+          fetchRecommendedProducts(8),
+          fetchPublicProducts({ sort_by: "newest", size: 8 })
+        ]);
+        if (isMounted) {
+          if (recommendRes.ok && recommendRes.products) {
+            setBestSellers(recommendRes.products);
+            setLocalVariants(prev => [...prev, ...recommendRes.variants!]);
+            setLocalShops(prev => [...prev, ...recommendRes.shops!]);
+          }
+          if (newestRes.ok && newestRes.products) {
+            setNewest(newestRes.products);
+            setLocalVariants(prev => [...prev, ...newestRes.variants!]);
+            setLocalShops(prev => [...prev, ...newestRes.shops!]);
+          }
+          setLoading(false);
+        }
+      };
+      loadHomeData();
+      return () => { isMounted = false; };
+    }, []);
+
     const approvedShops = store.state.shops.filter((shop) => shop.status === "APPROVED");
-    const bestSellers = [...store.state.products].sort((a, b) => b.soldCount - a.soldCount).slice(0, 8);
-    const newest = [...store.state.products].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, 8);
     const heroProduct = bestSellers[0];
-    const heroShop = store.state.shops.find((shop) => shop.id === heroProduct.sellerId);
+    const heroShop = heroProduct ? localShops.find((shop) => shop.id === heroProduct.sellerId) : undefined;
+
     return (
       <main className="mx-auto max-w-7xl px-4 py-5">
         <section className="grid gap-4 lg:grid-cols-[1.3fr_0.7fr]">
@@ -417,14 +460,20 @@ export function AppShell() {
                   </Button>
                 </div>
               </div>
-              <a href={`/shops/${heroShop?.shopSlug}/products/${heroProduct.slug}`} className="relative min-h-72 bg-canvas">
-                <img src={heroProduct.thumbnailUrl} alt={heroProduct.name} className="h-full w-full object-cover" />
-                <div className="absolute inset-x-4 bottom-4 rounded-panel border border-white/70 bg-white/95 p-3 shadow-soft backdrop-blur">
-                  <p className="inline-flex rounded-[6px] bg-amber/20 px-2 py-1 text-xs font-bold uppercase text-primary">Đang bán chạy</p>
-                  <h2 className="mt-1 text-lg font-black text-ink">{heroProduct.name}</h2>
-                  <p className="text-sm text-muted">{heroShop?.shopName}</p>
+              {heroProduct ? (
+                <a href={`/shops/${heroShop?.shopSlug}/products/${heroProduct.slug}`} className="relative min-h-72 bg-canvas">
+                  <img src={heroProduct.thumbnailUrl} alt={heroProduct.name} className="h-full w-full object-cover" />
+                  <div className="absolute inset-x-4 bottom-4 rounded-panel border border-white/70 bg-white/95 p-3 shadow-soft backdrop-blur">
+                    <p className="inline-flex rounded-[6px] bg-amber/20 px-2 py-1 text-xs font-bold uppercase text-primary">Đang bán chạy</p>
+                    <h2 className="mt-1 text-lg font-black text-ink">{heroProduct.name}</h2>
+                    <p className="text-sm text-muted">{heroShop?.shopName}</p>
+                  </div>
+                </a>
+              ) : (
+                <div className="relative min-h-72 bg-canvas flex items-center justify-center">
+                  {loading ? <p className="text-muted text-sm font-semibold">Đang tải...</p> : null}
                 </div>
-              </a>
+              )}
             </div>
           </div>
           <div className="grid gap-4">
@@ -468,12 +517,24 @@ export function AppShell() {
           </div>
         </Section>
 
-        <Section title="Sản phẩm bán chạy" action={<a className={linkClass} href="/products">Xem tất cả</a>}>
-          <ProductGrid products={bestSellers} />
+        <Section title="Sản phẩm gợi ý" action={<a className={linkClass} href="/products">Xem tất cả</a>}>
+          {loading ? (
+            <div className="py-12 text-center text-muted">Đang tải sản phẩm...</div>
+          ) : bestSellers.length > 0 ? (
+            <ProductGrid products={bestSellers} variants={localVariants} shops={localShops} />
+          ) : (
+            <EmptyState title="Không có sản phẩm" />
+          )}
         </Section>
 
         <Section title="Sản phẩm mới">
-          <ProductGrid products={newest} />
+          {loading ? (
+            <div className="py-12 text-center text-muted">Đang tải sản phẩm...</div>
+          ) : newest.length > 0 ? (
+            <ProductGrid products={newest} variants={localVariants} shops={localShops} />
+          ) : (
+            <EmptyState title="Không có sản phẩm" />
+          )}
         </Section>
 
         <Section title="Shop nổi bật">
@@ -487,15 +548,15 @@ export function AppShell() {
     );
   }
 
-  function ProductGrid({ products }: { products: Product[] }) {
+  function ProductGrid({ products, variants, shops }: { products: Product[]; variants: ProductVariant[]; shops: Shop[] }) {
     return (
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">
         {products.map((product) => (
           <ProductCard
             key={product.id}
             product={product}
-            variants={store.state.variants}
-            shop={shopById(product.sellerId)}
+            variants={variants}
+            shop={shops.find(s => s.id === product.sellerId)}
             categories={store.state.categories}
             onAdd={(variantId) => {
               const result = store.addToCart(variantId, 1);
@@ -516,23 +577,68 @@ export function AppShell() {
     categorySlug?: string;
     shopSlug?: string;
   }) {
-    const [keyword, setKeyword] = useState("");
+    const [keyword, setKeyword] = useState(() => {
+      if (typeof window !== "undefined") {
+        return new URLSearchParams(window.location.search).get("q") || "";
+      }
+      return "";
+    });
     const [sort, setSort] = useState<"newest" | "price-asc" | "price-desc" | "sold" | "rating">("newest");
     const [sellerId, setSellerId] = useState("");
     const [rating, setRating] = useState("");
     const [minPrice, setMinPrice] = useState("");
     const [maxPrice, setMaxPrice] = useState("");
     const [filtersOpen, setFiltersOpen] = useState(false);
-    const products = filterProducts(store.state.products, store.state.variants, store.state.shops, store.state.categories, {
-      keyword,
-      categorySlug,
-      shopSlug,
-      sellerId: sellerId || undefined,
-      rating: rating ? Number(rating) : undefined,
-      minPrice: minPrice ? Number(minPrice) : undefined,
-      maxPrice: maxPrice ? Number(maxPrice) : undefined,
-      sort
-    });
+    
+    const [products, setProducts] = useState<Product[]>([]);
+    const [variants, setVariants] = useState<ProductVariant[]>([]);
+    const [shops, setShops] = useState<Shop[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [page, setPage] = useState(1);
+    const [hasMore, setHasMore] = useState(false);
+
+    useEffect(() => {
+      let isMounted = true;
+      const loadProducts = async () => {
+        setLoading(true);
+        const res = await fetchPublicProducts({
+          keyword: keyword || undefined,
+          category: categorySlug || undefined,
+          sort_by: sort,
+          page,
+          size: 20
+          // MVP doesn't have backend filter by seller, rating, price yet. 
+          // We can just rely on keyword and sort, or we could pass them if added later.
+        });
+        if (isMounted) {
+          if (res.ok && res.products) {
+            setProducts(prev => page === 1 ? res.products! : [...prev, ...res.products!]);
+            setVariants(prev => page === 1 ? res.variants! : [...prev, ...res.variants!]);
+            setShops(prev => {
+              const newShops = res.shops!.filter(s => !prev.some(ps => ps.id === s.id));
+              return [...prev, ...newShops];
+            });
+            setHasMore(res.products.length === 20); // If it returned full page, there might be more
+          }
+          setLoading(false);
+        }
+      };
+      
+      const timer = setTimeout(() => {
+        loadProducts();
+      }, 300); // Debounce fetch
+
+      return () => {
+        isMounted = false;
+        clearTimeout(timer);
+      };
+    }, [keyword, sort, categorySlug, page, sellerId, rating, minPrice, maxPrice]);
+
+    // Reset page to 1 when filters change
+    useEffect(() => {
+      setPage(1);
+    }, [keyword, sort, categorySlug, sellerId, rating, minPrice, maxPrice]);
+
     const filterPanel = (
       <div className="grid gap-3">
         <Field label="Từ khóa">
@@ -600,8 +706,23 @@ export function AppShell() {
             </aside>
             {filtersOpen ? <Panel className="lg:hidden">{filterPanel}</Panel> : null}
             <div>
-              <p className="mb-3 text-sm text-muted">Tìm thấy {products.length} sản phẩm</p>
-              {products.length ? <ProductGrid products={products} /> : <EmptyState title="Không có kết quả" description="Hãy đổi từ khóa hoặc reset bộ lọc để xem thêm sản phẩm." />}
+              {loading && page === 1 ? (
+                <div className="py-12 text-center text-muted">Đang tải sản phẩm...</div>
+              ) : products.length > 0 ? (
+                <>
+                  <p className="mb-3 text-sm text-muted">Hiển thị {products.length} sản phẩm</p>
+                  <ProductGrid products={products} variants={variants} shops={shops} />
+                  {hasMore && (
+                    <div className="mt-8 flex justify-center">
+                      <Button variant="secondary" onClick={() => setPage(p => p + 1)} disabled={loading}>
+                        {loading ? "Đang tải..." : "Tải thêm"}
+                      </Button>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <EmptyState title="Không có kết quả" description="Hãy đổi từ khóa hoặc reset bộ lọc để xem thêm sản phẩm." />
+              )}
             </div>
           </div>
         </Section>
@@ -641,10 +762,42 @@ export function AppShell() {
     const [selectedVariantId, setSelectedVariantId] = useState("");
     const [quantity, setQuantity] = useState(1);
     const [showReport, setShowReport] = useState(false);
-    const shop = store.state.shops.find((item) => item.shopSlug === shopSlug);
-    const product = shop ? store.state.products.find((item) => item.sellerId === shop.id && item.slug === productSlug) : undefined;
+    
+    const [product, setProduct] = useState<Product | undefined>(undefined);
+    const [shop, setShop] = useState<Shop | undefined>(undefined);
+    const [productVariants, setProductVariants] = useState<ProductVariant[]>([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+      let isMounted = true;
+      const loadDetail = async () => {
+        if (!shopSlug || !productSlug) return;
+        setLoading(true);
+        const res = await fetchProductDetail(shopSlug, productSlug);
+        if (isMounted) {
+          if (res.ok && res.product) {
+            setProduct(res.product);
+            setProductVariants(res.variants!);
+            setShop(res.shop);
+            setSelectedVariantId(res.variants![0]?.id ?? "");
+          }
+          setLoading(false);
+        }
+      };
+      loadDetail();
+      return () => { isMounted = false; };
+    }, [shopSlug, productSlug]);
+
+    if (loading) {
+      return (
+        <main className="mx-auto max-w-7xl px-4 py-12 text-center text-muted">
+          Đang tải chi tiết sản phẩm...
+        </main>
+      );
+    }
+
     if (!shop || !product) return <NotFoundPage />;
-    const productVariants = store.state.variants.filter((variant) => variant.productId === product.id);
+    
     const selectedVariant = productVariants.find((variant) => variant.id === selectedVariantId) ?? productVariants[0];
     return (
       <main className="mx-auto max-w-7xl px-4 py-5">
@@ -2410,30 +2563,148 @@ export function AppShell() {
   function ProductFormPage({ productId }: { productId?: string }) {
     const editing = store.state.products.find((product) => product.id === productId);
     const shop = store.currentShop;
+    const editingVariants = editing ? store.state.variants.filter((v) => v.productId === editing.id) : [];
+
     const [name, setName] = useState(editing?.name ?? "");
+    const [shortDescription, setShortDescription] = useState(editing?.shortDescription ?? "");
+    const [description, setDescription] = useState(editing?.description ?? "");
+    const [brand, setBrand] = useState(editing?.brand ?? "");
+    const [origin, setOrigin] = useState(editing?.origin ?? "Việt Nam");
+    const [warranty, setWarranty] = useState(editing?.warranty ?? "");
     const [status, setStatus] = useState<Product["status"]>(editing?.status ?? "ACTIVE");
     const [categoryIds, setCategoryIds] = useState<string[]>(editing?.categoryIds ?? []);
-    const [variantName, setVariantName] = useState("Default");
-    const [price, setPrice] = useState("199000");
-    const [quantity, setQuantity] = useState("20");
+    const [imageUrl, setImageUrl] = useState(editing?.thumbnailUrl || "https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=900&q=80");
     const slug = slugify(name || "san-pham-moi");
+
+    const [hasVariants, setHasVariants] = useState(editing && editing.variantOptions && editing.variantOptions.length > 0 ? true : false);
+    const [options, setOptions] = useState<{name: string, values: string[], rawValue?: string}[]>(
+      editing?.variantOptions ? editing.variantOptions : []
+    );
+    const [variantMatrix, setVariantMatrix] = useState<{
+      tierIndex: number[];
+      sku: string;
+      price: string;
+      quantity: string;
+      imageUrl: string;
+      publicId?: string;
+    }[]>([{ tierIndex: [], sku: "", price: "199000", quantity: "20", imageUrl: imageUrl }]);
+
+    const [bulkPrice, setBulkPrice] = useState("");
+    const [bulkQuantity, setBulkQuantity] = useState("");
+
+    useEffect(() => {
+      if (editing) {
+        setName(editing.name ?? "");
+        setShortDescription(editing.shortDescription ?? "");
+        setDescription(editing.description ?? "");
+        setBrand(editing.brand ?? "");
+        setOrigin(editing.origin ?? "Việt Nam");
+        setWarranty(editing.warranty ?? "");
+        setStatus(editing.status ?? "ACTIVE");
+        setCategoryIds(editing.categoryIds ?? []);
+        setImageUrl(editing.thumbnailUrl || "https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=900&q=80");
+        
+        if (editing.variantOptions && editing.variantOptions.length > 0) {
+          setHasVariants(true);
+          setOptions(editing.variantOptions);
+        } else {
+          setHasVariants(false);
+          setOptions([]);
+        }
+
+        const newMatrix = editingVariants.map(v => ({
+            tierIndex: v.tierIndex ?? [],
+            sku: v.sku,
+            price: v.price.toString(),
+            quantity: v.inventory?.quantity.toString() ?? "0",
+            imageUrl: v.imageUrl ?? (editing.thumbnailUrl || ""),
+            publicId: v.id
+        }));
+        
+        if (!editing.variantOptions || editing.variantOptions.length === 0) {
+            if (editingVariants.length > 0) {
+                setVariantMatrix([{
+                    tierIndex: [],
+                    sku: editingVariants[0].sku,
+                    price: editingVariants[0].price.toString(),
+                    quantity: editingVariants[0].inventory?.quantity.toString() ?? "0",
+                    imageUrl: editingVariants[0].imageUrl ?? (editing.thumbnailUrl || ""),
+                    publicId: editingVariants[0].id
+                }]);
+            }
+        } else {
+            setVariantMatrix(newMatrix);
+        }
+      }
+    }, [editing, store.state.variants]);
+
+    // Generate Cartesian Product of options
+    useEffect(() => {
+        if (!hasVariants || options.length === 0) return;
+        
+        const generateCartesian = (opts: {name: string, values: string[]}[]): number[][] => {
+            if (opts.length === 0) return [[]];
+            const first = opts[0];
+            const rest = generateCartesian(opts.slice(1));
+            const result: number[][] = [];
+            for (let i = 0; i < first.values.length; i++) {
+                for (const r of rest) {
+                    result.push([i, ...r]);
+                }
+            }
+            return result;
+        };
+
+        const allCombinations = generateCartesian(options.filter(o => o.values.length > 0));
+        
+        // Preserve existing data in matrix if tierIndex matches
+        setVariantMatrix(prev => {
+            return allCombinations.map(combo => {
+                const existing = prev.find(p => p.tierIndex && p.tierIndex.length === combo.length && p.tierIndex.every((val, idx) => val === combo[idx]));
+                if (existing) return existing;
+                return {
+                    tierIndex: combo,
+                    sku: `${shop?.shopSlug}-${slug}-${combo.join("")}`,
+                    price: "0",
+                    quantity: "0",
+                    imageUrl: imageUrl
+                };
+            });
+        });
+
+    }, [options, hasVariants]);
+
+    const handleApplyBulk = () => {
+        setVariantMatrix(prev => prev.map(row => ({
+            ...row,
+            price: bulkPrice ? bulkPrice : row.price,
+            quantity: bulkQuantity ? bulkQuantity : row.quantity
+        })));
+    };
+
+    const handleAddOption = () => {
+        if (options.length >= 2) return;
+        setOptions([...options, { name: `Nhóm phân loại ${options.length + 1}`, values: [] }]);
+    };
+
     return (
       <Section title={editing ? "Sửa sản phẩm" : "Tạo sản phẩm"}>
         <Panel>
-          <div className="grid gap-4 lg:grid-cols-[1fr_360px]">
+          <div className="grid gap-4 lg:grid-cols-[1fr_400px]">
             <div className="grid gap-4">
               <Field label="Tên sản phẩm"><Input value={name} onChange={(event) => setName(event.target.value)} /></Field>
               <InfoRow label="Slug preview" value={slug} />
-              <Field label="Mô tả ngắn"><Textarea defaultValue={editing?.shortDescription} /></Field>
-              <Field label="Mô tả dài"><Textarea defaultValue={editing?.description} /></Field>
+              <Field label="Mô tả ngắn"><Textarea value={shortDescription} onChange={(e) => setShortDescription(e.target.value)} /></Field>
+              <Field label="Mô tả dài"><Textarea value={description} onChange={(e) => setDescription(e.target.value)} /></Field>
               <div className="grid gap-3 sm:grid-cols-3">
-                <Field label="Brand"><Input defaultValue={editing?.brand} /></Field>
-                <Field label="Xuất xứ"><Input defaultValue={editing?.origin ?? "Việt Nam"} /></Field>
-                <Field label="Bảo hành"><Input defaultValue={editing?.warranty} /></Field>
+                <Field label="Brand"><Input value={brand} onChange={(e) => setBrand(e.target.value)} /></Field>
+                <Field label="Xuất xứ"><Input value={origin} onChange={(e) => setOrigin(e.target.value)} /></Field>
+                <Field label="Bảo hành"><Input value={warranty} onChange={(e) => setWarranty(e.target.value)} /></Field>
               </div>
-              <Field label="Ảnh sản phẩm"><Input type="file" multiple /></Field>
-              <Field label="Thumbnail"><Input type="file" /></Field>
-              <Field label="Categories một cấp">
+              <Field label="URL ảnh sản phẩm chính">
+                <Input type="text" value={imageUrl} onChange={(e) => setImageUrl(e.target.value)} placeholder="Nhập URL ảnh" />
+              </Field>
+              <Field label="Danh mục sản phẩm">
                 <div className="grid gap-2 sm:grid-cols-2">
                   {store.state.categories.map((category) => (
                     <Checkbox
@@ -2448,20 +2719,62 @@ export function AppShell() {
                 </div>
               </Field>
             </div>
+            
             <div className="grid gap-4">
-              <Panel className="shadow-none">
-                <h3 className="font-bold">Variant editor</h3>
-                <div className="mt-3 grid gap-3">
-                  <Field label="Variant name"><Input value={variantName} onChange={(event) => setVariantName(event.target.value)} /></Field>
-                  <Field label="SKU"><Input placeholder="SKU tự nhập, không unique toàn sàn" /></Field>
-                  <Field label="Giá"><Input type="number" value={price} onChange={(event) => setPrice(event.target.value)} /></Field>
-                  <Field label="Sale price"><Input type="number" placeholder="Có thể bỏ trống" /></Field>
-                  <Field label="Sale window"><Input type="datetime-local" /></Field>
-                  <Field label="Ảnh variant"><Input type="file" /></Field>
-                  <Field label="Tồn kho"><Input type="number" value={quantity} onChange={(event) => setQuantity(event.target.value)} /></Field>
-                  <InfoRow label="Reserved quantity" value="Chỉ đọc từ inventory.reserved_quantity" />
-                </div>
+              <Panel className="shadow-none flex flex-col gap-4">
+                <h3 className="font-bold border-b pb-2">Phân loại hàng (Variant Options)</h3>
+                <Checkbox 
+                    label="Sản phẩm có nhiều phân loại?" 
+                    checked={hasVariants} 
+                    onChange={e => {
+                        setHasVariants(e.target.checked);
+                        if (!e.target.checked) {
+                            setOptions([]);
+                            setVariantMatrix([{ tierIndex: [], sku: `${shop?.shopSlug}-${slug}-1`, price: "0", quantity: "0", imageUrl: imageUrl }]);
+                        } else if (options.length === 0) {
+                            setOptions([{ name: "Màu sắc", values: ["Đỏ", "Xanh"] }]);
+                        }
+                    }} 
+                />
+
+                {hasVariants && (
+                    <div className="space-y-4">
+                        {options.map((opt, oIdx) => (
+                            <div key={oIdx} className="bg-slate-50 dark:bg-slate-800 p-3 rounded border space-y-2">
+                                <div className="flex justify-between items-center">
+                                    <Input value={opt.name} onChange={e => {
+                                        const newOpts = [...options];
+                                        newOpts[oIdx].name = e.target.value;
+                                        setOptions(newOpts);
+                                    }} className="w-1/2" />
+                                    <Button variant="danger" onClick={() => {
+                                        setOptions(options.filter((_, i) => i !== oIdx));
+                                    }}>Xóa</Button>
+                                </div>
+                                <div>
+                                    <label className="text-xs text-slate-500">Các giá trị (Cách nhau bởi dấu phẩy)</label>
+                                    <Input 
+                                        value={opt.rawValue ?? opt.values.join(", ")} 
+                                        onChange={e => {
+                                            const newOpts = [...options];
+                                            newOpts[oIdx].rawValue = e.target.value;
+                                            newOpts[oIdx].values = e.target.value.split(",").map(s => s.trim()).filter(s => s);
+                                            setOptions(newOpts);
+                                        }} 
+                                        placeholder="Ví dụ: Đỏ, Xanh, Vàng" 
+                                    />
+                                </div>
+                            </div>
+                        ))}
+                        {options.length < 2 && (
+                            <Button variant="secondary" onClick={handleAddOption} className="w-full text-sm">
+                                + Thêm nhóm phân loại
+                            </Button>
+                        )}
+                    </div>
+                )}
               </Panel>
+              
               <Field label="Status">
                 <Select value={status} onChange={(event) => setStatus(event.target.value as Product["status"])}>
                   <option value="ACTIVE">ACTIVE</option>
@@ -2470,7 +2783,67 @@ export function AppShell() {
                   <option value="DELETED">DELETED</option>
                 </Select>
               </Field>
-              <Button
+            </div>
+          </div>
+
+          <div className="mt-8 border-t pt-8">
+            <h3 className="font-bold text-lg mb-4">Ma trận phân loại hàng</h3>
+            {hasVariants && (
+                <div className="flex items-center gap-3 mb-4 bg-slate-50 dark:bg-slate-800 p-4 rounded border">
+                    <span className="font-semibold text-sm">Áp dụng cho tất cả:</span>
+                    <Input placeholder="Giá bán..." value={bulkPrice} onChange={e => setBulkPrice(e.target.value)} type="number" className="w-32" />
+                    <Input placeholder="Tồn kho..." value={bulkQuantity} onChange={e => setBulkQuantity(e.target.value)} type="number" className="w-32" />
+                    <Button variant="secondary" onClick={handleApplyBulk}>Áp dụng</Button>
+                </div>
+            )}
+            <div className="overflow-x-auto">
+              <table className="w-full border-collapse">
+                <thead>
+                    <tr className="bg-slate-100 dark:bg-slate-800 border-b">
+                        {hasVariants && options.map((o, i) => (
+                            <th key={i} className="p-3 text-left font-medium">{o.name}</th>
+                        ))}
+                        <th className="p-3 text-left font-medium">Giá bán *</th>
+                        <th className="p-3 text-left font-medium">Tồn kho *</th>
+                        <th className="p-3 text-left font-medium">SKU</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {variantMatrix.map((row, rIdx) => (
+                        <tr key={rIdx} className="border-b hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                            {hasVariants && row.tierIndex.map((optIdx, i) => (
+                                <td key={i} className="p-3">{options[i]?.values[optIdx]}</td>
+                            ))}
+                            <td className="p-3">
+                                <Input type="number" value={row.price} onChange={e => {
+                                    const newM = [...variantMatrix];
+                                    newM[rIdx].price = e.target.value;
+                                    setVariantMatrix(newM);
+                                }} />
+                            </td>
+                            <td className="p-3">
+                                <Input type="number" value={row.quantity} onChange={e => {
+                                    const newM = [...variantMatrix];
+                                    newM[rIdx].quantity = e.target.value;
+                                    setVariantMatrix(newM);
+                                }} />
+                            </td>
+                            <td className="p-3">
+                                <Input value={row.sku} onChange={e => {
+                                    const newM = [...variantMatrix];
+                                    newM[rIdx].sku = e.target.value;
+                                    setVariantMatrix(newM);
+                                }} />
+                            </td>
+                        </tr>
+                    ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div className="mt-8 flex justify-end">
+            <Button
                 onClick={async () => {
                   if (!shop) {
                     showToast("Shop của bạn chưa sẵn sàng để tạo sản phẩm.", "danger");
@@ -2480,22 +2853,27 @@ export function AppShell() {
                   const payload = {
                     name: name || "Sản phẩm mới",
                     slug,
-                    short_description: "Sản phẩm tạo từ form seller.",
-                    description: "Mô tả dài của sản phẩm. Có thể nối API upload ảnh và variant sau.",
-                    origin: "Việt Nam",
-                    category_ids: [],
+                    short_description: shortDescription,
+                    description: description,
+                    brand: brand,
+                    origin: origin,
+                    warranty_info: warranty,
+                    category_ids: categoryIds.map(Number),
+                    variant_options: hasVariants ? options : [],
                     images: [
-                      { image_url: "https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=900&q=80", is_thumbnail: true, sort_order: 1 }
+                      { image_url: imageUrl, is_thumbnail: true, sort_order: 1 }
                     ],
-                    variants: [
-                      {
-                        sku: `${shop.shopSlug}-${slug}-1`,
-                        variant_name: variantName || "Default",
-                        price: Number(price) || 0,
-                        quantity: Number(quantity) || 0,
-                        image_url: "https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=900&q=80"
-                      }
-                    ]
+                    variants: variantMatrix.map(row => ({
+                      public_id: row.publicId,
+                      sku: row.sku || `${shop.shopSlug}-${slug}-${row.tierIndex.join("") || "1"}`,
+                      variant_name: hasVariants && options.length > 0 
+                        ? row.tierIndex.map((tIdx, i) => options[i].values[tIdx]).join(" - ")
+                        : "Default",
+                      price: Number(row.price) || 0,
+                      quantity: Number(row.quantity) || 0,
+                      image_url: imageUrl,
+                      tier_index: hasVariants ? row.tierIndex : []
+                    }))
                   };
 
                   let res;
@@ -2515,7 +2893,6 @@ export function AppShell() {
               >
                 Lưu sản phẩm
               </Button>
-            </div>
           </div>
         </Panel>
       </Section>

@@ -3,6 +3,7 @@ from typing import Optional, List
 from pydantic import BaseModel
 from decimal import Decimal
 
+
 class OrderResponse(BaseModel):
     public_id: str
     order_code: str
@@ -25,6 +26,7 @@ class OrderResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
 
 class OrderListResponse(BaseModel):
     items: List[OrderResponse]
