@@ -97,5 +97,13 @@ async def get_seller_profile_list(
         )
 
     seller_profiles = result.scalars().all()
-
     return seller_profiles
+
+
+async def get_sellers_by_ids(
+    seller_ids: list[int], db: AsyncSession
+) -> list[SellerProfile]:
+    result = await db.execute(
+        select(SellerProfile).where(SellerProfile.id.in_(seller_ids))
+    )
+    return list(result.scalars().all())

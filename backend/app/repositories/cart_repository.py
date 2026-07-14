@@ -72,3 +72,24 @@ async def select_all_cart_items(
         .values(is_selected=is_selected)
     )
     await db.flush()
+
+
+async def get_cart_items_for_checkout(
+    db: AsyncSession, user_id: int, cart_item_ids: list[int]
+) -> list[CartItem]:
+    from models.product_variant import ProductVariant
+
+    stmt = (
+        select(CartItem)
+        .options(selectinload(CartItem.variant).selectinload(ProductVariant.product))
+        .where(CartItem.id.in_(cart_item_ids), CartItem.cart.has(user_id=user_id))
+    )
+    result = await db.execute(stmt)
+    return list(result.scalars().all())
+
+
+async def remove_cart_items_by_ids(db: AsyncSession, cart_item_ids: list[int]) -> None:
+    if not cart_item_ids:
+        return
+    await db.execute(delete(CartItem).where(CartItem.id.in_(cart_item_ids)))
+    await db.flush()

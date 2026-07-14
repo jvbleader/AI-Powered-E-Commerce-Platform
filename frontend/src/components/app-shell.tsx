@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import type { ChangeEvent, FormEvent, ReactNode } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 import {
@@ -163,6 +163,8 @@ export function AppShell() {
     window.setTimeout(() => setToast(undefined), 2600);
   };
 
+  const fetchedUserAddressesRef = useRef<string | null>(null);
+
   useEffect(() => {
     let active = true;
     if (store.state.categories.length === 0) {
@@ -172,8 +174,12 @@ export function AppShell() {
         }
       });
     }
+    if (store.currentUser && fetchedUserAddressesRef.current !== store.currentUser.id) {
+      fetchedUserAddressesRef.current = store.currentUser.id;
+      store.fetchAddresses();
+    }
     return () => { active = false; };
-  }, [store.setCategories]);
+  }, [store.currentUser, store.fetchAddresses, store.setCategories]);
 
   const findPaymentForOrder = (orderCode: string) =>
     store.state.payments.find((payment) => payment.orderCodes.includes(orderCode));
@@ -1383,6 +1389,7 @@ export function AppShell() {
   }
 
   function CheckoutPage() {
+    const [showAddressForm, setShowAddressForm] = useState(false);
     const [addressId, setAddressId] = useState(store.state.addresses.find((item) => item.userId === store.currentUser?.id && item.isDefault)?.id ?? "");
     const [method, setMethod] = useState<PaymentMethod>("MOCK");
     const [note, setNote] = useState("");
@@ -1393,6 +1400,14 @@ export function AppShell() {
     const groups = selectedCheckoutGroups(rows);
     const total = groups.reduce((sum, group) => sum + group.total, 0);
     const addresses = store.state.addresses.filter((address) => address.userId === store.currentUser?.id);
+    
+    // Auto-select address if none selected and addresses exist
+    useEffect(() => {
+      if (!addressId && addresses.length > 0) {
+        setAddressId(addresses[0].id);
+      }
+    }, [addresses, addressId]);
+    
     return (
       <main className="mx-auto max-w-7xl px-4 py-5">
         <Section title="Checkout">
@@ -1411,10 +1426,20 @@ export function AppShell() {
                         label={`${address.receiverName} - ${address.phone} - ${address.detailAddress}, ${address.ward}, ${address.district}, ${address.province}`}
                       />
                     ))}
-                    <Button variant="secondary" onClick={() => store.addAddress({ receiverName: "Địa chỉ mới", phone: "0909999999", province: "TP.HCM", district: "Quận 2", ward: "Thảo Điền", detailAddress: "Địa chỉ mới", addressType: "HOME" as AddressType, isDefault: false })}>
-                      <Plus className="h-4 w-4" aria-hidden="true" />
-                      Thêm địa chỉ
-                    </Button>
+                    {!showAddressForm ? (
+                      <Button variant="secondary" onClick={() => setShowAddressForm(true)}>
+                        <Plus className="h-4 w-4" aria-hidden="true" />
+                        Thêm địa chỉ
+                      </Button>
+                    ) : (
+                      <div className="mt-4 rounded-panel bg-neutral-50 p-4 dark:bg-neutral-800/50">
+                        <div className="mb-3 flex items-center justify-between">
+                          <h4 className="font-bold">Địa chỉ mới</h4>
+                          <Button variant="ghost" className="h-auto p-1 text-sm" onClick={() => setShowAddressForm(false)}>Hủy</Button>
+                        </div>
+                        <AddressForm onSuccess={() => setShowAddressForm(false)} />
+                      </div>
+                    )}
                   </div>
                 </Panel>
                 {groups.map((group) => (
@@ -1748,6 +1773,49 @@ export function AppShell() {
     );
   }
 
+  function AddressForm({ onSuccess }: { onSuccess?: () => void }) {
+    const [receiverName, setReceiverName] = useState("");
+    const [phone, setPhone] = useState("");
+    const [province, setProvince] = useState("");
+    const [district, setDistrict] = useState("");
+    const [ward, setWard] = useState("");
+    const [detailAddress, setDetailAddress] = useState("");
+    const [addressType, setAddressType] = useState<AddressType>("HOME");
+
+    const handleSubmit = async () => {
+      if (!receiverName || !phone || !province || !district || !ward || !detailAddress) {
+        showToast("Vui lòng điền đầy đủ thông tin", "danger");
+        return;
+      }
+      const success = await store.addAddress({
+        receiverName, phone, province, district, ward, detailAddress, addressType, isDefault: false
+      });
+      if (success) {
+        showToast("Đã thêm địa chỉ", "success");
+        setReceiverName(""); setPhone(""); setProvince(""); setDistrict(""); setWard(""); setDetailAddress("");
+        onSuccess?.();
+      } else {
+        showToast("Thêm địa chỉ thất bại", "danger");
+      }
+    };
+
+    return (
+      <div className="mt-3 grid gap-3">
+        <Input placeholder="Người nhận" value={receiverName} onChange={(e) => setReceiverName(e.target.value)} />
+        <Input placeholder="Số điện thoại" value={phone} onChange={(e) => setPhone(e.target.value)} />
+        <Input placeholder="Tỉnh/thành" value={province} onChange={(e) => setProvince(e.target.value)} />
+        <Input placeholder="Quận/huyện" value={district} onChange={(e) => setDistrict(e.target.value)} />
+        <Input placeholder="Phường/xã" value={ward} onChange={(e) => setWard(e.target.value)} />
+        <Textarea placeholder="Địa chỉ chi tiết" value={detailAddress} onChange={(e) => setDetailAddress(e.target.value)} />
+        <Select value={addressType} onChange={(e) => setAddressType(e.target.value as AddressType)}>
+          <option value="HOME">HOME</option>
+          <option value="OFFICE">OFFICE</option>
+        </Select>
+        <Button onClick={handleSubmit}>Thêm</Button>
+      </div>
+    );
+  }
+
   function AddressBook() {
     const addresses = store.state.addresses.filter((address) => address.userId === store.currentUser?.id);
     return (
@@ -1768,16 +1836,7 @@ export function AppShell() {
           </div>
           <Panel>
             <h3 className="font-bold">Thêm địa chỉ</h3>
-            <div className="mt-3 grid gap-3">
-              <Input placeholder="Người nhận" />
-              <Input placeholder="Số điện thoại" />
-              <Input placeholder="Tỉnh/thành" />
-              <Input placeholder="Quận/huyện" />
-              <Input placeholder="Phường/xã" />
-              <Textarea placeholder="Địa chỉ chi tiết" />
-              <Select><option>HOME</option><option>OFFICE</option></Select>
-              <Button onClick={() => showToast("Đã thêm địa chỉ.", "success")}>Thêm</Button>
-            </div>
+            <AddressForm />
           </Panel>
         </div>
       </Section>
@@ -2899,6 +2958,43 @@ export function AppShell() {
     );
   }
 
+  function InventoryAdjuster({ variant }: { variant: ProductVariant }) {
+    const product = store.state.products.find((item) => item.id === variant.productId);
+    const [quantity, setQuantity] = useState(variant.inventory.quantity.toString());
+    const [loading, setLoading] = useState(false);
+
+    const handleSave = async () => {
+      if (!product) return;
+      setLoading(true);
+      const allProductVariants = store.state.variants.filter(v => v.productId === product.id);
+      const payload = {
+          variants: allProductVariants.map(v => ({
+              public_id: v.id,
+              sku: v.sku,
+              variant_name: v.variantName,
+              price: v.price,
+              quantity: v.id === variant.id ? Number(quantity) : v.inventory.quantity,
+              image_url: v.imageUrl,
+              tier_index: v.tierIndex
+          }))
+      };
+      const res = await store.updateSellerProduct(product.id, payload);
+      setLoading(false);
+      if (res.ok) {
+          showToast("Đã điều chỉnh tồn kho.", "success");
+      } else {
+          showToast(res.message || "Lỗi cập nhật tồn kho", "danger");
+      }
+    };
+
+    return (
+      <div className="flex items-center gap-2">
+        <Input className="w-24" type="number" value={quantity} onChange={e => setQuantity(e.target.value)} />
+        <Button variant="secondary" onClick={handleSave} disabled={loading}>Lưu</Button>
+      </div>
+    );
+  }
+
   function SellerInventoryPage() {
     const shop = store.currentShop;
     const products = store.state.products.filter((product) => product.sellerId === shop?.id);
@@ -2917,7 +3013,7 @@ export function AppShell() {
               `${variant.inventory.quantity}`,
               `${variant.inventory.reservedQuantity}`,
               <StatusBadge key="st" status={variant.status} label={variant.status} />,
-              <div key="adjust" className="flex items-center gap-2"><Input className="w-24" type="number" defaultValue={variant.inventory.quantity} /><Button variant="secondary" onClick={() => showToast("Đã điều chỉnh tồn kho.", "success")}>Lưu</Button></div>
+              <InventoryAdjuster key={`adj-${variant.id}`} variant={variant} />
             ];
           })}
         />

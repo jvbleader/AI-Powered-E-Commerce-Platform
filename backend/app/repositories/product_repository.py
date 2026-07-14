@@ -89,7 +89,10 @@ async def create_product(
     # Reload product with relationships to avoid MissingGreenlet during serialization
     query = (
         select(Product)
-        .options(selectinload(Product.images), selectinload(Product.variants))
+        .options(
+            selectinload(Product.images),
+            selectinload(Product.variants).selectinload(ProductVariant.inventory),
+        )
         .filter(Product.id == product.id)
     )
     result = await db.execute(query)
@@ -115,7 +118,7 @@ async def get_products_by_seller(
     items_query = (
         base_filter.options(
             selectinload(Product.images),
-            selectinload(Product.variants),
+            selectinload(Product.variants).selectinload(ProductVariant.inventory),
             selectinload(Product.categories),
         )
         .offset(skip)
@@ -134,7 +137,7 @@ async def get_product_by_public_id_and_seller(
         select(Product)
         .options(
             selectinload(Product.images),
-            selectinload(Product.variants),
+            selectinload(Product.variants).selectinload(ProductVariant.inventory),
             selectinload(Product.categories),
         )
         .filter(
@@ -224,7 +227,7 @@ async def update_product(
 
                         transaction = InventoryTransaction(
                             variant_id=v.id,
-                            transaction_type="IMPORT" if delta > 0 else "EXPORT",
+                            transaction_type="IMPORT" if delta > 0 else "ADJUST",
                             quantity_change=abs(delta),
                             quantity_before=qty_before,
                             quantity_after=variant_req.quantity,
@@ -238,6 +241,7 @@ async def update_product(
                         reserved_quantity=0,
                     )
                     db.add(inventory)
+                    v.inventory = inventory
             else:
                 # Insert new variant
                 new_v = ProductVariant(
@@ -261,6 +265,7 @@ async def update_product(
                     reserved_quantity=0,
                 )
                 db.add(inventory)
+                new_v.inventory = inventory
 
                 if variant_req.quantity > 0:
                     transaction = InventoryTransaction(
@@ -280,10 +285,11 @@ async def update_product(
         select(Product)
         .options(
             selectinload(Product.images),
-            selectinload(Product.variants),
+            selectinload(Product.variants).selectinload(ProductVariant.inventory),
             selectinload(Product.categories),
         )
         .filter(Product.id == product.id)
+        .execution_options(populate_existing=True)
     )
     result = await db.execute(query)
     product_with_rels = result.scalar_one()
@@ -477,3 +483,15 @@ async def get_recommended_products(
         items.extend(fallback_items)
 
     return items
+
+
+async def get_variants_for_checkout(
+    db: AsyncSession, variant_ids: list[int]
+) -> list[ProductVariant]:
+    stmt = (
+        select(ProductVariant)
+        .options(selectinload(ProductVariant.product))
+        .where(ProductVariant.id.in_(variant_ids), ProductVariant.status == "ACTIVE")
+    )
+    result = await db.execute(stmt)
+    return list(result.scalars().all())
