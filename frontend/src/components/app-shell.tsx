@@ -168,7 +168,7 @@ export function AppShell() {
     if (store.state.categories.length === 0) {
       fetchCategories().then((res) => {
         if (active && res.ok && res.categories) {
-          store.setCategories(res.categories);
+          store.setCategories(res.categories as any);
         }
       });
     }
@@ -558,8 +558,8 @@ export function AppShell() {
             variants={variants}
             shop={shops.find(s => s.id === product.sellerId)}
             categories={store.state.categories}
-            onAdd={(variantId) => {
-              const result = store.addToCart(variantId, 1);
+            onAdd={async (variantId) => {
+              const result = await store.addToCart(variantId, 1);
               showToast(result.message, result.ok ? "success" : "danger");
             }}
           />
@@ -848,8 +848,8 @@ export function AppShell() {
               <div className="flex flex-wrap gap-2">
                 <Button
                   disabled={!selectedVariant || product.status !== "ACTIVE" || selectedVariant.status !== "ACTIVE"}
-                  onClick={() => {
-                    const result = store.addToCart(selectedVariant.id, quantity);
+                  onClick={async () => {
+                    const result = await store.addToCart(selectedVariant.id, quantity);
                     showToast(result.message, result.ok ? "success" : "danger");
                   }}
                 >

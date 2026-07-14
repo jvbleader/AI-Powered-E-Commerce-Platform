@@ -13,6 +13,7 @@ import {
   selectedCheckoutGroups
 } from "@/lib/helpers";
 import { AUTH_BASE_PATH, ApiError, apiFetch } from "@/lib/api";
+import { fetchMyCart, addToCartApi, updateCartItemApi, removeCartItemApi, selectAllCartApi } from "@/lib/cart-api";
 import type {
   Address,
   AppState,
@@ -721,9 +722,23 @@ export const useMarketplaceStore = () => {
     setReady(true);
 
     apiFetch<BackendUser>(AUTH_ROUTES.me)
-      .then((user) => {
+      .then(async (user) => {
         if (!cancelled) {
           setState((prev) => applyBackendUser(prev, user));
+          try {
+            const cartResp = await fetchMyCart();
+            setState((prev) => ({
+              ...prev,
+              cartItems: cartResp.items.map(item => ({
+                id: String(item.id),
+                variantId: item.variantPublicId,
+                quantity: item.quantity,
+                isSelected: item.isSelected
+              }))
+            }));
+          } catch (e) {
+            console.error("Failed to load cart:", e);
+          }
         }
       })
       .catch((error) => {
@@ -791,6 +806,20 @@ export const useMarketplaceStore = () => {
       const backendUser = await apiFetch<BackendUser>(AUTH_ROUTES.me);
       const user = normalizeBackendUser(backendUser);
       setState((prev) => applyBackendUser(prev, backendUser, false));
+      try {
+        const cartResp = await fetchMyCart();
+        setState((prev) => ({
+          ...prev,
+          cartItems: cartResp.items.map(item => ({
+            id: String(item.id),
+            variantId: item.variantPublicId,
+            quantity: item.quantity,
+            isSelected: item.isSelected
+          }))
+        }));
+      } catch (e) {
+        console.error("Failed to fetch cart on login", e);
+      }
       const preferredRole = preferredRoleFor(user);
       const message =
         "message" in loginResult && loginResult.message
@@ -1324,48 +1353,70 @@ export const useMarketplaceStore = () => {
     return true;
   }, [state]);
 
-  const addToCart = useCallback((variantId: string, quantity: number) => {
+  const addToCart = useCallback(async (variantId: string, quantity: number) => {
     if (!state.sessionUserId) {
       return { ok: false, message: "Vui lòng đăng nhập để thêm sản phẩm vào giỏ hàng." };
     }
-    setState((prev) => {
-      const existing = prev.cartItems.find((item) => item.variantId === variantId);
-      if (existing) {
+    try {
+      const apiItem = await addToCartApi(variantId, quantity);
+      setState((prev) => {
+        const existingIndex = prev.cartItems.findIndex((item) => item.variantId === variantId);
+        if (existingIndex >= 0) {
+          const newItems = [...prev.cartItems];
+          newItems[existingIndex] = {
+            id: String(apiItem.id),
+            variantId: apiItem.variantPublicId,
+            quantity: apiItem.quantity,
+            isSelected: apiItem.isSelected
+          };
+          return { ...prev, cartItems: newItems };
+        }
         return {
           ...prev,
-          cartItems: prev.cartItems.map((item) =>
-            item.variantId === variantId ? { ...item, quantity: item.quantity + quantity, isSelected: true } : item
-          )
+          cartItems: [
+            ...prev.cartItems,
+            { id: String(apiItem.id), variantId: apiItem.variantPublicId, quantity: apiItem.quantity, isSelected: apiItem.isSelected }
+          ]
         };
-      }
-      return {
-        ...prev,
-        cartItems: [
-          ...prev.cartItems,
-          { id: `cart-${prev.cartItems.length + 1}`, variantId, quantity, isSelected: true }
-        ]
-      };
-    });
-    return { ok: true, message: "Đã thêm vào giỏ hàng." };
+      });
+      return { ok: true, message: "Đã thêm vào giỏ hàng." };
+    } catch (e: any) {
+      return { ok: false, message: e.message || "Lỗi khi thêm vào giỏ hàng" };
+    }
   }, [state.sessionUserId]);
 
-  const updateCartItem = useCallback((cartItemId: string, changes: { quantity?: number; isSelected?: boolean }) => {
-    setState((prev) => ({
-      ...prev,
-      cartItems: prev.cartItems.map((item) =>
-        item.id === cartItemId
-          ? { ...item, quantity: Math.max(1, changes.quantity ?? item.quantity), isSelected: changes.isSelected ?? item.isSelected }
-          : item
-      )
-    }));
+  const updateCartItem = useCallback(async (cartItemId: string, changes: { quantity?: number; isSelected?: boolean }) => {
+    try {
+      const apiItem = await updateCartItemApi(Number(cartItemId), changes.quantity, changes.isSelected);
+      setState((prev) => ({
+        ...prev,
+        cartItems: prev.cartItems.map((item) =>
+          item.id === cartItemId
+            ? { ...item, quantity: apiItem.quantity, isSelected: apiItem.isSelected }
+            : item
+        )
+      }));
+    } catch (e) {
+      console.error("Failed to update cart item:", e);
+    }
   }, []);
 
-  const removeCartItem = useCallback((cartItemId: string) => {
-    setState((prev) => ({ ...prev, cartItems: prev.cartItems.filter((item) => item.id !== cartItemId) }));
+  const removeCartItem = useCallback(async (cartItemId: string) => {
+    try {
+      await removeCartItemApi(Number(cartItemId));
+      setState((prev) => ({ ...prev, cartItems: prev.cartItems.filter((item) => item.id !== cartItemId) }));
+    } catch (e) {
+      console.error("Failed to remove cart item:", e);
+    }
   }, []);
 
-  const selectAllCart = useCallback((selected: boolean) => {
-    setState((prev) => ({ ...prev, cartItems: prev.cartItems.map((item) => ({ ...item, isSelected: selected })) }));
+  const selectAllCart = useCallback(async (selected: boolean) => {
+    try {
+      await selectAllCartApi(selected);
+      setState((prev) => ({ ...prev, cartItems: prev.cartItems.map((item) => ({ ...item, isSelected: selected })) }));
+    } catch (e) {
+      console.error("Failed to select all cart items:", e);
+    }
   }, []);
 
   const checkout = useCallback((addressId: string, method: PaymentMethod, note: string) => {
