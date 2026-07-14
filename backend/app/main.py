@@ -55,6 +55,7 @@ app.add_middleware(
 )
 
 from api.category_api import router as category_router
+from api.cart_api import router as cart_router
 
 app.include_router(auth_router)
 app.include_router(seller_router)
@@ -63,6 +64,7 @@ app.include_router(seller_order_router)
 app.include_router(admin_router)
 app.include_router(product_router)
 app.include_router(category_router)
+app.include_router(cart_router)
 
 
 @app.get("/health", tags=["Health"])
