@@ -90,7 +90,7 @@ import {
 import { fetchPublicProducts, fetchRecommendedProducts, fetchProductDetail, fetchCategories } from "@/lib/product-api";
 import { paymentApi } from "@/lib/payment-api";
 import { useMarketplaceStore } from "@/store/use-marketplace-store";
-import type { AddressType, Order, OrderStatus, PaymentMethod, Product, ProductVariant, SellerApplication, SellerStatus, Shop } from "@/types/models";
+import type { Address, AddressType, Order, OrderStatus, PaymentMethod, Product, ProductVariant, SellerApplication, SellerStatus, Shop } from "@/types/models";
 
 type ToastTone = "success" | "danger" | "info";
 type ToastState = { message: string; tone: ToastTone } | undefined;
@@ -1414,6 +1414,9 @@ export function AppShell() {
       }
     }, [addresses, addressId]);
     
+    const [editingId, setEditingId] = useState<string | null>(null);
+    const editingAddress = addresses.find(a => a.id === editingId);
+    
     return (
       <main className="mx-auto max-w-7xl px-4 py-5">
         <Section title="Checkout">
@@ -1424,26 +1427,36 @@ export function AppShell() {
                   <h2 className="font-bold">Địa chỉ giao hàng</h2>
                   <div className="mt-3 grid gap-2">
                     {addresses.map((address) => (
-                      <Radio
-                        key={address.id}
-                        name="address"
-                        checked={addressId === address.id}
-                        onChange={() => setAddressId(address.id)}
-                        label={`${address.receiverName} - ${address.phone} - ${address.detailAddress}, ${address.ward}, ${address.district}, ${address.province}`}
-                      />
+                      <div key={address.id} className="flex items-start justify-between gap-2">
+                        <div className="flex-1">
+                          <Radio
+                            name="address"
+                            checked={addressId === address.id}
+                            onChange={() => setAddressId(address.id)}
+                            label={`${address.receiverName} - ${address.phone} - ${address.detailAddress}, ${address.ward}, ${address.district}, ${address.province}`}
+                          />
+                        </div>
+                        <Button variant="ghost" className="h-auto p-1 text-sm text-primary" onClick={() => { setEditingId(address.id); setShowAddressForm(true); }}>
+                          Sửa
+                        </Button>
+                      </div>
                     ))}
                     {!showAddressForm ? (
-                      <Button variant="secondary" onClick={() => setShowAddressForm(true)}>
+                      <Button variant="secondary" onClick={() => { setEditingId(null); setShowAddressForm(true); }}>
                         <Plus className="h-4 w-4" aria-hidden="true" />
                         Thêm địa chỉ
                       </Button>
                     ) : (
                       <div className="mt-4 rounded-panel bg-neutral-50 p-4 dark:bg-neutral-800/50">
                         <div className="mb-3 flex items-center justify-between">
-                          <h4 className="font-bold">Địa chỉ mới</h4>
-                          <Button variant="ghost" className="h-auto p-1 text-sm" onClick={() => setShowAddressForm(false)}>Hủy</Button>
+                          <h4 className="font-bold">{editingAddress ? "Sửa địa chỉ" : "Địa chỉ mới"}</h4>
+                          <Button variant="ghost" className="h-auto p-1 text-sm" onClick={() => { setShowAddressForm(false); setEditingId(null); }}>Hủy</Button>
                         </div>
-                        <AddressForm onSuccess={() => setShowAddressForm(false)} />
+                        <AddressForm 
+                          editingAddress={editingAddress} 
+                          onSuccess={() => { setShowAddressForm(false); setEditingId(null); }} 
+                          onCancel={() => { setShowAddressForm(false); setEditingId(null); }} 
+                        />
                       </div>
                     )}
                   </div>
@@ -1634,7 +1647,7 @@ export function AppShell() {
         </Panel>
         <div>
           {currentSection === "overview" ? <AccountOverview /> : null}
-          {currentSection === "profile" ? <AccountProfile /> : null}
+          {currentSection === "profile" ? <AccountProfileWrapper /> : null}
           {currentSection === "security" ? <AccountSecurity /> : null}
           {currentSection === "addresses" ? <AddressBook /> : null}
           {currentSection === "orders" && detailId ? <OrderDetailPage orderCode={detailId} audience="customer" /> : null}
@@ -1644,6 +1657,10 @@ export function AppShell() {
         </div>
       </main>
     );
+  }
+
+  function AccountProfileWrapper() {
+    return <AccountProfile store={store} showToast={showToast} />;
   }
 
   function AccountOverview() {
@@ -1660,30 +1677,7 @@ export function AppShell() {
     );
   }
 
-  function AccountProfile() {
-    const user = store.currentUser!;
-    return (
-      <Section title="Hồ sơ cá nhân">
-        <Panel>
-          <div className="grid gap-4 md:grid-cols-2">
-            <Field label="Họ tên"><Input defaultValue={user.fullName} /></Field>
-            <Field label="Email"><Input defaultValue={user.email} /></Field>
-            <Field label="Số điện thoại"><Input defaultValue={user.phone} /></Field>
-            <Field label="Giới tính">
-              <Select defaultValue={user.gender ?? "OTHER"}>
-                <option value="MALE">Nam</option>
-                <option value="FEMALE">Nữ</option>
-                <option value="OTHER">Khác</option>
-              </Select>
-            </Field>
-            <Field label="Ngày sinh"><Input type="date" defaultValue={user.birthday} /></Field>
-            <Field label="Avatar"><Input type="file" /></Field>
-          </div>
-          <Button className="mt-4" onClick={() => showToast("Đã lưu hồ sơ.", "success")}>Lưu hồ sơ</Button>
-        </Panel>
-      </Section>
-    );
-  }
+
 
   function AccountSecurity() {
     const [currentPassword, setCurrentPassword] = useState("");
@@ -1784,29 +1778,49 @@ export function AppShell() {
     );
   }
 
-  function AddressForm({ onSuccess }: { onSuccess?: () => void }) {
-    const [receiverName, setReceiverName] = useState("");
-    const [phone, setPhone] = useState("");
-    const [province, setProvince] = useState("");
-    const [district, setDistrict] = useState("");
-    const [ward, setWard] = useState("");
-    const [detailAddress, setDetailAddress] = useState("");
-    const [addressType, setAddressType] = useState<AddressType>("HOME");
+  function AddressForm({ onSuccess, editingAddress, onCancel }: { onSuccess?: () => void, editingAddress?: Address, onCancel?: () => void }) {
+    const [receiverName, setReceiverName] = useState(editingAddress?.receiverName || "");
+    const [phone, setPhone] = useState(editingAddress?.phone || "");
+    const [province, setProvince] = useState(editingAddress?.province || "");
+    const [district, setDistrict] = useState(editingAddress?.district || "");
+    const [ward, setWard] = useState(editingAddress?.ward || "");
+    const [detailAddress, setDetailAddress] = useState(editingAddress?.detailAddress || "");
+    const [addressType, setAddressType] = useState<AddressType>(editingAddress?.addressType || "HOME");
+
+    useEffect(() => {
+      setReceiverName(editingAddress?.receiverName || "");
+      setPhone(editingAddress?.phone || "");
+      setProvince(editingAddress?.province || "");
+      setDistrict(editingAddress?.district || "");
+      setWard(editingAddress?.ward || "");
+      setDetailAddress(editingAddress?.detailAddress || "");
+      setAddressType(editingAddress?.addressType || "HOME");
+    }, [editingAddress]);
 
     const handleSubmit = async () => {
       if (!receiverName || !phone || !province || !district || !ward || !detailAddress) {
         showToast("Vui lòng điền đầy đủ thông tin", "danger");
         return;
       }
-      const success = await store.addAddress({
-        receiverName, phone, province, district, ward, detailAddress, addressType, isDefault: false
-      });
+      let success = false;
+      if (editingAddress) {
+        success = await store.updateAddress(editingAddress.id, {
+          receiverName, phone, province, district, ward, detailAddress, addressType, isDefault: editingAddress.isDefault
+        });
+      } else {
+        success = await store.addAddress({
+          receiverName, phone, province, district, ward, detailAddress, addressType, isDefault: false
+        });
+      }
+      
       if (success) {
-        showToast("Đã thêm địa chỉ", "success");
-        setReceiverName(""); setPhone(""); setProvince(""); setDistrict(""); setWard(""); setDetailAddress("");
+        showToast(editingAddress ? "Đã cập nhật địa chỉ" : "Đã thêm địa chỉ", "success");
+        if (!editingAddress) {
+          setReceiverName(""); setPhone(""); setProvince(""); setDistrict(""); setWard(""); setDetailAddress("");
+        }
         onSuccess?.();
       } else {
-        showToast("Thêm địa chỉ thất bại", "danger");
+        showToast(editingAddress ? "Cập nhật địa chỉ thất bại" : "Thêm địa chỉ thất bại", "danger");
       }
     };
 
@@ -1822,32 +1836,47 @@ export function AppShell() {
           <option value="HOME">HOME</option>
           <option value="OFFICE">OFFICE</option>
         </Select>
-        <Button onClick={handleSubmit}>Thêm</Button>
+        <div className="flex items-center gap-2">
+          <Button onClick={handleSubmit}>{editingAddress ? "Cập nhật" : "Thêm"}</Button>
+          {onCancel && <Button variant="secondary" onClick={onCancel}>Hủy</Button>}
+        </div>
       </div>
     );
   }
 
   function AddressBook() {
     const addresses = store.state.addresses.filter((address) => address.userId === store.currentUser?.id);
+    const [editingId, setEditingId] = useState<string | null>(null);
+    const editingAddress = addresses.find(a => a.id === editingId);
+
     return (
       <Section title="Địa chỉ giao hàng">
         <div className="grid gap-4 lg:grid-cols-[1fr_360px]">
           <div className="grid gap-3">
             {addresses.map((address) => (
               <Panel key={address.id}>
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="font-bold">{address.receiverName} - {address.phone}</p>
-                    <p className="mt-1 text-sm text-muted">{address.detailAddress}, {address.ward}, {address.district}, {address.province}</p>
+                <div className="flex flex-col gap-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="font-bold">{address.receiverName} - {address.phone}</p>
+                      <p className="mt-1 text-sm text-muted">{address.detailAddress}, {address.ward}, {address.district}, {address.province}</p>
+                    </div>
+                    <StatusBadge status={address.isDefault ? "ACTIVE" : "HIDDEN"} label={address.isDefault ? "Mặc định" : address.addressType} />
                   </div>
-                  <StatusBadge status={address.isDefault ? "ACTIVE" : "HIDDEN"} label={address.isDefault ? "Mặc định" : address.addressType} />
+                  <div className="flex gap-2">
+                    <Button variant="secondary" onClick={() => setEditingId(address.id)}>Sửa</Button>
+                  </div>
                 </div>
               </Panel>
             ))}
           </div>
           <Panel>
-            <h3 className="font-bold">Thêm địa chỉ</h3>
-            <AddressForm />
+            <h3 className="font-bold">{editingAddress ? "Sửa địa chỉ" : "Thêm địa chỉ"}</h3>
+            <AddressForm 
+              editingAddress={editingAddress} 
+              onSuccess={() => setEditingId(null)}
+              onCancel={editingAddress ? () => setEditingId(null) : undefined}
+            />
           </Panel>
         </div>
       </Section>
@@ -3723,7 +3752,6 @@ export function AppShell() {
       </main>
     );
   }
-
   function shopById(id?: string) {
     return store.state.shops.find((shop) => shop.id === id);
   }
@@ -3732,3 +3760,62 @@ export function AppShell() {
     return store.state.categories.find((category) => category.slug === slug);
   }
 }
+
+function AccountProfile({ store, showToast }: { store: any, showToast: any }) {
+  const user = store.currentUser;
+  const [fullName, setFullName] = useState(user?.fullName || "");
+  const [gender, setGender] = useState(user?.gender ?? "OTHER");
+  const [birthday, setBirthday] = useState(user?.birthday || "");
+  const [submitting, setSubmitting] = useState(false);
+
+  // Cập nhật state nếu user thay đổi từ bên ngoài (sau khi refetch)
+  useEffect(() => {
+    if (user) {
+      setFullName(user.fullName || "");
+      setGender(user.gender ?? "OTHER");
+      setBirthday(user.birthday || "");
+    }
+  }, [user]);
+
+  if (!user) return <Section title="Hồ sơ cá nhân"><p>Vui lòng đăng nhập</p></Section>;
+
+  const handleSave = async () => {
+    setSubmitting(true);
+    const res = await store.updateProfile({
+      fullName,
+      gender,
+      dateOfBirth: birthday || undefined,
+    });
+    setSubmitting(false);
+    if (res.ok) {
+      showToast("Đã lưu hồ sơ.", "success");
+    } else {
+      showToast(res.message || "Lỗi lưu hồ sơ.", "danger");
+    }
+  };
+
+  return (
+    <Section title="Hồ sơ cá nhân">
+      <Panel>
+        <div className="grid gap-4 md:grid-cols-2">
+          <Field label="Họ tên"><Input value={fullName} onChange={e => setFullName(e.target.value)} /></Field>
+          <Field label="Email"><Input defaultValue={user.email} disabled className="opacity-70" /></Field>
+          <Field label="Số điện thoại"><Input defaultValue={user.phone} disabled className="opacity-70" /></Field>
+          <Field label="Giới tính">
+            <Select value={gender} onChange={e => setGender(e.target.value)}>
+              <option value="MALE">Nam</option>
+              <option value="FEMALE">Nữ</option>
+              <option value="OTHER">Khác</option>
+            </Select>
+          </Field>
+          <Field label="Ngày sinh"><Input type="date" value={birthday} onChange={e => setBirthday(e.target.value)} /></Field>
+          <Field label="Avatar"><Input type="file" disabled className="opacity-70" /></Field>
+        </div>
+        <Button className="mt-4" disabled={submitting} onClick={handleSave}>
+          {submitting ? "Đang lưu..." : "Lưu hồ sơ"}
+        </Button>
+      </Panel>
+    </Section>
+  );
+}
+

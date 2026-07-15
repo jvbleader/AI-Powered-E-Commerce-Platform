@@ -17,7 +17,7 @@ from schemas.auth_schema import (
     ResetPasswordRequest,
     RouterStatusResponse,
 )
-from schemas.user_schema import UserMeResponse
+from schemas.user_schema import UserMeResponse, UserUpdateRequest
 from services import (
     auth_service,
     jwt_service,
@@ -162,6 +162,24 @@ async def get_me(
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
     return await auth_service.user_to_response(current_user, db)
+
+
+@router.put(
+    "/me",
+    response_model=UserMeResponse,
+)
+async def update_me(
+    data: UserUpdateRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    try:
+        result = await auth_service.update_profile(current_user, data, db)
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        raise
+    return result
 
 
 @router.post(

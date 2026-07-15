@@ -25,3 +25,9 @@ class UserMeResponse(BaseModel):
     )
     lock_reason: str | None = Field(default=None, serialization_alias="lockReason")
     roles: list[str]
+
+class UserUpdateRequest(BaseModel):
+    full_name: str | None = Field(default=None, min_length=2, max_length=150)
+    gender: str | None = Field(default=None)
+    date_of_birth: date | None = Field(default=None)
+    avatar_url: str | None = Field(default=None)

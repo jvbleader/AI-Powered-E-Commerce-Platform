@@ -1168,6 +1168,32 @@ export const useMarketplaceStore = () => {
     }
   }, []);
 
+  const updateProfile = useCallback(async (updates: {
+    fullName?: string;
+    gender?: string;
+    dateOfBirth?: string;
+    avatarUrl?: string;
+  }) => {
+    try {
+      const result = await apiFetch<BackendUser>(AUTH_ROUTES.me, {
+        method: "PUT",
+        body: JSON.stringify({
+          full_name: updates.fullName,
+          gender: updates.gender,
+          date_of_birth: updates.dateOfBirth || null,
+          avatar_url: updates.avatarUrl || null,
+        }),
+      });
+      setState((prev) => applyBackendUser(prev, result));
+      return { ok: true, message: "Cập nhật hồ sơ thành công." };
+    } catch (error) {
+      if (error instanceof ApiError) {
+        return { ok: false, message: error.message };
+      }
+      return { ok: false, message: "Lỗi cập nhật hồ sơ." };
+    }
+  }, []);
+
   const logout = useCallback(async () => {
     try {
       await apiFetch<{ message: string }>(AUTH_ROUTES.logout, { method: "POST" });
@@ -1985,6 +2011,66 @@ export const useMarketplaceStore = () => {
     }
   }, [currentUser]);
 
+  const updateAddress = useCallback(async (id: string, updates: Partial<Omit<Address, "id" | "userId">>): Promise<boolean> => {
+    if (!currentUser) return false;
+    try {
+      const { updateAddressApi } = await import("@/lib/address-api");
+      const resp = await updateAddressApi(Number(id), {
+        receiver_name: updates.receiverName,
+        phone: updates.phone,
+        province: updates.province,
+        district: updates.district,
+        ward: updates.ward,
+        detail_address: updates.detailAddress,
+        address_type: updates.addressType,
+        is_default: updates.isDefault
+      });
+      
+      const updatedAddr: Address = {
+        id: String(resp.id),
+        userId: currentUser.id,
+        receiverName: resp.receiver_name,
+        phone: resp.phone,
+        province: resp.province,
+        district: resp.district,
+        ward: resp.ward,
+        detailAddress: resp.detail_address,
+        addressType: resp.address_type as "HOME" | "OFFICE",
+        isDefault: resp.is_default
+      };
+
+      setState((prev) => ({
+        ...prev,
+        addresses: prev.addresses.map((item) => {
+          if (item.id === id) return updatedAddr;
+          if (item.userId === currentUser.id && updatedAddr.isDefault) return { ...item, isDefault: false };
+          return item;
+        })
+      }));
+      return true;
+    } catch (error) {
+      console.error("Failed to update address", error);
+      return false;
+    }
+  }, [currentUser]);
+
+  const removeAddress = useCallback(async (id: string): Promise<boolean> => {
+    if (!currentUser) return false;
+    try {
+      const { deleteAddressApi } = await import("@/lib/address-api");
+      await deleteAddressApi(Number(id));
+      
+      setState((prev) => ({
+        ...prev,
+        addresses: prev.addresses.filter((item) => item.id !== id)
+      }));
+      return true;
+    } catch (error) {
+      console.error("Failed to delete address", error);
+      return false;
+    }
+  }, [currentUser]);
+
   const resetDemo = useCallback(() => {
     const fresh = cloneState();
     setState(fresh);
@@ -2007,6 +2093,7 @@ export const useMarketplaceStore = () => {
     requestPasswordReset,
     resetPassword,
     changePassword,
+    updateProfile,
     logout,
     logoutAll,
     getSellerApplication,
@@ -2045,6 +2132,8 @@ export const useMarketplaceStore = () => {
     saveProduct,
     fetchAddresses,
     addAddress,
+    updateAddress,
+    removeAddress,
     resetDemo
   };
 };
