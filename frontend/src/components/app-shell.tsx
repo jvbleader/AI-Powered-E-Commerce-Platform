@@ -855,7 +855,10 @@ export function AppShell() {
                 </div>
               </Field>
               <Field label="Số lượng">
-                <QuantityStepper value={quantity} onChange={setQuantity} max={selectedVariant?.inventory.quantity ?? 1} />
+                <div className="flex items-center gap-4">
+                  <QuantityStepper value={quantity} onChange={setQuantity} max={selectedVariant?.inventory.quantity ?? 1} />
+                  <span className="text-sm text-muted">{selectedVariant?.inventory.quantity ?? 0} sản phẩm có sẵn</span>
+                </div>
               </Field>
               <div className="flex flex-wrap gap-2">
                 <Button
