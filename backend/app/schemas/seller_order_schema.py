@@ -2,6 +2,7 @@ from datetime import datetime
 from typing import Optional, List
 from pydantic import BaseModel
 from decimal import Decimal
+from schemas.order_schema import OrderItemResponse, ShipmentResponse
 
 
 class OrderResponse(BaseModel):
@@ -23,6 +24,8 @@ class OrderResponse(BaseModel):
     cancelled_at: Optional[datetime]
     created_at: datetime
     updated_at: Optional[datetime]
+    items: List[OrderItemResponse] = []
+    shipment: Optional[ShipmentResponse] = None
 
     class Config:
         from_attributes = True

@@ -68,6 +68,10 @@ import {
 } from "@/components/marketplace/cards";
 import {
   canCustomerCancel,
+  canCustomerConfirmReceipt,
+  canSellerCancel,
+  canSellerConfirm,
+  canSellerShip,
   formatDate,
   formatVnd,
   getCategoryNames,
@@ -84,6 +88,7 @@ import {
   sellerStatusLabel
 } from "@/lib/helpers";
 import { fetchPublicProducts, fetchRecommendedProducts, fetchProductDetail, fetchCategories } from "@/lib/product-api";
+import { paymentApi } from "@/lib/payment-api";
 import { useMarketplaceStore } from "@/store/use-marketplace-store";
 import type { AddressType, Order, OrderStatus, PaymentMethod, Product, ProductVariant, SellerApplication, SellerStatus, Shop } from "@/types/models";
 
@@ -146,6 +151,7 @@ export function AppShell() {
   const store = useMarketplaceStore();
   const [toast, setToast] = useState<ToastState>();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [sellerProductsActiveTab, setSellerProductsActiveTab] = useState<"ACTIVE" | "HIDDEN">("ACTIVE");
   const isDashboardRoute = ["seller", "admin", "supporter"].includes(segments[0] ?? "");
   const currentRoles = store.currentUser?.roles ?? [];
   const forcedDashboardPath = !isDashboardRoute
@@ -589,7 +595,7 @@ export function AppShell() {
       }
       return "";
     });
-    const [sort, setSort] = useState<"newest" | "price-asc" | "price-desc" | "sold" | "rating">("newest");
+    const [sort, setSort] = useState<"newest" | "price_asc" | "price_desc" | "best_selling" | "high_rating">("newest");
     const [sellerId, setSellerId] = useState("");
     const [rating, setRating] = useState("");
     const [minPrice, setMinPrice] = useState("");
@@ -698,10 +704,10 @@ export function AppShell() {
               </IconButton>
               <Select value={sort} onChange={(event) => setSort(event.target.value as typeof sort)} className="w-44">
                 <option value="newest">Mới nhất</option>
-                <option value="price-asc">Giá tăng</option>
-                <option value="price-desc">Giá giảm</option>
-                <option value="sold">Bán chạy</option>
-                <option value="rating">Rating cao</option>
+                <option value="price_asc">Giá tăng</option>
+                <option value="price_desc">Giá giảm</option>
+                <option value="best_selling">Bán chạy</option>
+                <option value="high_rating">Rating cao</option>
               </Select>
             </div>
           }
@@ -1490,8 +1496,8 @@ export function AppShell() {
                   <InfoRow label="Số đơn hàng" value={`${groups.length}`} />
                   <InfoRow label="Tổng thanh toán" value={formatVnd(total)} />
                   <Button
-                    onClick={() => {
-                      const result = store.checkout(addressId, method, note);
+                    onClick={async () => {
+                      const result = await store.checkout(addressId, method, note);
                       showToast(result.message, result.ok ? "success" : "danger");
                       if (result.ok) window.location.href = "/checkout/success";
                     }}
@@ -1567,16 +1573,21 @@ export function AppShell() {
             <Panel className="h-fit">
               <h3 className="font-bold">Hành động</h3>
               <div className="mt-3 grid gap-2">
-                <Button disabled={!canPayPayment} onClick={() => { store.updatePaymentStatus(payment.paymentCode, "PAID"); showToast("Đã thanh toán đơn hàng.", "success"); }}>
+                <Button 
+                  disabled={!canPayPayment} 
+                  onClick={async () => {
+                    try {
+                      await paymentApi.mockCallback({ payment_code: payment.paymentCode, status: "PAID" });
+                      store.updatePaymentStatus(payment.paymentCode, "PAID"); 
+                      showToast("Đã thanh toán đơn hàng.", "success"); 
+                    } catch (err) {
+                      showToast("Lỗi khi thanh toán đơn hàng.", "danger");
+                    }
+                  }}
+                >
                   <CreditCard className="h-4 w-4" aria-hidden="true" />
                   {payment.paymentStatus === "PAID" ? "Đã thanh toán" : "Thanh toán ngay"}
                 </Button>
-                <Button variant="danger" onClick={() => { store.updatePaymentStatus(payment.paymentCode, "FAILED"); showToast("Đã đánh dấu thanh toán lỗi.", "danger"); }}>Đánh dấu lỗi</Button>
-                <Button variant="secondary" onClick={() => { store.retryPayment(payment.paymentCode); showToast("Đã thử lại thanh toán.", "success"); }}>
-                  <RefreshCcw className="h-4 w-4" aria-hidden="true" />
-                  Thử lại
-                </Button>
-                <Button variant="ghost" onClick={() => { store.updatePaymentStatus(payment.paymentCode, "CANCELLED"); showToast("Đã hủy thanh toán.", "info"); }}>Hủy</Button>
                 <div className="my-1 border-t border-line" />
                 <Button variant="secondary" onClick={() => (window.location.href = "/")}>
                   <Home className="h-4 w-4" aria-hidden="true" />
@@ -1849,8 +1860,10 @@ export function AppShell() {
     useEffect(() => {
       if (audience === "seller") {
         store.fetchSellerOrders(status as OrderStatus | "");
+      } else {
+        store.fetchCustomerOrders(status as OrderStatus | "");
       }
-    }, [audience, status, store.fetchSellerOrders]);
+    }, [audience, status, store.fetchSellerOrders, store.fetchCustomerOrders]);
 
 
     const orders = store.state.orders.filter((order) => {
@@ -1858,11 +1871,26 @@ export function AppShell() {
       return belongs && (!status || order.orderStatus === status);
     });
     const renderOrderAction = (order: Order) => {
-      if (audience !== "customer") return <span className="text-muted">Theo dõi</span>;
+      if (audience !== "customer") {
+        const showConfirm = canSellerConfirm(order);
+        const showShip = canSellerShip(order);
+        const showCancel = canSellerCancel(order);
+
+        if (!showConfirm && !showShip && !showCancel) return <span className="text-muted">Theo dõi</span>;
+
+        return (
+          <div className="flex flex-wrap gap-2">
+            {showConfirm ? <Button onClick={() => store.confirmSellerOrder(order.id).then((res) => { if (res.ok) showToast("Đã xác nhận đơn hàng.", "success"); else showToast(res.message || "Lỗi xác nhận", "danger"); })}>Xác nhận</Button> : null}
+            {showShip ? <Button variant="secondary" onClick={() => store.shippingSellerOrder(order.id).then((res) => { if (res.ok) showToast("Đã chuyển shipping.", "success"); else showToast(res.message || "Lỗi chuyển shipping", "danger"); })}>Giao hàng</Button> : null}
+            {showCancel ? <Button variant="danger" onClick={() => store.cancelSellerOrder(order.id).then((res) => { if (res.ok) showToast("Đã từ chối đơn hàng.", "success"); else showToast(res.message || "Lỗi từ chối", "danger"); })}>Từ chối</Button> : null}
+          </div>
+        );
+      }
 
       const showPayment = canContinuePayment(order);
       const showCancel = canCustomerCancel(order);
-      if (!showPayment && !showCancel) return <span className="text-muted">Theo dõi</span>;
+      const showReceipt = canCustomerConfirmReceipt(order);
+      if (!showPayment && !showCancel && !showReceipt) return <span className="text-muted">Theo dõi</span>;
 
       return (
         <div className="flex flex-wrap gap-2">
@@ -1872,7 +1900,8 @@ export function AppShell() {
               Thanh toán
             </Button>
           ) : null}
-          {showCancel ? <Button variant="danger" onClick={() => store.cancelCustomerOrder(order.orderCode)}>Hủy</Button> : null}
+          {showReceipt ? <Button variant="secondary" onClick={() => store.confirmCustomerReceipt(order.orderCode).then((res) => { if (res.ok) showToast("Đã xác nhận nhận hàng.", "success"); else showToast(res.message || "Lỗi xác nhận", "danger"); })}>Đã nhận hàng</Button> : null}
+          {showCancel ? <Button variant="danger" onClick={() => store.cancelCustomerOrder(order.orderCode).then((res) => { if (res.ok) showToast("Đã hủy đơn hàng.", "success"); else showToast(res.message || "Lỗi hủy đơn", "danger"); })}>Hủy</Button> : null}
         </div>
       );
     };
@@ -1902,8 +1931,20 @@ export function AppShell() {
   }
 
   function OrderDetailPage({ orderCode, audience }: { orderCode?: string; audience: "customer" | "seller" }) {
-    const order = store.state.orders.find((item) => item.orderCode === orderCode);
-    if (!order) return <NotFoundPage />;
+    const order = store.state.orders.find((item) => (audience === "customer" ? item.orderCode === orderCode : item.id === orderCode || item.orderCode === orderCode));
+    
+    useEffect(() => {
+      if (!order && orderCode) {
+        if (audience === "customer") {
+          store.fetchCustomerOrderDetail(orderCode);
+        } else {
+          store.fetchSellerOrderDetail(orderCode);
+        }
+      }
+    }, [order, orderCode, audience]);
+
+    if (!order) return <div className="flex justify-center p-8"><span className="loading loading-spinner"></span></div>; // Loading or wait until fetched
+
     const shop = shopById(order.sellerId);
     return (
       <Section title={`Chi tiết đơn ${order.orderCode}`}>
@@ -1947,21 +1988,31 @@ export function AppShell() {
               <InfoRow label="Phí ship" value={formatVnd(order.shippingFee)} />
               <InfoRow label="Tổng" value={formatVnd(order.totalAmount)} />
             </div>
-            {audience === "customer" && canContinuePayment(order) ? (
+            {audience === "customer" && (canContinuePayment(order) || canCustomerCancel(order) || canCustomerConfirmReceipt(order)) ? (
               <div className="mt-4 grid gap-2">
-                <Button onClick={() => goToPaymentForOrder(order)}>
-                  <CreditCard className="h-4 w-4" aria-hidden="true" />
-                  Thanh toán
-                </Button>
-                {canCustomerCancel(order) ? <Button variant="danger" onClick={() => store.cancelCustomerOrder(order.orderCode)}>Hủy đơn</Button> : null}
+                {canContinuePayment(order) ? (
+                  <Button onClick={() => goToPaymentForOrder(order)}>
+                    <CreditCard className="h-4 w-4" aria-hidden="true" />
+                    Thanh toán
+                  </Button>
+                ) : null}
+                {canCustomerConfirmReceipt(order) ? (
+                  <Button variant="secondary" onClick={() => store.confirmCustomerReceipt(order.orderCode).then((res) => { if (res.ok) showToast("Đã xác nhận nhận hàng.", "success"); else showToast(res.message || "Lỗi xác nhận", "danger"); })}>Đã nhận hàng</Button>
+                ) : null}
+                {canCustomerCancel(order) ? <Button variant="danger" onClick={() => store.cancelCustomerOrder(order.orderCode).then((res) => { if (res.ok) showToast("Đã hủy đơn hàng.", "success"); else showToast(res.message || "Lỗi hủy đơn", "danger"); })}>Hủy đơn</Button> : null}
               </div>
             ) : null}
-            {audience === "seller" ? (
+            {audience === "seller" && (canSellerConfirm(order) || canSellerShip(order) || canSellerCancel(order)) ? (
               <div className="mt-4 grid gap-2">
-                <Button disabled={order.paymentStatus !== "PAID" || order.orderStatus !== "PLACED"} onClick={() => store.confirmSellerOrder(order.id).then((res) => { if (res.ok) showToast("Đã xác nhận đơn hàng.", "success"); else showToast(res.message || "Lỗi xác nhận", "danger"); })}>Xác nhận đơn</Button>
-                <Button variant="secondary" disabled={order.paymentStatus !== "PAID" || !order.sellerConfirmed || order.orderStatus !== "READY_TO_SHIP"} onClick={() => store.shippingSellerOrder(order.id).then((res) => { if (res.ok) showToast("Đã chuyển shipping.", "success"); else showToast(res.message || "Lỗi chuyển shipping", "danger"); })}>Chuyển shipping</Button>
-                <Button variant="secondary" onClick={() => store.updateSellerOrder(order.orderCode, "COMPLETED")}>Hoàn thành (Mock)</Button>
-                <Button variant="danger" onClick={() => store.updateSellerOrder(order.orderCode, "DELIVERY_FAILED")}>Giao thất bại (Mock)</Button>
+                {canSellerConfirm(order) ? (
+                  <Button onClick={() => store.confirmSellerOrder(order.id).then((res) => { if (res.ok) showToast("Đã xác nhận đơn hàng.", "success"); else showToast(res.message || "Lỗi xác nhận", "danger"); })}>Xác nhận đơn</Button>
+                ) : null}
+                {canSellerShip(order) ? (
+                  <Button variant="secondary" onClick={() => store.shippingSellerOrder(order.id).then((res) => { if (res.ok) showToast("Đã chuyển shipping.", "success"); else showToast(res.message || "Lỗi chuyển shipping", "danger"); })}>Chuyển shipping</Button>
+                ) : null}
+                {canSellerCancel(order) ? (
+                  <Button variant="danger" onClick={() => store.cancelSellerOrder(order.id).then((res) => { if (res.ok) showToast("Đã từ chối đơn hàng.", "success"); else showToast(res.message || "Lỗi từ chối", "danger"); })}>Từ chối đơn</Button>
+                ) : null}
               </div>
             ) : null}
           </Panel>
@@ -2584,14 +2635,40 @@ export function AppShell() {
 
   function SellerProductsPage() {
     const shop = store.currentShop;
+    const activeTab = sellerProductsActiveTab;
+    const setActiveTab = setSellerProductsActiveTab;
     
     useEffect(() => {
       if (shop) store.fetchSellerProducts();
     }, [shop, store.fetchSellerProducts]);
 
-    const products = store.state.products.filter((product) => product.sellerId === shop?.id);
+    const products = store.state.products.filter((product) => product.sellerId === shop?.id && product.status === activeTab);
     return (
       <Section title="Quản lý sản phẩm" action={<Button onClick={() => (window.location.href = "/seller/products/new")}><Plus className="h-4 w-4" />Tạo sản phẩm</Button>}>
+        <div className="flex gap-4 border-b border-line mb-4">
+          <button
+            className={cn(
+              "pb-2 text-sm font-semibold transition-colors",
+              activeTab === "ACTIVE"
+                ? "border-b-2 border-primary text-primary"
+                : "text-muted hover:text-primary"
+            )}
+            onClick={() => setActiveTab("ACTIVE")}
+          >
+            Sản phẩm đang bán
+          </button>
+          <button
+            className={cn(
+              "pb-2 text-sm font-semibold transition-colors",
+              activeTab === "HIDDEN"
+                ? "border-b-2 border-primary text-primary"
+                : "text-muted hover:text-primary"
+            )}
+            onClick={() => setActiveTab("HIDDEN")}
+          >
+            Sản phẩm đã ẩn
+          </button>
+        </div>
         <DataTable
           columns={["Sản phẩm", "Categories", "Variants", "Kho", "Đã bán", "Rating", "Status", "Action"]}
           rows={products.map((product) => {
@@ -2607,8 +2684,10 @@ export function AppShell() {
               <StatusBadge key="st" status={product.status} label={productStatusLabel[product.status]} />,
               <div key="actions" className="flex gap-3 text-sm">
                 <a className="font-bold text-primary" href={`/seller/products/${product.id}/edit`}>Sửa</a>
-                {product.status !== "HIDDEN" && (
-                  <button className="text-muted hover:text-primary" onClick={() => store.hideSellerProduct(product.id).then((r) => { if(!r.ok) showToast(r.message||"", "danger") })}>Ẩn</button>
+                {product.status !== "HIDDEN" ? (
+                  <button className="text-muted hover:text-primary" onClick={() => { if (confirm("Ẩn sản phẩm?")) { store.hideSellerProduct(product.id).then((r) => { if(!r.ok) showToast(r.message||"", "danger") }) } }}>Ẩn</button>
+                ) : (
+                  <button className="text-muted hover:text-primary" onClick={() => { if (confirm("Bỏ ẩn sản phẩm?")) { store.unhideSellerProduct(product.id).then((r) => { if(!r.ok) showToast(r.message||"", "danger") }) } }}>Bỏ ẩn</button>
                 )}
                 <button className="text-danger hover:text-danger/80" onClick={() => { if(confirm("Xóa sản phẩm?")) store.deleteSellerProduct(product.id).then((r) => { if(!r.ok) showToast(r.message||"", "danger") }) }}>Xóa</button>
               </div>
@@ -3509,11 +3588,7 @@ export function AppShell() {
   }
 
   function ViolationReportsPage() {
-    const reports = [
-      ["VR-001", "Tai nghe bluetooth chống ồn", "Hàng giả", "PENDING"],
-      ["VR-002", "Pin dự phòng 10000mAh", "Mô tả sai", "REVIEWING"],
-      ["VR-003", "Máy khuếch tán tinh dầu", "Nội dung không phù hợp", "RESOLVED"]
-    ];
+    const reports: string[][] = [];
     return (
       <Section title="Violation reports">
         <DataTable
@@ -3566,10 +3641,7 @@ export function AppShell() {
       <Section title="System reports">
         <DataTable
           columns={["Code", "Severity", "Module", "Status"]}
-          rows={[
-            ["SYS-001", "LOW", "payment", "OPEN"],
-            ["SYS-002", "MEDIUM", "image upload", "WATCHING"]
-          ]}
+          rows={[]}
         />
       </Section>
     );
@@ -3581,11 +3653,7 @@ export function AppShell() {
         <div className="grid gap-4 lg:grid-cols-[1fr_360px]">
           <DataTable
             columns={["Document", "Type", "Status", "Chunks", "Updated"]}
-            rows={[
-              ["Chính sách thanh toán online", "POLICY", "ACTIVE", "12", "29/06/2026"],
-              ["FAQ mua hàng nhiều shop", "FAQ", "ACTIVE", "8", "29/06/2026"],
-              ["Hướng dẫn bảo hành", "POLICY", "PROCESSING", "0", "29/06/2026"]
-            ]}
+            rows={[]}
           />
           <Panel>
             <h3 className="font-bold">Upload knowledge</h3>

@@ -16,6 +16,7 @@ from services.seller_product_service import (
     update_seller_product,
     delete_seller_product,
     hide_seller_product,
+    unhide_seller_product,
 )
 
 router = APIRouter(prefix="/seller/products", tags=["Seller Products"])
@@ -86,6 +87,23 @@ async def hide_product_api(
         await db.rollback()
         raise
     return result
+
+
+@router.patch("/{product_id}/unhide", response_model=ProductResponse)
+async def unhide_product_api(
+    product_id: str,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> ProductResponse:
+    result = None
+    try:
+        result = await unhide_seller_product(user, product_id, db)
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        raise
+    return result
+
 
 
 @router.delete("/{product_id}", response_model=ProductResponse)
