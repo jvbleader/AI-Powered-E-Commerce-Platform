@@ -1,6 +1,7 @@
 from typing import List, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
+from sqlalchemy import select, func, or_
+from sqlalchemy.orm import selectinload
 from models.order import Order
 from models.order_status_log import OrderStatusLog
 from models.base import utc_now
@@ -23,7 +24,12 @@ async def get_orders_by_seller_and_status(
     total = total_result.scalar_one()
 
     # Get items
-    items_query = query.order_by(Order.created_at.desc()).offset(skip).limit(limit)
+    items_query = (
+        query.options(selectinload(Order.items), selectinload(Order.shipment))
+        .order_by(Order.created_at.desc())
+        .offset(skip)
+        .limit(limit)
+    )
     items_result = await db.execute(items_query)
     items = list(items_result.scalars().all())
 
@@ -33,8 +39,13 @@ async def get_orders_by_seller_and_status(
 async def get_order_by_public_id_and_seller(
     db: AsyncSession, public_id: str, seller_id: int
 ) -> Optional[Order]:
-    query = select(Order).filter(
-        Order.public_id == public_id, Order.seller_id == seller_id
+    query = (
+        select(Order)
+        .options(selectinload(Order.items), selectinload(Order.shipment))
+        .filter(
+            or_(Order.public_id == public_id, Order.order_code == public_id),
+            Order.seller_id == seller_id,
+        )
     )
     result = await db.execute(query)
     return result.scalar_one_or_none()
@@ -101,11 +112,13 @@ async def add_order_cancellation(db: AsyncSession, cancellation) -> None:
 
 
 async def get_user_orders(db: AsyncSession, user_id: int) -> list[Order]:
-    from sqlalchemy.orm import selectinload
-
     stmt = (
         select(Order)
-        .options(selectinload(Order.items), selectinload(Order.seller))
+        .options(
+            selectinload(Order.items),
+            selectinload(Order.seller),
+            selectinload(Order.shipment),
+        )
         .where(Order.user_id == user_id)
         .order_by(Order.created_at.desc())
     )
@@ -116,11 +129,13 @@ async def get_user_orders(db: AsyncSession, user_id: int) -> list[Order]:
 async def get_order_by_code_and_user(
     db: AsyncSession, order_code: str, user_id: int
 ) -> Order | None:
-    from sqlalchemy.orm import selectinload
-
     stmt = (
         select(Order)
-        .options(selectinload(Order.items), selectinload(Order.seller))
+        .options(
+            selectinload(Order.items),
+            selectinload(Order.seller),
+            selectinload(Order.shipment),
+        )
         .where(Order.order_code == order_code, Order.user_id == user_id)
     )
     res = await db.execute(stmt)

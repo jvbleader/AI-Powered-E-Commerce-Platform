@@ -336,9 +336,15 @@ export const createPaymentFromOrders = (
   createdAt: "2026-06-29T08:00:00.000Z"
 });
 
-export const canCustomerCancel = (order: Order) => order.paymentStatus !== "PAID" && !order.sellerConfirmed && order.orderStatus === "PLACED";
+export const canCustomerCancel = (order: Order) => order.orderStatus === "PLACED" || order.orderStatus === "READY_TO_SHIP";
 
 export const canSellerCancel = (order: Order) => order.paymentStatus !== "PAID" && !order.sellerConfirmed && order.orderStatus === "PLACED";
+
+export const canCustomerConfirmReceipt = (order: Order) => order.orderStatus === "SHIPPING";
+
+export const canSellerConfirm = (order: Order) => order.orderStatus === "PLACED" && !order.sellerConfirmed;
+
+export const canSellerShip = (order: Order) => order.orderStatus === "READY_TO_SHIP";
 
 export const statusTone = (status: string) => {
   if (["ACTIVE", "APPROVED", "PAID", "COMPLETED", "READY_TO_SHIP"].includes(status)) return "success";

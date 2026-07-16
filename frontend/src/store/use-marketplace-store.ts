@@ -10,12 +10,16 @@ import {
   getCartRows,
   makeOrderCode,
   makePaymentCode,
-  selectedCheckoutGroups
+  selectedCheckoutGroups,
 } from "@/lib/helpers";
 import { AUTH_BASE_PATH, ApiError, apiFetch } from "@/lib/api";
 import { fetchMyCart, addToCartApi, updateCartItemApi, removeCartItemApi, selectAllCartApi } from "@/lib/cart-api";
+import { orderApi } from "@/lib/order-api";
+import { paymentApi } from "@/lib/payment-api";
+import { normalizeProduct } from "@/lib/product-api";
 import type {
   Address,
+  AddressType,
   AppState,
   OrderStatus,
   PaymentMethod,
@@ -28,6 +32,7 @@ import type {
   User,
   ProductVariant,
   Order,
+  Payment,
   Category
 } from "@/types/models";
 
@@ -65,12 +70,14 @@ const SELLER_PRODUCT_ROUTES = {
   create: "/seller/products",
   update: (productId: string) => `/seller/products/${productId}`,
   hide: (productId: string) => `/seller/products/${productId}/hide`,
+  unhide: (productId: string) => '/seller/products/' + productId + '/unhide',
   delete: (productId: string) => `/seller/products/${productId}`
 };
 const SELLER_ORDER_ROUTES = {
   list: "/seller/orders",
   confirm: (orderId: string) => `/seller/orders/${orderId}/confirm`,
-  shipping: (orderId: string) => `/seller/orders/${orderId}/shipping`
+  shipping: (orderId: string) => `/seller/orders/${orderId}/shipping`,
+  cancel: (orderId: string) => `/seller/orders/${orderId}/cancel`
 };
 
 type BackendUser = {
@@ -228,6 +235,9 @@ type BackendOrderResponse = {
   cancelled_at?: string | null;
   created_at: string;
   updated_at?: string | null;
+  seller?: { public_id: string; shop_name: string; shop_logo_url?: string | null };
+  items?: any[];
+  shipment?: any;
 };
 
 type BackendOrderListResponse = {
@@ -606,8 +616,31 @@ const normalizeBackendOrder = (
   sellerConfirmExpiresAt: backendOrder.seller_confirm_expires_at,
   completedAt: backendOrder.completed_at ?? undefined,
   cancelledAt: backendOrder.cancelled_at ?? undefined,
-  items: [], // Details not in list response yet
-  shipment: {
+  items: (backendOrder.items || []).map((item: any) => ({
+    id: String(item.id),
+    productId: item.product_id ? String(item.product_id) : undefined,
+    variantId: item.variant_id ? String(item.variant_id) : undefined,
+    productNameSnapshot: item.product_name_snapshot,
+    variantNameSnapshot: item.variant_name_snapshot,
+    productImageSnapshot: item.product_image_snapshot || "",
+    sellerNameSnapshot: item.seller_name_snapshot,
+    skuSnapshot: item.sku_snapshot || "",
+    unitPrice: Number(item.unit_price),
+    quantity: item.quantity,
+    subtotal: Number(item.subtotal)
+  })),
+  shipment: backendOrder.shipment ? {
+    shippingProviderName: backendOrder.shipment.shipping_provider_name || "Chưa có thông tin",
+    receiverName: backendOrder.shipment.receiver_name,
+    receiverPhone: backendOrder.shipment.receiver_phone,
+    province: backendOrder.shipment.province,
+    district: backendOrder.shipment.district,
+    ward: backendOrder.shipment.ward,
+    detailAddress: backendOrder.shipment.detail_address,
+    addressType: (backendOrder.shipment.address_type || "HOME") as AddressType,
+    shippedAt: backendOrder.shipment.shipped_at || undefined,
+    deliveredAt: backendOrder.shipment.delivered_at || undefined
+  } : {
     shippingProviderName: "Chưa có thông tin",
     receiverName: "-",
     receiverPhone: "-",
@@ -718,6 +751,7 @@ export const useMarketplaceStore = () => {
 
   const fetchedSellerProductsRef = useRef(false);
   const fetchedSellerOrdersStatusRef = useRef<string | null>(null);
+  const fetchedCustomerOrdersStatusRef = useRef<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -735,15 +769,41 @@ export const useMarketplaceStore = () => {
           setState((prev) => applyBackendUser(prev, user));
           try {
             const cartResp = await fetchMyCart();
-            setState((prev) => ({
-              ...prev,
-              cartItems: cartResp.items.map(item => ({
-                id: String(item.id),
-                variantId: item.variantPublicId,
-                quantity: item.quantity,
-                isSelected: item.isSelected
-              }))
-            }));
+            setState((prev) => {
+              const newProducts = [...prev.products];
+              const newVariants = [...prev.variants];
+              const newShops = [...prev.shops];
+
+              if (cartResp.products) {
+                for (const backendProduct of cartResp.products) {
+                  const normalized = normalizeProduct(backendProduct);
+                  if (!newProducts.some(p => p.id === normalized.product.id)) {
+                    newProducts.push(normalized.product);
+                  }
+                  for (const variant of normalized.variants) {
+                    if (!newVariants.some(v => v.id === variant.id)) {
+                      newVariants.push(variant);
+                    }
+                  }
+                  if (normalized.shop && !newShops.some(s => s.id === normalized.shop!.id)) {
+                    newShops.push(normalized.shop);
+                  }
+                }
+              }
+
+              return {
+                ...prev,
+                products: newProducts,
+                variants: newVariants,
+                shops: newShops,
+                cartItems: cartResp.items.map(item => ({
+                  id: String(item.id),
+                  variantId: item.variantPublicId,
+                  quantity: item.quantity,
+                  isSelected: item.isSelected
+                }))
+              };
+            });
           } catch (e) {
             console.error("Failed to load cart:", e);
           }
@@ -1135,6 +1195,32 @@ export const useMarketplaceStore = () => {
     }
   }, []);
 
+  const updateProfile = useCallback(async (updates: {
+    fullName?: string;
+    gender?: string;
+    dateOfBirth?: string;
+    avatarUrl?: string;
+  }) => {
+    try {
+      const result = await apiFetch<BackendUser>(AUTH_ROUTES.me, {
+        method: "PUT",
+        body: JSON.stringify({
+          full_name: updates.fullName,
+          gender: updates.gender,
+          date_of_birth: updates.dateOfBirth || null,
+          avatar_url: updates.avatarUrl || null,
+        }),
+      });
+      setState((prev) => applyBackendUser(prev, result));
+      return { ok: true, message: "Cập nhật hồ sơ thành công." };
+    } catch (error) {
+      if (error instanceof ApiError) {
+        return { ok: false, message: error.message };
+      }
+      return { ok: false, message: "Lỗi cập nhật hồ sơ." };
+    }
+  }, []);
+
   const logout = useCallback(async () => {
     try {
       await apiFetch<{ message: string }>(AUTH_ROUTES.logout, { method: "POST" });
@@ -1427,7 +1513,7 @@ export const useMarketplaceStore = () => {
     }
   }, []);
 
-  const checkout = useCallback((addressId: string, method: PaymentMethod, note: string) => {
+  const checkout = useCallback(async (addressId: string, method: PaymentMethod, note: string) => {
     if (!currentUser) return { ok: false, message: "Bạn cần đăng nhập để checkout.", paymentCode: undefined };
     const address = state.addresses.find((item) => item.id === addressId);
     if (!address) return { ok: false, message: "Vui lòng chọn địa chỉ giao hàng.", paymentCode: undefined };
@@ -1439,24 +1525,63 @@ export const useMarketplaceStore = () => {
     const groups = selectedCheckoutGroups(rows);
     if (!groups.length) return { ok: false, message: "Chưa có sản phẩm hợp lệ được chọn.", paymentCode: undefined };
 
-    let paymentCode = "";
-    setState((prev) => {
-      const orders = groups.map((group, index) =>
-        createOrderFromGroup(makeOrderCode(prev.orders.length + index), currentUser, group, address, note, prev.orders.length + index)
-      );
-      paymentCode = makePaymentCode(prev.payments.length);
-      const payment = createPaymentFromOrders(paymentCode, currentUser.id, method, orders, prev.payments.length);
-      const checkedVariantIds = new Set(groups.flatMap((group) => group.rows.map((row) => row.variant.id)));
-      return {
-        ...prev,
-        orders: [...orders, ...prev.orders],
-        payments: [payment, ...prev.payments],
-        cartItems: prev.cartItems.filter((item) => !checkedVariantIds.has(item.variantId)),
-        lastCheckoutPaymentCode: payment.paymentCode
-      };
-    });
-    return { ok: true, message: "Đã tạo payment chung và tách đơn theo shop.", paymentCode };
-  }, [currentUser, state.addresses, state.cartItems, state.products, state.shops, state.variants]);
+    try {
+      const cartItemIds = groups.flatMap(g => g.rows.map(r => Number(r.item.id)));
+      const backendOrders = await orderApi.checkoutCart({
+        cart_item_ids: cartItemIds,
+        address_id: Number(addressId),
+        customer_note: note || undefined
+      }) as unknown as BackendOrderResponse[];
+
+
+
+      const orderCodes = backendOrders.map(o => o.order_code);
+      const rawPaymentRes = await paymentApi.createPayment({
+        order_codes: orderCodes,
+        payment_method: method
+      }) as any;
+      const paymentRes = {
+        id: rawPaymentRes.public_id || "mock-id",
+        paymentCode: rawPaymentRes.payment_code,
+        userId: currentUser.id,
+        paymentMethod: rawPaymentRes.payment_method,
+        paymentStatus: rawPaymentRes.payment_status,
+        amount: parseFloat(rawPaymentRes.amount),
+        transactionCode: rawPaymentRes.transaction_code,
+        paymentGateway: rawPaymentRes.payment_gateway,
+        orderCodes: rawPaymentRes.order_codes || orderCodes,
+        expiresAt: rawPaymentRes.expires_at,
+        createdAt: rawPaymentRes.created_at,
+        paidAt: rawPaymentRes.paid_at,
+        failedAt: rawPaymentRes.failed_at,
+        cancelledAt: rawPaymentRes.cancelled_at
+      } as Payment;
+      
+      const paymentCode = paymentRes.paymentCode;
+
+      setState((prev) => {
+        const newOrders = backendOrders.map(bo => normalizeBackendOrder(bo, bo.seller?.public_id || "UNKNOWN_SELLER", currentUser.id));
+        
+        let newPayment = paymentRes;
+        if (!newPayment) {
+          newPayment = createPaymentFromOrders(paymentCode, currentUser.id, method, newOrders, prev.payments.length);
+        }
+
+        const checkedVariantIds = new Set(groups.flatMap((group) => group.rows.map((row) => row.variant.id)));
+        return {
+          ...prev,
+          orders: [...newOrders, ...prev.orders],
+          payments: [newPayment, ...prev.payments],
+          cartItems: prev.cartItems.filter((item) => !checkedVariantIds.has(item.variantId)),
+          lastCheckoutPaymentCode: newPayment.paymentCode
+        };
+      });
+
+      return { ok: true, message: "Đặt hàng thành công.", paymentCode };
+    } catch (e: any) {
+      return { ok: false, message: e.message || "Lỗi khi đặt hàng.", paymentCode: undefined };
+    }
+  }, [currentUser, state.addresses, state.cartItems, state.products, state.shops, state.variants, state.payments.length]);
 
   const updatePaymentStatus = useCallback((paymentCode: string, status: PaymentStatus) => {
     setState((prev) => {
@@ -1491,64 +1616,39 @@ export const useMarketplaceStore = () => {
     updatePaymentStatus(paymentCode, "PENDING");
   }, [updatePaymentStatus]);
 
-  const cancelCustomerOrder = useCallback((orderCode: string) => {
-    setState((prev) => ({
-      ...prev,
-      orders: prev.orders.map((order) =>
-        order.orderCode === orderCode && canCustomerCancel(order)
-          ? {
-              ...order,
-              orderStatus: "CANCELLED",
-              paymentStatus: "CANCELLED",
-              cancelledAt: "2026-06-29T08:45:00.000Z",
-              timeline: [
-                ...order.timeline,
-                {
-                  id: `${order.orderCode}-cancel`,
-                  oldStatus: order.orderStatus,
-                  newStatus: "CANCELLED",
-                  note: "Khách hàng hủy khi chưa thanh toán và shop chưa xác nhận",
-                  createdAt: "2026-06-29T08:45:00.000Z"
-                }
-              ]
-            }
-          : order
-      )
-    }));
-  }, []);
+  const cancelCustomerOrder = useCallback(async (orderCode: string) => {
+    if (!currentUser) return { ok: false, message: "Người dùng chưa đăng nhập." };
+    try {
+      const response = await orderApi.cancelOrder(orderCode, { reason: "Khách hàng hủy đơn" }) as unknown as BackendOrderResponse;
+      const order = normalizeBackendOrder(response, response.seller?.public_id || "UNKNOWN_SELLER", currentUser.id);
+      setState((prev) => ({
+        ...prev,
+        orders: prev.orders.some((o) => o.id === order.id || o.orderCode === order.orderCode)
+          ? prev.orders.map((o) => (o.id === order.id || o.orderCode === order.orderCode ? order : o))
+          : [...prev.orders, order]
+      }));
+      return { ok: true, order };
+    } catch (error) {
+      return { ok: false, message: error instanceof ApiError ? error.message : "Lỗi khi hủy đơn." };
+    }
+  }, [currentUser]);
 
-  const updateSellerOrder = useCallback((orderCode: string, nextStatus: OrderStatus) => {
-    setState((prev) => ({
-      ...prev,
-      orders: prev.orders.map((order) => {
-        if (order.orderCode !== orderCode) return order;
-        if (nextStatus === "CANCELLED" && !canSellerCancel(order)) return order;
-        if (nextStatus === "READY_TO_SHIP" && order.paymentStatus !== "PAID") return order;
-        if (nextStatus === "SHIPPING" && (order.paymentStatus !== "PAID" || !order.sellerConfirmed)) return order;
-        return {
-          ...order,
-          sellerConfirmed: nextStatus === "READY_TO_SHIP" || nextStatus === "SHIPPING" || order.sellerConfirmed,
-          sellerConfirmedAt:
-            nextStatus === "READY_TO_SHIP" || nextStatus === "SHIPPING"
-              ? "2026-06-29T09:00:00.000Z"
-              : order.sellerConfirmedAt,
-          orderStatus: nextStatus,
-          completedAt: nextStatus === "COMPLETED" ? "2026-06-29T09:00:00.000Z" : order.completedAt,
-          cancelledAt: nextStatus === "CANCELLED" ? "2026-06-29T09:00:00.000Z" : order.cancelledAt,
-          timeline: [
-            ...order.timeline,
-            {
-              id: `${order.orderCode}-${nextStatus}`,
-              oldStatus: order.orderStatus,
-              newStatus: nextStatus,
-              note: "Người bán cập nhật trạng thái theo rule MVP",
-              createdAt: "2026-06-29T09:00:00.000Z"
-            }
-          ]
-        };
-      })
-    }));
-  }, []);
+  const confirmCustomerReceipt = useCallback(async (orderCode: string) => {
+    if (!currentUser) return { ok: false, message: "Người dùng chưa đăng nhập." };
+    try {
+      const response = await orderApi.confirmReceipt(orderCode) as unknown as BackendOrderResponse;
+      const order = normalizeBackendOrder(response, response.seller?.public_id || "UNKNOWN_SELLER", currentUser.id);
+      setState((prev) => ({
+        ...prev,
+        orders: prev.orders.some((o) => o.id === order.id || o.orderCode === order.orderCode)
+          ? prev.orders.map((o) => (o.id === order.id || o.orderCode === order.orderCode ? order : o))
+          : [...prev.orders, order]
+      }));
+      return { ok: true, order };
+    } catch (error) {
+      return { ok: false, message: error instanceof ApiError ? error.message : "Lỗi khi xác nhận nhận hàng." };
+    }
+  }, [currentUser]);
 
   const updateSellerStatus = useCallback((shopId: string, status: SellerStatus, reason?: string) => {
     setState((prev) => ({
@@ -1673,6 +1773,24 @@ export const useMarketplaceStore = () => {
     }
   }, [currentShop]);
 
+  const unhideSellerProduct = useCallback(async (productId: string) => {
+    if (!currentShop) return { ok: false, message: "Shop không tồn tại." };
+    try {
+      const response = await apiFetch<BackendProductResponse>(SELLER_PRODUCT_ROUTES.unhide(productId), {
+        method: "PATCH"
+      });
+      const { product, variants } = normalizeBackendProduct(response, currentShop.id);
+      setState((prev) => ({
+        ...prev,
+        products: prev.products.map((p) => p.id === product.id ? product : p),
+        variants: [...variants, ...prev.variants.filter((v) => v.productId !== product.id)]
+      }));
+      return { ok: true, product };
+    } catch (error) {
+      return { ok: false, message: error instanceof ApiError ? error.message : "Lỗi khi hiển thị sản phẩm." };
+    }
+  }, [currentShop]);
+
   const deleteSellerProduct = useCallback(async (productId: string) => {
     try {
       await apiFetch(SELLER_PRODUCT_ROUTES.delete(productId), { method: "DELETE" });
@@ -1686,6 +1804,40 @@ export const useMarketplaceStore = () => {
       return { ok: false, message: error instanceof ApiError ? error.message : "Lỗi khi xóa sản phẩm." };
     }
   }, []);
+
+  const fetchCustomerOrderDetail = useCallback(async (orderCode: string) => {
+    if (!currentUser) return { ok: false, message: "Người dùng chưa đăng nhập." };
+    try {
+      const response = await orderApi.getOrderDetail(orderCode) as unknown as BackendOrderResponse;
+      const order = normalizeBackendOrder(response, response.seller?.public_id || "UNKNOWN_SELLER", currentUser.id);
+      setState((prev) => ({
+        ...prev,
+        orders: prev.orders.some((o) => o.id === order.id || o.orderCode === order.orderCode)
+          ? prev.orders.map((o) => (o.id === order.id || o.orderCode === order.orderCode ? order : o))
+          : [...prev.orders, order]
+      }));
+      return { ok: true, order };
+    } catch (error) {
+      return { ok: false, message: error instanceof ApiError ? error.message : "Lỗi tải chi tiết đơn hàng." };
+    }
+  }, [currentUser]);
+
+  const fetchSellerOrderDetail = useCallback(async (orderId: string) => {
+    if (!currentShop || !currentUser) return { ok: false, message: "Shop không tồn tại." };
+    try {
+      const response = await apiFetch<BackendOrderResponse>(`${SELLER_ORDER_ROUTES.list}/${orderId}`);
+      const order = normalizeBackendOrder(response, currentShop.id, currentUser.id);
+      setState((prev) => ({
+        ...prev,
+        orders: prev.orders.some((o) => o.id === order.id || o.orderCode === order.orderCode)
+          ? prev.orders.map((o) => (o.id === order.id || o.orderCode === order.orderCode ? order : o))
+          : [...prev.orders, order]
+      }));
+      return { ok: true, order };
+    } catch (error) {
+      return { ok: false, message: error instanceof ApiError ? error.message : "Lỗi tải chi tiết đơn hàng." };
+    }
+  }, [currentShop, currentUser]);
 
   const fetchSellerOrders = useCallback(async (status?: OrderStatus | "", force = false) => {
     if (!currentShop || !currentUser) return { ok: false, message: "Shop không tồn tại." };
@@ -1715,6 +1867,36 @@ export const useMarketplaceStore = () => {
     }
   }, [currentShop, currentUser]);
 
+  const fetchCustomerOrders = useCallback(async (status?: OrderStatus | "", force = false) => {
+    if (!currentUser) return { ok: false, message: "Người dùng chưa đăng nhập." };
+    const queryStatus = status || "";
+    if (!force && fetchedCustomerOrdersStatusRef.current === queryStatus) return { ok: true, orders: [] };
+    fetchedCustomerOrdersStatusRef.current = queryStatus;
+    try {
+      const response = await orderApi.getMyOrders();
+      let rawOrders = response.items as unknown as BackendOrderResponse[];
+      if (status) {
+        rawOrders = rawOrders.filter(o => o.order_status === status);
+      }
+      
+      const orders = rawOrders.map((item) => normalizeBackendOrder(item, item.seller?.public_id || "UNKNOWN_SELLER", currentUser.id));
+      
+      setState((prev) => {
+        const incomingIds = new Set(orders.map((o) => o.id));
+        return {
+          ...prev,
+          orders: [
+            ...orders,
+            ...prev.orders.filter((o) => o.userId !== currentUser.id || !incomingIds.has(o.id))
+          ]
+        };
+      });
+      return { ok: true, orders };
+    } catch (error) {
+      return { ok: false, message: error instanceof ApiError ? error.message : "Lỗi khi tải đơn hàng của khách hàng." };
+    }
+  }, [currentUser]);
+
   const confirmSellerOrder = useCallback(async (orderId: string) => {
     if (!currentShop || !currentUser) return { ok: false, message: "Shop không tồn tại." };
     try {
@@ -1724,7 +1906,9 @@ export const useMarketplaceStore = () => {
       const order = normalizeBackendOrder(response, currentShop.id, currentUser.id);
       setState((prev) => ({
         ...prev,
-        orders: prev.orders.map((o) => (o.id === order.id ? { ...o, ...order } : o))
+        orders: prev.orders.some((o) => o.id === order.id || o.orderCode === order.orderCode)
+          ? prev.orders.map((o) => (o.id === order.id || o.orderCode === order.orderCode ? order : o))
+          : [...prev.orders, order]
       }));
       return { ok: true, order };
     } catch (error) {
@@ -1741,11 +1925,33 @@ export const useMarketplaceStore = () => {
       const order = normalizeBackendOrder(response, currentShop.id, currentUser.id);
       setState((prev) => ({
         ...prev,
-        orders: prev.orders.map((o) => (o.id === order.id ? { ...o, ...order } : o))
+        orders: prev.orders.some((o) => o.id === order.id || o.orderCode === order.orderCode)
+          ? prev.orders.map((o) => (o.id === order.id || o.orderCode === order.orderCode ? order : o))
+          : [...prev.orders, order]
       }));
       return { ok: true, order };
     } catch (error) {
       return { ok: false, message: error instanceof ApiError ? error.message : "Lỗi khi chuyển trạng thái shipping." };
+    }
+  }, [currentShop, currentUser]);
+
+  const cancelSellerOrder = useCallback(async (orderId: string) => {
+    if (!currentShop || !currentUser) return { ok: false, message: "Shop không tồn tại." };
+    try {
+      const response = await apiFetch<BackendOrderResponse>(SELLER_ORDER_ROUTES.cancel(orderId), {
+        method: "POST",
+        body: JSON.stringify({ reason: "Shop hủy đơn" })
+      });
+      const order = normalizeBackendOrder(response, currentShop.id, currentUser.id);
+      setState((prev) => ({
+        ...prev,
+        orders: prev.orders.some((o) => o.id === order.id || o.orderCode === order.orderCode)
+          ? prev.orders.map((o) => (o.id === order.id || o.orderCode === order.orderCode ? order : o))
+          : [...prev.orders, order]
+      }));
+      return { ok: true, order };
+    } catch (error) {
+      return { ok: false, message: error instanceof ApiError ? error.message : "Lỗi khi từ chối đơn hàng." };
     }
   }, [currentShop, currentUser]);
 
@@ -1763,6 +1969,14 @@ export const useMarketplaceStore = () => {
       };
     });
   }, [state.variants]);
+
+  const saveShop = useCallback((shop: Shop) => {
+    setState((prev) => {
+      const exists = prev.shops.some((item) => item.id === shop.id);
+      if (exists) return prev;
+      return { ...prev, shops: [...prev.shops, shop] };
+    });
+  }, []);
 
   const fetchAddresses = useCallback(async () => {
     if (!currentUser) return;
@@ -1832,6 +2046,66 @@ export const useMarketplaceStore = () => {
     }
   }, [currentUser]);
 
+  const updateAddress = useCallback(async (id: string, updates: Partial<Omit<Address, "id" | "userId">>): Promise<boolean> => {
+    if (!currentUser) return false;
+    try {
+      const { updateAddressApi } = await import("@/lib/address-api");
+      const resp = await updateAddressApi(Number(id), {
+        receiver_name: updates.receiverName,
+        phone: updates.phone,
+        province: updates.province,
+        district: updates.district,
+        ward: updates.ward,
+        detail_address: updates.detailAddress,
+        address_type: updates.addressType,
+        is_default: updates.isDefault
+      });
+      
+      const updatedAddr: Address = {
+        id: String(resp.id),
+        userId: currentUser.id,
+        receiverName: resp.receiver_name,
+        phone: resp.phone,
+        province: resp.province,
+        district: resp.district,
+        ward: resp.ward,
+        detailAddress: resp.detail_address,
+        addressType: resp.address_type as "HOME" | "OFFICE",
+        isDefault: resp.is_default
+      };
+
+      setState((prev) => ({
+        ...prev,
+        addresses: prev.addresses.map((item) => {
+          if (item.id === id) return updatedAddr;
+          if (item.userId === currentUser.id && updatedAddr.isDefault) return { ...item, isDefault: false };
+          return item;
+        })
+      }));
+      return true;
+    } catch (error) {
+      console.error("Failed to update address", error);
+      return false;
+    }
+  }, [currentUser]);
+
+  const removeAddress = useCallback(async (id: string): Promise<boolean> => {
+    if (!currentUser) return false;
+    try {
+      const { deleteAddressApi } = await import("@/lib/address-api");
+      await deleteAddressApi(Number(id));
+      
+      setState((prev) => ({
+        ...prev,
+        addresses: prev.addresses.filter((item) => item.id !== id)
+      }));
+      return true;
+    } catch (error) {
+      console.error("Failed to delete address", error);
+      return false;
+    }
+  }, [currentUser]);
+
   const resetDemo = useCallback(() => {
     const fresh = cloneState();
     setState(fresh);
@@ -1854,6 +2128,7 @@ export const useMarketplaceStore = () => {
     requestPasswordReset,
     resetPassword,
     changePassword,
+    updateProfile,
     logout,
     logoutAll,
     getSellerApplication,
@@ -1870,21 +2145,31 @@ export const useMarketplaceStore = () => {
     updatePaymentStatus,
     retryPayment,
     cancelCustomerOrder,
-    updateSellerOrder,
+    confirmCustomerReceipt,
+
     updateSellerStatus,
     toggleUserLock,
     fetchSellerProducts,
     createSellerProduct,
     updateSellerProduct,
     hideSellerProduct,
+    unhideSellerProduct,
     deleteSellerProduct,
+
+    fetchCustomerOrderDetail,
+    fetchSellerOrderDetail,
     setCategories,
     fetchSellerOrders,
+    fetchCustomerOrders,
     confirmSellerOrder,
     shippingSellerOrder,
+    cancelSellerOrder,
     saveProduct,
+    saveShop,
     fetchAddresses,
     addAddress,
+    updateAddress,
+    removeAddress,
     resetDemo
   };
 };

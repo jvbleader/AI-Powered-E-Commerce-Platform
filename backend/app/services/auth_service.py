@@ -30,7 +30,7 @@ from schemas.auth_schema import (
     RegisterRequest,
     RegisterResponse,
 )
-from schemas.user_schema import UserMeResponse
+from schemas.user_schema import UserMeResponse, UserUpdateRequest
 from utils.hash_and_verify import hash_password, hash_token, verify_password
 
 
@@ -217,3 +217,15 @@ async def user_to_response(user: User, db: AsyncSession) -> UserMeResponse:
         lock_reason=user.lock_reason,
         roles=roles,
     )
+
+async def update_profile(user: User, data: "UserUpdateRequest", db: AsyncSession) -> UserMeResponse:
+    if data.full_name is not None:
+        user.full_name = data.full_name
+    if data.gender is not None:
+        user.gender = data.gender
+    if data.date_of_birth is not None:
+        user.date_of_birth = data.date_of_birth
+    if data.avatar_url is not None:
+        user.avatar_url = data.avatar_url
+    
+    return await user_to_response(user, db)

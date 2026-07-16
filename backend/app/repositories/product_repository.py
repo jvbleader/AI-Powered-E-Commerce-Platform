@@ -92,6 +92,7 @@ async def create_product(
         .options(
             selectinload(Product.images),
             selectinload(Product.variants).selectinload(ProductVariant.inventory),
+            selectinload(Product.categories),
         )
         .filter(Product.id == product.id)
     )
@@ -312,6 +313,14 @@ async def hide_product(db: AsyncSession, product: Product) -> Product:
     return product
 
 
+async def unhide_product(db: AsyncSession, product: Product) -> Product:
+    product.status = "ACTIVE"
+    await db.flush()
+    await db.refresh(product)
+    return product
+
+
+
 # --- PUBLIC APIS FOR CUSTOMERS ---
 
 
@@ -353,12 +362,21 @@ async def get_public_products(
 
     # Apply sorting
     if sort_by == "price_asc":
-        # Need to join variants to sort by price (approximate by using minimum variant price)
-        # For simplicity in this mock MVP, we might not sort by variant price here easily without complex subqueries
-        # Let's sort by average rating as fallback, or sold_count
-        pass  # To properly sort by price, we'd join ProductVariant and group by Product.id
+        min_price_subq = (
+            select(func.min(ProductVariant.price))
+            .where(ProductVariant.product_id == Product.id)
+            .correlate(Product)
+            .scalar_subquery()
+        )
+        base_filter = base_filter.order_by(min_price_subq.asc())
     elif sort_by == "price_desc":
-        pass
+        max_price_subq = (
+            select(func.max(ProductVariant.price))
+            .where(ProductVariant.product_id == Product.id)
+            .correlate(Product)
+            .scalar_subquery()
+        )
+        base_filter = base_filter.order_by(max_price_subq.desc())
     elif sort_by == "newest":
         base_filter = base_filter.order_by(desc(Product.created_at))
     elif sort_by == "best_selling":

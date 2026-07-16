@@ -7,6 +7,7 @@ from repositories.product_repository import (
     update_product,
     soft_delete_product,
     hide_product,
+    unhide_product,
 )
 from repositories.seller_profile_repository import get_seller_profile_by_user_id
 from schemas.seller_product_schema import (
@@ -99,3 +100,21 @@ async def hide_seller_product(
 
     hidden_product = await hide_product(db, product)
     return ProductResponse.model_validate(hidden_product)
+
+
+async def unhide_seller_product(
+    user: User, product_id: str, db: AsyncSession
+) -> ProductResponse:
+    seller_profile = await _get_active_seller_profile(user, db)
+
+    product = await get_product_by_public_id_and_seller(
+        db, product_id, seller_profile.id
+    )
+    if not product:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Product not found"
+        )
+
+    unhidden_product = await unhide_product(db, product)
+    return ProductResponse.model_validate(unhidden_product)
+

@@ -257,7 +257,7 @@ async def get_order_detail(user: User, order_code: str, db: AsyncSession):
 async def confirm_receipt(user: User, order_code: str, db: AsyncSession):
     order = await get_order_detail(user, order_code, db)
 
-    if order.order_status not in ["PLACED", "READY_TO_SHIP", "SHIPPING"]:
+    if order.order_status not in ["SHIPPING"]:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Không thể xác nhận nhận hàng ở trạng thái {order.order_status}",

@@ -94,7 +94,23 @@ async def process_mock_callback(data: MockPaymentCallbackRequest, db: AsyncSessi
         for po in payment.order_links:
             order = po.order
             if order.payment_status == "PENDING":
-                order.payment_status = "PAID"
+                if order.order_status == "CANCELLED":
+                    order.payment_status = "REFUND_PENDING"
+                else:
+                    order.payment_status = "PAID"
+                    if order.seller_confirmed and order.order_status == "PLACED":
+                        old_status = order.order_status
+                        order.order_status = "READY_TO_SHIP"
+                        
+                        # Log status change
+                        from models.order_status_log import OrderStatusLog
+                        log = OrderStatusLog(
+                            order_id=order.id,
+                            old_status=old_status,
+                            new_status="READY_TO_SHIP",
+                            note="Payment completed and seller already confirmed",
+                        )
+                        db.add(log)
 
     elif data.status in ["FAILED", "CANCELLED"]:
         payment.payment_status = data.status

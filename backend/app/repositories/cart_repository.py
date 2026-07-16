@@ -4,12 +4,20 @@ from sqlalchemy.orm import selectinload
 
 from models.cart import Cart
 from models.cart_item import CartItem
+from models.product_variant import ProductVariant
+from models.product import Product
 
 
 async def get_cart_by_user_id(db: AsyncSession, user_id: int) -> Cart | None:
     result = await db.execute(
         select(Cart)
-        .options(selectinload(Cart.items).selectinload(CartItem.variant))
+        .options(
+            selectinload(Cart.items).selectinload(CartItem.variant).selectinload(ProductVariant.inventory),
+            selectinload(Cart.items).selectinload(CartItem.variant).selectinload(ProductVariant.product).selectinload(Product.seller),
+            selectinload(Cart.items).selectinload(CartItem.variant).selectinload(ProductVariant.product).selectinload(Product.images),
+            selectinload(Cart.items).selectinload(CartItem.variant).selectinload(ProductVariant.product).selectinload(Product.categories),
+            selectinload(Cart.items).selectinload(CartItem.variant).selectinload(ProductVariant.product).selectinload(Product.variants).selectinload(ProductVariant.inventory)
+        )
         .where(Cart.user_id == user_id)
     )
     return result.scalar_one_or_none()
