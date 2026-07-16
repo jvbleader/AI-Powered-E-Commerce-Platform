@@ -7,6 +7,7 @@ from schemas.cart_schema import (
     CartResponse,
     CartItemResponse,
 )
+from schemas.product_public_schema import ProductPublicResponse
 from models.user import User
 
 
@@ -20,6 +21,9 @@ async def get_my_cart(user: User, db: AsyncSession) -> CartResponse:
 
     # We need to map Cart items to CartItemResponse
     items_response = []
+    products_response = []
+    seen_products = set()
+
     for item in cart.items:
         items_response.append(
             CartItemResponse(
@@ -31,10 +35,16 @@ async def get_my_cart(user: User, db: AsyncSession) -> CartResponse:
                 updated_at=item.updated_at,
             )
         )
+        if item.variant and item.variant.product:
+            p = item.variant.product
+            if p.public_id not in seen_products:
+                seen_products.add(p.public_id)
+                products_response.append(ProductPublicResponse.model_validate(p))
 
     return CartResponse(
         id=cart.id,
         items=items_response,
+        products=products_response,
         created_at=cart.created_at,
         updated_at=cart.updated_at,
     )

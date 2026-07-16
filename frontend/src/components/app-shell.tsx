@@ -792,6 +792,8 @@ export function AppShell() {
             setProductVariants(res.variants!);
             setShop(res.shop);
             setSelectedVariantId(res.variants![0]?.id ?? "");
+            store.saveProduct(res.product, res.variants!);
+            if (res.shop) store.saveShop(res.shop);
           }
           setLoading(false);
         }

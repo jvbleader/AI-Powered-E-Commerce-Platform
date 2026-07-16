@@ -26,9 +26,12 @@ class CartItemResponse(BaseModel):
         populate_by_name = True
 
 
+from schemas.product_public_schema import ProductPublicResponse
+
 class CartResponse(BaseModel):
     id: int
     items: List[CartItemResponse]
+    products: Optional[List[ProductPublicResponse]] = None
     created_at: datetime
     updated_at: Optional[datetime]
 

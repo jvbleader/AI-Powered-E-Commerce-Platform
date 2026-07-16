@@ -10,6 +10,7 @@ export interface CartItemResponse {
 export interface CartResponse {
   id: number;
   items: CartItemResponse[];
+  products?: any[];
 }
 
 export async function fetchMyCart(): Promise<CartResponse> {

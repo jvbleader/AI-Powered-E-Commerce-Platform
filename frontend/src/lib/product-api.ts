@@ -75,7 +75,7 @@ type ProductListResponse = {
 };
 
 // Normalize backend product into our frontend models
-const normalizeProduct = (
+export const normalizeProduct = (
   backendProduct: ProductPublicResponse
 ): { product: Product; variants: ProductVariant[]; shop?: Shop } => {
   const sellerId = backendProduct.seller?.shop_slug ?? "unknown";

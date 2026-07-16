@@ -10,12 +10,13 @@ import {
   getCartRows,
   makeOrderCode,
   makePaymentCode,
-  selectedCheckoutGroups
+  selectedCheckoutGroups,
 } from "@/lib/helpers";
 import { AUTH_BASE_PATH, ApiError, apiFetch } from "@/lib/api";
 import { fetchMyCart, addToCartApi, updateCartItemApi, removeCartItemApi, selectAllCartApi } from "@/lib/cart-api";
 import { orderApi } from "@/lib/order-api";
 import { paymentApi } from "@/lib/payment-api";
+import { normalizeProduct } from "@/lib/product-api";
 import type {
   Address,
   AddressType,
@@ -768,15 +769,41 @@ export const useMarketplaceStore = () => {
           setState((prev) => applyBackendUser(prev, user));
           try {
             const cartResp = await fetchMyCart();
-            setState((prev) => ({
-              ...prev,
-              cartItems: cartResp.items.map(item => ({
-                id: String(item.id),
-                variantId: item.variantPublicId,
-                quantity: item.quantity,
-                isSelected: item.isSelected
-              }))
-            }));
+            setState((prev) => {
+              const newProducts = [...prev.products];
+              const newVariants = [...prev.variants];
+              const newShops = [...prev.shops];
+
+              if (cartResp.products) {
+                for (const backendProduct of cartResp.products) {
+                  const normalized = normalizeProduct(backendProduct);
+                  if (!newProducts.some(p => p.id === normalized.product.id)) {
+                    newProducts.push(normalized.product);
+                  }
+                  for (const variant of normalized.variants) {
+                    if (!newVariants.some(v => v.id === variant.id)) {
+                      newVariants.push(variant);
+                    }
+                  }
+                  if (normalized.shop && !newShops.some(s => s.id === normalized.shop!.id)) {
+                    newShops.push(normalized.shop);
+                  }
+                }
+              }
+
+              return {
+                ...prev,
+                products: newProducts,
+                variants: newVariants,
+                shops: newShops,
+                cartItems: cartResp.items.map(item => ({
+                  id: String(item.id),
+                  variantId: item.variantPublicId,
+                  quantity: item.quantity,
+                  isSelected: item.isSelected
+                }))
+              };
+            });
           } catch (e) {
             console.error("Failed to load cart:", e);
           }
@@ -1943,6 +1970,14 @@ export const useMarketplaceStore = () => {
     });
   }, [state.variants]);
 
+  const saveShop = useCallback((shop: Shop) => {
+    setState((prev) => {
+      const exists = prev.shops.some((item) => item.id === shop.id);
+      if (exists) return prev;
+      return { ...prev, shops: [...prev.shops, shop] };
+    });
+  }, []);
+
   const fetchAddresses = useCallback(async () => {
     if (!currentUser) return;
     try {
@@ -2130,6 +2165,7 @@ export const useMarketplaceStore = () => {
     shippingSellerOrder,
     cancelSellerOrder,
     saveProduct,
+    saveShop,
     fetchAddresses,
     addAddress,
     updateAddress,
