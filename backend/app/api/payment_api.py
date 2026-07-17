@@ -13,7 +13,7 @@ from schemas.payment_schema import (
 )
 from services import payment_service
 
-router = APIRouter(prefix="/api/v1/payments", tags=["Payment"])
+router = APIRouter(prefix="/payments", tags=["Payment"])
 
 
 @router.post(

@@ -5,7 +5,7 @@ from core.database import get_db
 from repositories.category_repository import CategoryRepository
 from schemas.category_public_schema import CategoryListResponse
 
-router = APIRouter(prefix="/api/v1/categories", tags=["Categories"])
+router = APIRouter(prefix="/categories", tags=["Categories"])
 
 
 @router.get("", response_model=CategoryListResponse)

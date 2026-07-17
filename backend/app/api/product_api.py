@@ -10,7 +10,7 @@ from schemas.product_public_schema import (
 )
 from dependencies.auth import get_current_user_optional
 
-router = APIRouter(prefix="/api/v1", tags=["Public Products"])
+router = APIRouter(prefix="", tags=["Public Products"])
 
 
 @router.get("/products", response_model=ProductListResponse)

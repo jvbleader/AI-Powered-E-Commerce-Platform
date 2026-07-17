@@ -12,9 +12,9 @@ const toVariantStatus = (status: string): VariantStatus => {
 };
 
 const PUBLIC_PRODUCT_ROUTES = {
-  list: "/api/v1/products",
-  recommendations: "/api/v1/products/recommendations",
-  detail: (shopSlug: string, productSlug: string) => `/api/v1/shops/${shopSlug}/products/${productSlug}`
+  list: "/products",
+  recommendations: "/products/recommendations",
+  detail: (shopSlug: string, productSlug: string) => `/shops/${shopSlug}/products/${productSlug}`
 };
 
 export type FetchProductsParams = {
@@ -228,7 +228,7 @@ export async function fetchProductDetail(shopSlug: string, productSlug: string) 
 
 export async function fetchCategories() {
   try {
-    const response = await apiFetch<{ categories: any[] }>("/api/v1/categories");
+    const response = await apiFetch<{ categories: any[] }>("/categories");
     return { 
       ok: true, 
       categories: response.categories.map(c => ({

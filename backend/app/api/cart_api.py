@@ -14,7 +14,7 @@ from schemas.cart_schema import (
 from schemas.auth_schema import MessageResponse
 from services import cart_service
 
-router = APIRouter(prefix="/api/v1/cart", tags=["Cart"])
+router = APIRouter(prefix="/cart", tags=["Cart"])
 
 
 @router.get("", response_model=CartResponse)

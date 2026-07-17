@@ -13,7 +13,7 @@ from schemas.user_address_schema import (
 from schemas.auth_schema import MessageResponse
 from services import user_address_service
 
-router = APIRouter(prefix="/api/v1/addresses", tags=["User Addresses"])
+router = APIRouter(prefix="/addresses", tags=["User Addresses"])
 
 
 @router.get("", response_model=List[UserAddressResponse])

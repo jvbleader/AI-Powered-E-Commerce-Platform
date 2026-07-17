@@ -14,13 +14,13 @@ export interface MockPaymentCallbackRequest {
 
 export const paymentApi = {
   createPayment: (data: PaymentCreateRequest) =>
-    apiFetch<Payment>("/api/v1/payments/create", {
+    apiFetch<Payment>("/payments/create", {
       method: "POST",
       body: JSON.stringify(data),
     }),
 
   mockCallback: (data: MockPaymentCallbackRequest) =>
-    apiFetch<Payment>("/api/v1/payments/mock-callback", {
+    apiFetch<Payment>("/payments/mock-callback", {
       method: "POST",
       body: JSON.stringify(data),
     }),

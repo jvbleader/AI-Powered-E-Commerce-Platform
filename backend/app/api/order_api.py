@@ -16,7 +16,7 @@ from schemas.order_schema import (
 )
 from services import order_service
 
-router = APIRouter(prefix="/api/v1/orders", tags=["Order"])
+router = APIRouter(prefix="/orders", tags=["Order"])
 
 
 @router.post(
