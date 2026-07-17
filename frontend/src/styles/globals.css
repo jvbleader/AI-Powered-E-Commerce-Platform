@@ -46,7 +46,7 @@ img {
 }
 
 :focus-visible {
-  outline: 3px solid rgba(59, 130, 246, 0.45);
+  outline: 3px solid rgba(11, 107, 78, 0.45);
   outline-offset: 2px;
 }
 

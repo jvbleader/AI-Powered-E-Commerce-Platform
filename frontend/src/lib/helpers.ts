@@ -292,8 +292,8 @@ export const createOrderFromGroup = (
     shippingDiscountAmount: 0,
     totalAmount: group.total,
     customerNote,
-    paymentExpiresAt: "2026-06-30T08:00:00.000Z",
-    sellerConfirmExpiresAt: "2026-07-01T08:00:00.000Z",
+    paymentExpiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+    sellerConfirmExpiresAt: new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString(),
     items,
     shipment: {
       shippingProviderName: group.shop.shippingProviderName,
@@ -310,10 +310,10 @@ export const createOrderFromGroup = (
         id: `${code}-log-1`,
         newStatus: "PLACED",
         note: "Đã đặt hàng từ checkout nhiều shop",
-        createdAt: "2026-06-29T08:00:00.000Z"
+        createdAt: new Date().toISOString()
       }
     ],
-    createdAt: "2026-06-29T08:00:00.000Z"
+    createdAt: new Date().toISOString()
   };
 };
 
@@ -331,9 +331,9 @@ export const createPaymentFromOrders = (
   paymentGateway: method === "MOCK" ? "MOCK_GATEWAY" : method,
   paymentStatus: "PENDING",
   amount: orders.reduce((sum, order) => sum + order.totalAmount, 0),
-  expiresAt: "2026-06-30T08:00:00.000Z",
+  expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
   orderCodes: orders.map((order) => order.orderCode),
-  createdAt: "2026-06-29T08:00:00.000Z"
+  createdAt: new Date().toISOString()
 });
 
 export const canCustomerCancel = (order: Order) => order.orderStatus === "PLACED" || order.orderStatus === "READY_TO_SHIP";
