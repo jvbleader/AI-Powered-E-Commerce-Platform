@@ -409,23 +409,42 @@ export const createAuthSlice: StateCreator<MarketplaceStore, [], [], any> = (set
       return true;
     },
     toggleUserLock: async (userId: string) => {
-      const { state, verificationContext } = get();
-
-      setState((prev: AppState) => ({
-        ...prev,
-        users: prev.users.map((user) =>
-          user.id === userId
-            ? user.status === "LOCKED"
-              ? { ...user, status: "ACTIVE", lockedUntil: undefined, lockReason: undefined }
-              : {
-                  ...user,
-                  status: "LOCKED",
-                  lockedUntil: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-                  lockReason: "Admin khóa thủ công từ dashboard."
-                }
-            : user
-        )
-      }));
+      const { showToast } = get();
+      try {
+        const updatedUser = await apiFetch<any>(`/admin/users/${userId}/toggle-lock`, {
+          method: "POST"
+        });
+        const normalized = {
+          id: updatedUser.publicId ?? updatedUser.public_id ?? updatedUser.email,
+          fullName: updatedUser.fullName ?? updatedUser.full_name ?? updatedUser.fullname ?? updatedUser.email,
+          email: updatedUser.email,
+          phone: updatedUser.phone,
+          avatarUrl: updatedUser.avatarUrl ?? updatedUser.avatar_url ?? "https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=240&q=80",
+          gender: updatedUser.gender ?? undefined,
+          birthday: updatedUser.dateOfBirth ?? updatedUser.date_of_birth ?? undefined,
+          emailVerified: Boolean(updatedUser.emailVerifiedAt ?? updatedUser.email_verified_at),
+          phoneVerified: Boolean(updatedUser.phoneVerifiedAt ?? updatedUser.phone_verified_at),
+          status: updatedUser.status ?? "ACTIVE",
+          lockedUntil: updatedUser.lockedUntil ?? updatedUser.locked_until ?? undefined,
+          lockReason: updatedUser.lockReason ?? updatedUser.lock_reason ?? undefined,
+          roles: updatedUser.roles ?? ["CUSTOMER"]
+        };
+        setState((prev: AppState) => ({
+          ...prev,
+          users: prev.users.map((u) => u.id === userId ? normalized : u)
+        }));
+        if (showToast) {
+          showToast(
+            normalized.status === "LOCKED" ? "Đã khóa tài khoản thành công." : "Đã mở khóa tài khoản thành công.",
+            "success"
+          );
+        }
+      } catch (error: any) {
+        console.error("Failed to toggle lock:", error);
+        if (showToast) {
+          showToast(error.message ?? "Lỗi cập nhật trạng thái khóa.", "danger");
+        }
+      }
     },
     updateSellerStatus: async (shopId: string, status: SellerStatus, reason?: string) => {
       const { state, verificationContext } = get();

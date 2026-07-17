@@ -31,3 +31,15 @@ class UserUpdateRequest(BaseModel):
     gender: str | None = Field(default=None)
     date_of_birth: date | None = Field(default=None)
     avatar_url: str | None = Field(default=None)
+
+
+class AdminCreateUserRequest(BaseModel):
+    full_name: str = Field(min_length=2, max_length=150)
+    email: EmailStr
+    phone: str
+    password: str = Field(min_length=8)
+    roles: list[str]
+
+
+class UserRolesUpdateRequest(BaseModel):
+    roles: list[str]

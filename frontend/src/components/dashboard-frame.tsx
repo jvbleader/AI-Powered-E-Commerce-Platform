@@ -70,7 +70,8 @@ export function DashboardFrame({
             ["/admin/supporters", "Supporters", MessageSquare],
             ["/admin/chats", "Chats", MessageSquare],
             ["/admin/system-reports", "System", ClipboardCheck],
-            ["/admin/ai/knowledge", "AI Knowledge", Bot]
+            ["/admin/ai/knowledge", "AI Knowledge", Bot],
+            ["/admin/role-management", "Phân quyền", ShieldCheck]
           ]
         : [
             ["/supporter", "Dashboard", LayoutDashboard],
