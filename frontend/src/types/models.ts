@@ -264,3 +264,11 @@ export interface AppState {
   activeRole: Role | "GUEST";
   lastCheckoutPaymentCode?: string;
 }
+
+export interface VerificationContext {
+  registrationId?: string | null;
+  email: string;
+  phone: string;
+  emailVerified: boolean;
+  phoneVerified: boolean;
+}
