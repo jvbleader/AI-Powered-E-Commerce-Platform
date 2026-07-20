@@ -219,7 +219,7 @@ export default function HomePageComponent() {
   };
 
   return (
-    <div className="min-h-screen space-y-8 bg-[#eaf0f6] text-slate-900 pb-20 pt-4 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen space-y-8 bg-canvas text-slate-900 pb-20 pt-4 px-4 sm:px-6 lg:px-8">
       {/* SECTION 1: BENTO GRID HERO & SPOTLIGHT */}
       <section className="mx-auto max-w-7xl animate-fade-in-up">
         <div className="grid gap-4 lg:grid-cols-12">
@@ -641,7 +641,7 @@ function CyberProductCard({
   onAddToCart: (variantId: string) => void;
 }) {
   return (
-    <div className="bento-card group flex flex-col justify-between overflow-hidden rounded-2xl border border-slate-200/80 bg-white/90 p-4 transition-all hover:-translate-y-1 hover:border-emerald-300">
+    <div className="bento-card group flex flex-col justify-between overflow-hidden rounded-2xl border border-slate-200/80 bg-white/90 p-4 transition-all hover:-translate-y-1 hover:border-slate-300">
       <div>
         <div className="relative aspect-square w-full overflow-hidden rounded-xl bg-slate-50">
           <img

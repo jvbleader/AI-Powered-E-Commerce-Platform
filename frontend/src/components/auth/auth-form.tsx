@@ -125,7 +125,7 @@ export default function AuthPage({ mode: initialMode }: { mode: "login" | "regis
   };
 
   return (
-    <div className="flex min-h-[calc(100vh-140px)] items-center justify-center p-4 sm:p-6 lg:p-8 bg-[#F8FAFC]">
+    <div className="flex min-h-[calc(100vh-140px)] items-center justify-center p-4 sm:p-6 lg:p-8 bg-canvas">
       <div className="bento-card relative w-full max-w-5xl overflow-hidden rounded-3xl border border-slate-200/80 bg-white/90 shadow-2xl lg:grid lg:grid-cols-12">
         {/* LEFT BRAND PANEL (Deep Emerald Contrast) */}
         <div className="relative hidden flex-col justify-between overflow-hidden bg-gradient-to-br from-slate-900 via-emerald-950 to-slate-900 p-10 text-white lg:col-span-5 lg:flex">

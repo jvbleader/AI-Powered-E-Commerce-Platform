@@ -61,7 +61,7 @@ export function ProductCard({
   const category = categories.find((item) => product.categoryIds.includes(item.id));
   const href = `/shops/${shop?.shopSlug}/products/${product.slug}`;
   return (
-    <article className="group hover-lift overflow-hidden rounded-2xl border border-slate-200/90 bg-white transition-all duration-300 hover:border-emerald-400/80 hover:shadow-xl">
+    <article className="group hover-lift overflow-hidden rounded-2xl border border-slate-200/90 bg-white transition-all duration-300 hover:border-slate-300 hover:shadow-xl">
       <a href={href} className="block">
         <div className="relative aspect-square overflow-hidden bg-slate-100">
           <img
@@ -110,7 +110,7 @@ export function ShopCard({ shop }: { shop: Shop }) {
   return (
     <a
       href={`/shops/${shop.shopSlug}`}
-      className="group hover-lift block rounded-2xl border border-slate-200/90 bg-white p-4 transition-all duration-300 hover:border-emerald-400/80 hover:shadow-xl"
+      className="group hover-lift block rounded-2xl border border-slate-200/90 bg-white p-4 transition-all duration-300 hover:border-slate-300 hover:shadow-xl"
     >
       <div className="flex items-start gap-3">
         <div className="relative overflow-hidden rounded-xl">

@@ -11,3 +11,5 @@ email-validator
 httpx
 pytest
 pytest-asyncio
+langchain
+langchain-openai

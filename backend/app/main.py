@@ -59,6 +59,7 @@ from api.cart_api import router as cart_router
 from api.order_api import router as order_router
 from api.payment_api import router as payment_router
 from api.user_address_api import router as user_address_router
+from api.chat_ai_api import router as chat_ai_router
 
 app.include_router(auth_router)
 app.include_router(seller_router)
@@ -71,6 +72,7 @@ app.include_router(cart_router)
 app.include_router(order_router)
 app.include_router(payment_router)
 app.include_router(user_address_router)
+app.include_router(chat_ai_router)
 
 
 @app.get("/health", tags=["Health"])

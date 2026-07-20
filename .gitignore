@@ -58,7 +58,9 @@ redis_data/
 
 # Understand Anything
 .ua/
-.understand-anything/
 
 #agent
-*.agents/
+.agents/
+
+#CodeGraph
+.codegraph/

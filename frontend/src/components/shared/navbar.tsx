@@ -124,6 +124,8 @@ export function MarketplaceHeader() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  const [isScrolled, setIsScrolled] = useState(false);
+
   // Close mobile nav on route change
   useEffect(() => {
     setMobileNavOpen(false);
@@ -132,10 +134,32 @@ export function MarketplaceHeader() {
     setCartOpen(false);
   }, [pathname]);
 
+  // Hallmark N10 Floating Morph + Ribbon Height Hysteresis Buffer (>85px / <20px) to prevent layout feedback loop
+  useEffect(() => {
+    let ticking = false;
+    const handleScroll = () => {
+      if (!ticking) {
+        window.requestAnimationFrame(() => {
+          const y = window.scrollY;
+          if (y > 85) {
+            setIsScrolled(true);
+          } else if (y < 20) {
+            setIsScrolled(false);
+          }
+          ticking = false;
+        });
+        ticking = true;
+      }
+    };
+    handleScroll();
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
   return (
-    <header className="sticky top-0 z-50 w-full transition-all">
-      {/* TOP ANNOUNCEMENT BAR */}
-      <div className="bg-slate-900 text-slate-300 text-[11px] py-1.5 px-4 border-b border-slate-850">
+    <header className="fixed inset-x-0 top-0 z-50 w-full pointer-events-none isolate">
+      {/* TOP ANNOUNCEMENT BAR (Permanently fixed at top edge at all times) */}
+      <div className="bg-slate-900 text-slate-300 text-[11px] py-1.5 px-4 border-b border-slate-850 w-full pointer-events-auto">
         <div className="mx-auto max-w-7xl flex items-center justify-between gap-4">
           <div className="flex items-center gap-3 font-medium text-slate-300 overflow-x-auto no-scrollbar">
             <a href="/seller" className="hover:text-emerald-400 transition-colors flex items-center gap-1 shrink-0">
@@ -172,111 +196,146 @@ export function MarketplaceHeader() {
         </div>
       </div>
 
-      {/* MAIN NAVIGATION BAR */}
-      <div className="nav-glass-header">
-        <div className="mx-auto max-w-7xl px-4 py-3">
-          <div className="flex items-center justify-between gap-3 md:gap-6">
+      {/* MAIN NAVIGATION BAR (Hallmark N10 Floating Morph) */}
+      <div
+        className={`mx-auto w-full nav-glass-header pointer-events-auto ${
+          isScrolled ? "nav-glass-header-island" : ""
+        }`}
+      >
+        <div
+          className={`mx-auto w-full max-w-7xl px-4 sm:px-6 transition-all duration-500 cubic-bezier(0.16, 1, 0.3, 1) ${
+            isScrolled ? "py-2" : "py-3"
+          }`}
+        >
+          <div className="flex items-center justify-between gap-2.5 sm:gap-4 md:gap-6">
             {/* LOGO */}
-            <a href="/" className="group flex shrink-0 items-center gap-3" aria-label={`${BRAND_NAME} Trang chủ`}>
+            <a
+              href="/"
+              className="group flex shrink-0 items-center gap-2 sm:gap-2.5"
+              aria-label={`${BRAND_NAME} Trang chủ`}
+            >
               <div className="relative">
-                <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-emerald-600 font-heading text-xl font-black text-white shadow-md shadow-emerald-600/30 transition-all duration-300 group-hover:scale-105 group-hover:rotate-3">
+                <span
+                  className={`flex items-center justify-center bg-emerald-600 font-heading font-black text-white shadow-sm transition-all duration-500 group-hover:scale-105 ${
+                    isScrolled ? "h-9 w-9 text-lg rounded-xl" : "h-10 w-10 text-xl rounded-2xl"
+                  }`}
+                >
                   S
                 </span>
               </div>
-              <div className="hidden sm:flex flex-col items-center">
-                <span className="font-heading text-2xl font-black text-slate-900 tracking-tight leading-none group-hover:text-emerald-600 transition-colors">
+              <div className="hidden sm:flex flex-col items-start justify-center">
+                <span
+                  className={`font-heading font-black text-slate-900 tracking-tight leading-none group-hover:text-emerald-600 transition-all duration-500 ${
+                    isScrolled ? "text-xl" : "text-2xl"
+                  }`}
+                >
                   {BRAND_NAME}
                 </span>
-                <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500 leading-tight">
-                  Marketplace
-                </span>
+                <div
+                  className={`transition-all duration-500 cubic-bezier(0.16, 1, 0.3, 1) overflow-hidden origin-top ${
+                    isScrolled ? "max-h-0 opacity-0 scale-y-0 mt-0" : "max-h-4 opacity-100 scale-y-100 mt-0.5"
+                  }`}
+                >
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500 leading-tight block">
+                    Marketplace
+                  </span>
+                </div>
               </div>
             </a>
 
-            {/* SEARCH FIELD & SUGGESTIONS */}
-            <div className="relative flex-1 max-w-2xl">
-              <SearchField
-                inputRef={searchInputRef}
-                value={query}
-                onChange={setQuery}
-                onFocus={() => setIsSearchFocused(true)}
-                onBlur={() => setTimeout(() => setIsSearchFocused(false), 200)}
-              />
+            {/* SEARCH AREA (Morphing search field with fixed center position) */}
+            <div className="relative flex-1 flex items-center justify-center min-w-0 px-1 sm:px-2">
+              <div
+                className={`w-full transition-all duration-500 cubic-bezier(0.16, 1, 0.3, 1) ${
+                  isScrolled ? "max-w-xs sm:max-w-sm md:max-w-md" : "max-w-xl lg:max-w-2xl"
+                }`}
+              >
+                <SearchField
+                  inputRef={searchInputRef}
+                  value={query}
+                  onChange={setQuery}
+                  onFocus={() => setIsSearchFocused(true)}
+                  onBlur={() => setTimeout(() => setIsSearchFocused(false), 200)}
+                  isScrolled={isScrolled}
+                />
 
-              {/* SEARCH SUGGESTION DROPDOWN */}
-              {(isSearchFocused || query) && (
-                <div className="absolute left-0 right-0 top-12 z-50 animate-scale-in rounded-2xl border border-slate-200/90 bg-white/95 p-3 shadow-2xl backdrop-blur-xl max-h-[80vh] overflow-y-auto">
-                  {query ? (
-                    suggestions.length ? (
-                      <div className="space-y-1">
-                        <div className="px-3 py-1.5 text-[11px] font-extrabold uppercase tracking-wider text-slate-400 flex items-center justify-between">
-                          <span>Gợi ý tìm kiếm</span>
-                          <span className="text-emerald-600">{suggestions.length} kết quả</span>
-                        </div>
-                        {suggestions.map((item) => (
-                          <a
-                            key={`${item.type}-${item.href}`}
-                            href={item.href}
-                            className="flex items-center justify-between rounded-xl px-3 py-2.5 text-xs font-semibold text-slate-800 hover:bg-emerald-50 hover:text-emerald-700 transition-all duration-150 group"
-                          >
-                            <div className="flex items-center gap-2.5 truncate">
-                              <Search className="h-3.5 w-3.5 text-slate-400 group-hover:text-emerald-600" />
-                              <span className="truncate font-bold text-slate-900 group-hover:text-emerald-700">
-                                {item.label}
+                {/* SEARCH SUGGESTION DROPDOWN */}
+                {(isSearchFocused || query) && (
+                  <div className="absolute left-0 right-0 top-full mt-2 z-50 animate-scale-in rounded-2xl border border-slate-200/90 bg-white/95 p-3 shadow-2xl backdrop-blur-xl max-h-[80vh] overflow-y-auto">
+                    {query ? (
+                      suggestions.length ? (
+                        <div className="space-y-1">
+                          <div className="px-3 py-1.5 text-[11px] font-extrabold uppercase tracking-wider text-slate-400 flex items-center justify-between">
+                            <span>Gợi ý tìm kiếm</span>
+                            <span className="text-emerald-600">{suggestions.length} kết quả</span>
+                          </div>
+                          {suggestions.map((item) => (
+                            <a
+                              key={`${item.type}-${item.href}`}
+                              href={item.href}
+                              className="flex items-center justify-between rounded-xl px-3 py-2.5 text-xs font-semibold text-slate-800 hover:bg-emerald-50 hover:text-emerald-700 transition-all duration-150 group"
+                            >
+                              <div className="flex items-center gap-2.5 truncate">
+                                <Search className="h-3.5 w-3.5 text-slate-400 group-hover:text-emerald-600" />
+                                <span className="truncate font-bold text-slate-900 group-hover:text-emerald-700">
+                                  {item.label}
+                                </span>
+                              </div>
+                              <span className="shrink-0 rounded bg-slate-100 px-2 py-0.5 text-[10px] text-slate-500">
+                                {item.type}
                               </span>
-                            </div>
-                            <span className="shrink-0 rounded bg-slate-100 px-2 py-0.5 text-[10px] text-slate-500">
-                              {item.type}
-                            </span>
-                          </a>
-                        ))}
-                      </div>
+                            </a>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="p-6 text-center text-xs text-slate-500">
+                          <Search className="mx-auto h-8 w-8 text-slate-300 mb-2" />
+                          Không tìm thấy từ khóa phù hợp với &quot;{query}&quot;
+                        </div>
+                      )
                     ) : (
-                      <div className="p-6 text-center text-xs text-slate-500">
-                        <Search className="mx-auto h-8 w-8 text-slate-300 mb-2" />
-                        Không tìm thấy từ khóa phù hợp với &quot;{query}&quot;
-                      </div>
-                    )
-                  ) : (
-                    <div className="space-y-3 p-1">
-                      <div>
-                        <div className="px-2 py-1 text-[11px] font-extrabold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
-                          <Tag className="h-3 w-3 text-emerald-600" />
-                          Từ khóa hot hôm nay
-                        </div>
-                        <div className="mt-2 flex flex-wrap gap-1.5">
-                          {["iPhone 15 Pro", "Tai nghe Bluetooth", "Áo Nam Basic", "Bàn Phím Cơ", "Mỹ Phẩm Korea"].map(
-                            (tag) => (
-                              <button
-                                key={tag}
-                                type="button"
-                                onClick={() => setQuery(tag)}
-                                className="rounded-xl border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-semibold text-slate-700 hover:border-emerald-500 hover:bg-emerald-55 hover:text-emerald-700 transition-all"
-                              >
-                                {tag}
-                              </button>
-                            )
-                          )}
+                      <div className="space-y-3 p-1">
+                        <div>
+                          <div className="px-2 py-1 text-[11px] font-extrabold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                            <Tag className="h-3 w-3 text-emerald-600" />
+                            Từ khóa hot hôm nay
+                          </div>
+                          <div className="mt-2 flex flex-wrap gap-1.5">
+                            {["iPhone 15 Pro", "Tai nghe Bluetooth", "Áo Nam Basic", "Bàn Phím Cơ", "Mỹ Phẩm Korea"].map(
+                              (tag) => (
+                                <button
+                                  key={tag}
+                                  type="button"
+                                  onClick={() => setQuery(tag)}
+                                  className="rounded-xl border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-semibold text-slate-700 hover:border-emerald-500 hover:bg-emerald-55 hover:text-emerald-700 transition-all"
+                                >
+                                  {tag}
+                                </button>
+                              )
+                            )}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  )}
-                </div>
-              )}
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* ACTION NAV LINKS */}
-            <div className="hidden items-center gap-1 lg:flex">
+            <div className="hidden items-center gap-1 lg:flex shrink-0">
               <a
                 href="/chat"
-                className={`inline-flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-bold transition-all duration-200 ${
+                className={`inline-flex items-center gap-1.5 rounded-xl text-xs font-bold transition-all duration-300 ${
+                  isScrolled ? "px-2.5 py-1.5" : "px-3 py-2"
+                } ${
                   pathname.startsWith("/chat")
                     ? "bg-emerald-50 text-emerald-700"
                     : "text-slate-700 hover:bg-slate-200/50 hover:text-emerald-700"
                 }`}
               >
                 <MessageSquare className="h-4 w-4" aria-hidden="true" />
-                Chat
+                <span>Chat</span>
               </a>
 
               {/* NOTIFICATION BELL */}
@@ -289,7 +348,9 @@ export function MarketplaceHeader() {
                 <button
                   type="button"
                   onClick={() => setNotifOpen((v) => !v)}
-                  className={`relative inline-flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-bold transition-all duration-200 ${
+                  className={`relative inline-flex items-center gap-1.5 rounded-xl text-xs font-bold transition-all duration-300 ${
+                    isScrolled ? "px-2.5 py-1.5" : "px-3 py-2"
+                  } ${
                     notifOpen
                       ? "bg-emerald-50 text-emerald-700"
                       : "text-slate-700 hover:bg-slate-200/50 hover:text-emerald-700"
@@ -351,7 +412,9 @@ export function MarketplaceHeader() {
               >
                 <a
                   href="/cart"
-                  className={`relative inline-flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-bold transition-all duration-200 ${
+                  className={`relative inline-flex items-center gap-1.5 rounded-xl text-xs font-bold transition-all duration-300 ${
+                    isScrolled ? "px-2.5 py-1.5" : "px-3 py-2"
+                  } ${
                     pathname === "/cart" || cartOpen
                       ? "bg-emerald-50 text-emerald-700"
                       : "text-slate-700 hover:bg-slate-200/50 hover:text-emerald-700"
@@ -418,7 +481,7 @@ export function MarketplaceHeader() {
               {/* USER PROFILE DROPDOWN */}
               {currentUser ? (
                 <div
-                  className="relative ml-1"
+                  className="relative ml-0.5"
                   ref={userMenuRef}
                   onMouseEnter={() => setUserMenuOpen(true)}
                   onMouseLeave={() => setUserMenuOpen(false)}
@@ -426,7 +489,9 @@ export function MarketplaceHeader() {
                   <button
                     type="button"
                     onClick={() => setUserMenuOpen((v) => !v)}
-                    className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-bold text-slate-800 hover:border-emerald-450 hover:bg-emerald-50/50 transition-all shadow-2xs active:scale-98"
+                    className={`flex items-center gap-2 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-800 hover:border-emerald-450 hover:bg-emerald-50/50 transition-all duration-300 shadow-2xs active:scale-98 ${
+                      isScrolled ? "px-2 py-1" : "px-2.5 py-1.5"
+                    }`}
                   >
                     <div className="flex h-6 w-6 items-center justify-center rounded-lg bg-emerald-600 font-heading text-xs font-black text-white shadow-2xs">
                       {currentUser.fullName.charAt(0).toUpperCase()}
@@ -497,35 +562,36 @@ export function MarketplaceHeader() {
                   )}
                 </div>
               ) : (
-                <div className="flex items-center gap-2 ml-2">
+                <div className="flex items-center gap-2 ml-1">
                   <a
                     href="/login"
-                    className="rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-bold text-slate-800 hover:border-slate-300 hover:bg-slate-50 transition-all shadow-2xs"
+                    className={`rounded-xl border border-slate-200 bg-white font-bold text-slate-800 hover:border-slate-300 hover:bg-slate-50 transition-all duration-300 shadow-2xs ${
+                      isScrolled ? "px-3 py-1.5 text-xs" : "px-3.5 py-2 text-xs"
+                    }`}
                   >
                     Đăng nhập
                   </a>
                   <a
                     href="/register"
-                    className="rounded-xl bg-emerald-600 px-3.5 py-2 text-xs font-bold text-white hover:bg-emerald-500 transition-all shadow-md shadow-emerald-600/20"
+                    className={`rounded-xl bg-emerald-600 font-bold text-white hover:bg-emerald-500 transition-all duration-300 shadow-md shadow-emerald-600/20 ${
+                      isScrolled ? "px-3 py-1.5 text-xs" : "px-3.5 py-2 text-xs"
+                    }`}
                   >
                     Đăng ký
                   </a>
                 </div>
               )}
             </div>
-
-            {/* MOBILE HAMBURGER BUTTON */}
-            <IconButton
-              aria-label="Mở menu"
-              className="lg:hidden text-slate-700 hover:bg-slate-200/50 hover:text-slate-900 active:scale-90"
-              onClick={() => setMobileNavOpen((value) => !value)}
-            >
-              {mobileNavOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-            </IconButton>
           </div>
 
-          {/* CATEGORY NAV RIBBON */}
-          <div className="mt-2.5 hidden lg:block">
+          {/* CATEGORY NAV RIBBON (Collapses ultra smoothly on scroll) */}
+          <div
+            className={`hidden lg:block transition-all duration-500 cubic-bezier(0.16, 1, 0.3, 1) overflow-hidden origin-top ${
+              isScrolled
+                ? "max-h-0 opacity-0 mt-0 pointer-events-none scale-y-95 -translate-y-1"
+                : "max-h-14 opacity-100 mt-2.5 transform-none"
+            }`}
+          >
             <div className="relative flex items-center justify-center gap-2 overflow-x-auto no-scrollbar mask-gradient-x py-1 px-4">
               <a
                 href="/products"
@@ -556,84 +622,10 @@ export function MarketplaceHeader() {
               })}
             </div>
           </div>
-
-          {/* MOBILE DRAWER SHEET */}
-          {mobileNavOpen && (
-            <div className="mt-3 lg:hidden animate-scale-in rounded-2xl border border-slate-200 bg-white p-4 shadow-xl text-slate-800">
-              {currentUser && (
-                <div className="flex items-center gap-3 border-b border-slate-100 pb-3 mb-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-600 font-heading text-sm font-black text-white shadow-sm">
-                    {currentUser.fullName.charAt(0).toUpperCase()}
-                  </div>
-                  <div className="overflow-hidden">
-                    <p className="font-heading text-sm font-bold text-slate-900 truncate">{currentUser.fullName}</p>
-                    <p className="text-xs text-slate-500 truncate">{currentUser.email}</p>
-                  </div>
-                </div>
-              )}
-
-              <div className="grid gap-1.5">
-                {[
-                  ["/cart", `Giỏ hàng (${selectedCount})`, ShoppingCart],
-                  ["/chat", "Chat", MessageSquare],
-                  ["/account", "Tài khoản cá nhân", User]
-                ].map(([href, label, IconComponent]: any) => (
-                  <a
-                    key={href}
-                    href={href}
-                    className="flex items-center gap-3 rounded-xl border border-slate-100 bg-slate-50/70 px-4 py-2.5 text-xs font-bold text-slate-800 hover:bg-emerald-50 hover:text-emerald-700 transition-colors"
-                  >
-                    <IconComponent className="h-4 w-4 text-emerald-600" />
-                    <span>{label}</span>
-                  </a>
-                ))}
-
-                {canSwitchBuyerSeller && (
-                  <Button
-                    variant="secondary"
-                    className="mt-2 w-full rounded-xl border border-amber-200 bg-amber-50 text-amber-800 font-bold"
-                    onClick={() => {
-                      store.switchRole("SELLER");
-                      router.push("/seller");
-                    }}
-                  >
-                    <Store className="h-4 w-4 mr-2" />
-                    Chuyển sang Kênh Người Bán
-                  </Button>
-                )}
-
-                {currentUser ? (
-                  <button
-                    type="button"
-                    onClick={store.logout}
-                    className="mt-2 w-full flex items-center justify-center gap-2 rounded-xl border border-rose-100 bg-rose-50 px-4 py-2.5 text-xs font-bold text-rose-600"
-                  >
-                    <LogOut className="h-4 w-4" />
-                    Đăng xuất
-                  </button>
-                ) : (
-                  <div className="mt-2 grid grid-cols-2 gap-2">
-                    <a
-                      href="/login"
-                      className="rounded-xl border border-slate-200 bg-white py-2.5 text-center text-xs font-bold text-slate-800"
-                    >
-                      Đăng nhập
-                    </a>
-                    <a
-                      href="/register"
-                      className="rounded-xl bg-emerald-600 py-2.5 text-center text-xs font-bold text-white"
-                    >
-                      Đăng ký
-                    </a>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
         </div>
       </div>
-    </header>
-  );
+      </header>
+    );
 }
 
 export function MarketplaceFooter() {
