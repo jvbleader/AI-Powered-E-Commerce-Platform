@@ -50,5 +50,15 @@ redis_data/
 *.swo
 *~
 
-other
 *.demo.*
+
+/docs/other
+/docs/project_document
+/docs/artifacts
+
+# Understand Anything
+.ua/
+.understand-anything/
+
+#agent
+*.agents/

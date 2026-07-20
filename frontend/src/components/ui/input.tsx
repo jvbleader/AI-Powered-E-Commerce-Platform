@@ -117,23 +117,47 @@ export function Field({
 export function SearchField({
   value,
   onChange,
-  placeholder = "Tìm sản phẩm, shop, danh mục",
+  onFocus,
+  onBlur,
+  inputRef,
+  placeholder = "Tìm kiếm sản phẩm, shop, thương hiệu...",
   className
 }: {
   value: string;
   onChange: (value: string) => void;
+  onFocus?: () => void;
+  onBlur?: () => void;
+  inputRef?: React.Ref<HTMLInputElement>;
   placeholder?: string;
   className?: string;
 }) {
   return (
-    <div className={cn("relative", className)}>
-      <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" aria-hidden="true" />
-      <Input
+    <div className={cn("relative group w-full", className)}>
+      <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-450 group-focus-within:text-emerald-600 transition-colors" aria-hidden="true" />
+      <input
+        ref={inputRef}
+        type="text"
         value={value}
         onChange={(event) => onChange(event.target.value)}
+        onFocus={onFocus}
+        onBlur={onBlur}
         placeholder={placeholder}
-        className="pl-9"
+        className="h-10 w-full rounded-2xl border border-slate-200 bg-white pl-10 pr-10 text-xs sm:text-sm text-slate-900 placeholder:text-slate-400/80 transition-all duration-200 focus:border-emerald-500 focus:bg-white focus:outline-none focus:ring-4 focus:ring-emerald-500/15 shadow-2xs"
       />
+      {value ? (
+        <button
+          type="button"
+          onClick={() => onChange("")}
+          className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full p-0.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors"
+          aria-label="Xóa tìm kiếm"
+        >
+          <span className="sr-only">Xóa</span>
+          <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      ) : null}
     </div>
   );
 }
+

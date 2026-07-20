@@ -61,36 +61,37 @@ export function ProductCard({
   const category = categories.find((item) => product.categoryIds.includes(item.id));
   const href = `/shops/${shop?.shopSlug}/products/${product.slug}`;
   return (
-    <article className="group overflow-hidden rounded-panel border border-line bg-white transition hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-soft">
+    <article className="group hover-lift overflow-hidden rounded-2xl border border-slate-200/90 bg-white transition-all duration-300 hover:border-emerald-400/80 hover:shadow-xl">
       <a href={href} className="block">
-        <div className="aspect-square overflow-hidden bg-canvas">
+        <div className="relative aspect-square overflow-hidden bg-slate-100">
           <img
             src={product.thumbnailUrl}
             alt={product.name}
-            className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
+            className="h-full w-full object-cover transition-transform duration-500 ease-out group-hover:scale-110"
           />
+          <div className="absolute inset-0 bg-gradient-to-t from-slate-900/20 via-transparent to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
         </div>
-        <div className="space-y-2 p-3">
+        <div className="space-y-2 p-3.5">
           <div className="flex items-center justify-between gap-2">
             <StatusBadge status={product.status} label={productStatusLabel[product.status]} />
-            {category ? <span className="truncate text-xs text-muted">{category.name}</span> : null}
+            {category ? <span className="truncate text-xs font-medium text-slate-400">{category.name}</span> : null}
           </div>
-          <h3 className="line-clamp-2 min-h-10 text-sm font-bold leading-5 text-ink">{product.name}</h3>
+          <h3 className="line-clamp-2 min-h-10 text-sm font-bold leading-5 text-slate-800 group-hover:text-emerald-700 transition-colors duration-200">{product.name}</h3>
           {shop ? (
-            <p className="flex items-center gap-1 truncate text-xs text-muted">
-              <Store className="h-3.5 w-3.5" aria-hidden="true" />
+            <p className="flex items-center gap-1 truncate text-xs text-slate-500">
+              <Store className="h-3.5 w-3.5 text-emerald-600 group-hover:scale-110 transition-transform duration-200" aria-hidden="true" />
               {shop.shopName}
             </p>
           ) : null}
           <PriceDisplay price={priceRange.min} salePrice={primaryVariant?.salePrice} compact />
-          <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center justify-between gap-2 pt-1 border-t border-slate-100">
             <RatingStars rating={product.averageRating} count={product.reviewCount} />
-            <span className="text-xs text-muted">Đã bán {product.soldCount}</span>
+            <span className="text-xs font-semibold text-slate-400">Đã bán {product.soldCount}</span>
           </div>
         </div>
       </a>
       {primaryVariant && onAdd ? (
-        <div className="border-t border-line p-3">
+        <div className="border-t border-slate-100 p-3 bg-slate-50/50">
           <Button
             className="w-full"
             variant="secondary"
@@ -109,26 +110,28 @@ export function ShopCard({ shop }: { shop: Shop }) {
   return (
     <a
       href={`/shops/${shop.shopSlug}`}
-      className="block rounded-panel border border-line bg-white p-4 transition hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-soft"
+      className="group hover-lift block rounded-2xl border border-slate-200/90 bg-white p-4 transition-all duration-300 hover:border-emerald-400/80 hover:shadow-xl"
     >
       <div className="flex items-start gap-3">
-        <img src={shop.logoUrl} alt={shop.shopName} className="h-14 w-14 rounded-panel object-cover" />
+        <div className="relative overflow-hidden rounded-xl">
+          <img src={shop.logoUrl} alt={shop.shopName} className="h-14 w-14 object-cover transition-transform duration-500 group-hover:scale-110" />
+        </div>
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <h3 className="truncate font-bold text-ink">{shop.shopName}</h3>
+            <h3 className="truncate font-bold text-slate-900 group-hover:text-emerald-700 transition-colors">{shop.shopName}</h3>
             <StatusBadge status={shop.status} label={sellerStatusLabel[shop.status]} />
           </div>
-          <p className="mt-1 line-clamp-2 text-sm leading-5 text-muted">{shop.description}</p>
+          <p className="mt-1 line-clamp-2 text-sm leading-5 text-slate-500">{shop.description}</p>
         </div>
       </div>
       <div className="mt-4 grid grid-cols-2 gap-2 text-sm">
-        <div className="rounded-panel bg-canvas p-2">
-          <p className="text-xs text-muted">Đã bán</p>
-          <p className="font-bold text-ink">{shop.totalSold.toLocaleString("vi-VN")}</p>
+        <div className="rounded-xl bg-slate-50 p-2.5 transition-colors group-hover:bg-emerald-50/50">
+          <p className="text-xs font-semibold text-slate-400">Đã bán</p>
+          <p className="font-bold text-slate-900">{shop.totalSold.toLocaleString("vi-VN")}</p>
         </div>
-        <div className="rounded-panel bg-canvas p-2">
-          <p className="text-xs text-muted">Phí ship</p>
-          <p className="font-bold text-ink">{formatVnd(shop.shippingFee)}</p>
+        <div className="rounded-xl bg-slate-50 p-2.5 transition-colors group-hover:bg-emerald-50/50">
+          <p className="text-xs font-semibold text-slate-400">Phí ship</p>
+          <p className="font-bold text-slate-900">{formatVnd(shop.shippingFee)}</p>
         </div>
       </div>
     </a>
