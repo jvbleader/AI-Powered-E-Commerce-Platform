@@ -14,6 +14,11 @@ async def get_public_product_list(
     keyword: Optional[str] = None,
     category_slug: Optional[str] = None,
     sort_by: Optional[str] = None,
+    min_price: Optional[float] = None,
+    max_price: Optional[float] = None,
+    seller_id: Optional[int] = None,
+    shop_slug: Optional[str] = None,
+    min_rating: Optional[float] = None,
     page: int = 1,
     size: int = 20,
 ) -> ProductListResponse:
@@ -23,9 +28,15 @@ async def get_public_product_list(
         keyword=keyword,
         category_slug=category_slug,
         sort_by=sort_by,
+        min_price=min_price,
+        max_price=max_price,
+        seller_id=seller_id,
+        shop_slug=shop_slug,
+        min_rating=min_rating,
         skip=skip,
         limit=size,
     )
+
 
     return ProductListResponse(items=items, total=total, page=page, size=size)
 
@@ -38,6 +49,10 @@ async def get_public_product_detail(
         raise HTTPException(
             status_code=404, detail="Product not found or not available"
         )
+
+    product.view_count += 1
+    await db.commit()
+    await db.refresh(product)
 
     return product
 

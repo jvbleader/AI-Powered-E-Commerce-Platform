@@ -56,16 +56,16 @@ export default function SellerDashboardPage() {
   const waiting = sellerOrders.filter((order) => !order.sellerConfirmed && order.orderStatus === "PLACED").length;
 
   return (
-    <Section title="Seller dashboard">
+    <Section title="Tổng quan">
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <MetricCard label="Doanh thu hoàn thành" value={formatVnd(revenue)} />
         <MetricCard label="Tổng đã bán" value={`${shop?.totalSold ?? 0}`} />
-        <MetricCard label="Đơn cần xác nhận" value={`${waiting}`} detail="Deadline xác nhận 2 ngày" />
+        <MetricCard label="Đơn cần xác nhận" value={`${waiting}`} />
         <MetricCard label="Sản phẩm" value={`${store.state.products.filter((product) => product.sellerId === shop?.id).length}`} />
       </div>
       <div className="mt-4 grid gap-4 lg:grid-cols-2">
         <Panel>
-          <h3 className="font-bold">Shortcut</h3>
+          <h3 className="font-bold">Thao tác nhanh</h3>
           <div className="mt-3 flex flex-wrap gap-2">
             <Button onClick={() => (window.location.href = "/seller/products/new")}>Tạo sản phẩm</Button>
             <Button variant="secondary" onClick={() => (window.location.href = "/seller/orders")}>Xem đơn hàng</Button>

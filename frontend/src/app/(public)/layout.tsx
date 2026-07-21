@@ -36,7 +36,6 @@ export default function MarketplaceLayout({
 
   const ready = useMarketplaceStore((s) => s.ready);
   const activeRole = useMarketplaceStore((s) => s.state.activeRole);
-  const categoriesLength = useMarketplaceStore((s) => s.state.categories.length);
   const setCategories = useMarketplaceStore((s) => s.setCategories);
   const fetchAddresses = useMarketplaceStore((s) => s.fetchAddresses);
 
@@ -58,13 +57,12 @@ export default function MarketplaceLayout({
 
   useEffect(() => {
     let active = true;
-    if (categoriesLength === 0) {
-      fetchCategories().then((res) => {
-        if (active && res.ok && res.categories) {
-          setCategories(res.categories as any);
-        }
-      });
-    }
+    // Always fetch latest categories from DB on mount
+    fetchCategories().then((res) => {
+      if (active && res.ok && res.categories) {
+        setCategories(res.categories as any);
+      }
+    });
     if (currentUserId && fetchedUserAddressesRef.current !== currentUserId) {
       fetchedUserAddressesRef.current = currentUserId;
       fetchAddresses();
@@ -72,7 +70,7 @@ export default function MarketplaceLayout({
     return () => {
       active = false;
     };
-  }, [currentUserId, categoriesLength, fetchAddresses, setCategories]);
+  }, [currentUserId, fetchAddresses, setCategories]);
 
   if (!ready) {
     return (

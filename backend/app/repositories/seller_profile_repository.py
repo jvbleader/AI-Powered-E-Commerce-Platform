@@ -107,3 +107,45 @@ async def get_sellers_by_ids(
         select(SellerProfile).where(SellerProfile.id.in_(seller_ids))
     )
     return list(result.scalars().all())
+
+
+async def get_shop_stats(seller_id: int, db: AsyncSession) -> dict:
+    from sqlalchemy import func
+    from models.product import Product
+    from models.product_review import ProductReview
+    from models.order import Order
+    from models.order_item import OrderItem
+
+    # 1. Total sold
+    sold_query = (
+        select(func.coalesce(func.sum(OrderItem.quantity), 0))
+        .join(Order, OrderItem.order_id == Order.id)
+        .where(Order.seller_id == seller_id, Order.order_status == "COMPLETED")
+    )
+    total_sold_res = await db.execute(sold_query)
+    total_sold = total_sold_res.scalar() or 0
+
+    # 2. Product count
+    prod_query = select(func.count(Product.id)).where(Product.seller_id == seller_id, Product.status == "ACTIVE")
+    prod_res = await db.execute(prod_query)
+    product_count = prod_res.scalar() or 0
+
+    # 3. Rating & Review count
+    rating_query = (
+        select(
+            func.count(ProductReview.id),
+            func.coalesce(func.avg(ProductReview.rating), 0)
+        )
+        .join(Product, ProductReview.product_id == Product.id)
+        .where(Product.seller_id == seller_id)
+    )
+    rating_res = await db.execute(rating_query)
+    review_count, avg_rating = rating_res.one()
+
+    return {
+        "total_sold": total_sold,
+        "product_count": product_count,
+        "review_count": review_count or 0,
+        "average_rating": round(float(avg_rating or 0), 2)
+    }
+

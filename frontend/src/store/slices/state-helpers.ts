@@ -18,7 +18,8 @@ export const hydrateSavedState = (saved: AppState): AppState => {
     ...saved,
     users: mergeById(seed.users, saved.users),
     shops: mergeById(seed.shops, saved.shops),
-    categories: mergeById(seed.categories, saved.categories),
+    // Always refetch categories from API; do not restore stale cached data
+    categories: [],
     products: mergeById(seed.products, saved.products),
     variants: mergeById(seed.variants, saved.variants),
     addresses: [],

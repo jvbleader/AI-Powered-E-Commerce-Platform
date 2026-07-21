@@ -10,14 +10,14 @@ export default function AdminStatisticsPage() {
   const completedOrders = store.state.orders.filter((order) => order.orderStatus === "COMPLETED");
 
   return (
-    <Section title="Statistics">
+    <Section title="Thống kê">
       <div className="grid gap-4 lg:grid-cols-3">
         <MetricCard
-          label="Revenue toàn sàn"
+          label="Doanh thu toàn sàn"
           value={formatVnd(completedOrders.reduce((sum, order) => sum + order.totalAmount, 0))}
         />
-        <MetricCard label="New users" value={`${store.state.users.length}`} />
-        <MetricCard label="New sellers" value={`${store.state.shops.length}`} />
+        <MetricCard label="Người dùng mới" value={`${store.state.users.length}`} />
+        <MetricCard label="Người bán mới" value={`${store.state.shops.length}`} />
       </div>
     </Section>
   );

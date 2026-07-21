@@ -64,3 +64,5 @@ redis_data/
 
 #CodeGraph
 .codegraph/
+
+/backend/database

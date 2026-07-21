@@ -34,11 +34,33 @@ export function PriceDisplay({
 }
 
 export function RatingStars({ rating, count }: { rating: number; count?: number }) {
+  if (count === 0) {
+    return <span className="text-xs text-slate-400">Chưa có đánh giá</span>;
+  }
   return (
-    <span className="inline-flex items-center gap-1 text-xs text-muted">
-      <Star className="h-4 w-4 fill-amber text-amber" aria-hidden="true" />
-      <span className="font-semibold text-ink">{rating.toFixed(1)}</span>
-      {typeof count === "number" ? <span>({count})</span> : null}
+
+    <span className="inline-flex items-center gap-1 text-xs">
+      <span className="inline-flex items-center" aria-label={`Đánh giá ${rating.toFixed(1)} trên 5 sao`}>
+        {[1, 2, 3, 4, 5].map((star) => {
+          const filled = rating >= star;
+          const half = !filled && rating >= star - 0.5;
+          return (
+            <span
+              key={star}
+              aria-hidden="true"
+              style={{
+                fontSize: "15px",
+                lineHeight: 1,
+                color: filled ? "#f59e0b" : half ? "#fcd34d" : "#d1d5db",
+              }}
+            >
+              ★
+            </span>
+          );
+        })}
+      </span>
+      <span className="font-bold text-amber-600">{rating.toFixed(1)}</span>
+      {typeof count === "number" ? <span className="text-slate-500">({count})</span> : null}
     </span>
   );
 }
@@ -72,11 +94,14 @@ export function ProductCard({
           <div className="absolute inset-0 bg-gradient-to-t from-slate-900/20 via-transparent to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
         </div>
         <div className="space-y-2 p-3.5">
-          <div className="flex items-center justify-between gap-2">
-            <StatusBadge status={product.status} label={productStatusLabel[product.status]} />
-            {category ? <span className="truncate text-xs font-medium text-slate-400">{category.name}</span> : null}
-          </div>
+
+          {product.status === "OUT_OF_STOCK" && (
+            <div className="flex items-center gap-2">
+              <StatusBadge status="OUT_OF_STOCK" label="Hết hàng" />
+            </div>
+          )}
           <h3 className="line-clamp-2 min-h-10 text-sm font-bold leading-5 text-slate-800 group-hover:text-emerald-700 transition-colors duration-200">{product.name}</h3>
+
           {shop ? (
             <p className="flex items-center gap-1 truncate text-xs text-slate-500">
               <Store className="h-3.5 w-3.5 text-emerald-600 group-hover:scale-110 transition-transform duration-200" aria-hidden="true" />
@@ -86,7 +111,7 @@ export function ProductCard({
           <PriceDisplay price={priceRange.min} salePrice={primaryVariant?.salePrice} compact />
           <div className="flex items-center justify-between gap-2 pt-1 border-t border-slate-100">
             <RatingStars rating={product.averageRating} count={product.reviewCount} />
-            <span className="text-xs font-semibold text-slate-400">Đã bán {product.soldCount}</span>
+            <span className="text-xs font-semibold text-slate-600">Đã bán <span className="text-emerald-600 font-bold">{product.soldCount.toLocaleString("vi-VN")}</span></span>
           </div>
         </div>
       </a>

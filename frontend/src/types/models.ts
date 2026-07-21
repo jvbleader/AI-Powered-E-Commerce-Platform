@@ -156,7 +156,9 @@ export interface OrderItem {
   unitPrice: number;
   quantity: number;
   subtotal: number;
+  isReviewed?: boolean;
 }
+
 
 export interface ShipmentSnapshot {
   shippingProviderName: string;

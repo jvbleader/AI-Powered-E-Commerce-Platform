@@ -26,8 +26,10 @@ export type FetchProductsParams = {
   min_price?: number;
   max_price?: number;
   seller_id?: string;
+  shop_slug?: string;
   min_rating?: number;
 };
+
 
 // Define matching interfaces for the backend models
 type SellerInfo = {
@@ -170,6 +172,7 @@ export async function fetchPublicProducts(params: FetchProductsParams) {
     if (params.min_price !== undefined) query.set("min_price", params.min_price.toString());
     if (params.max_price !== undefined) query.set("max_price", params.max_price.toString());
     if (params.seller_id) query.set("seller_id", params.seller_id);
+    if (params.shop_slug) query.set("shop_slug", params.shop_slug);
     if (params.min_rating !== undefined) query.set("min_rating", params.min_rating.toString());
 
     const response = await apiFetch<ProductListResponse>(`${PUBLIC_PRODUCT_ROUTES.list}?${query.toString()}`);
@@ -190,6 +193,31 @@ export async function fetchPublicProducts(params: FetchProductsParams) {
     return { ok: true, products, variants, shops, total: response.total, page: response.page };
   } catch (error) {
     return { ok: false, message: error instanceof ApiError ? error.message : "Không thể tải danh sách sản phẩm." };
+  }
+}
+
+export async function fetchPublicShop(shopSlug: string) {
+  try {
+    const response = await apiFetch<any>(`/shops/${shopSlug}`);
+    const shop: Shop = {
+      id: response.shop_slug,
+      userId: "",
+      shopName: response.shop_name,
+      shopSlug: response.shop_slug,
+      logoUrl: response.shop_logo_url || "https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?auto=format&fit=crop&w=240&q=80",
+      description: response.shop_description || "Chào mừng bạn đến với cửa hàng của chúng tôi!",
+      phone: response.phone || "",
+      email: response.email || "",
+      pickupAddress: response.pickup_address || "",
+      shippingFee: response.shipping_fee || 0,
+      shippingProviderName: response.shipping_provider_name || "Giao hàng nhanh",
+      status: response.status || "APPROVED",
+      totalSold: response.total_sold || 0,
+      totalRevenue: 0
+    };
+    return { ok: true, shop };
+  } catch (error) {
+    return { ok: false, message: error instanceof ApiError ? error.message : "Không tìm thấy thông tin cửa hàng." };
   }
 }
 
@@ -225,6 +253,7 @@ export async function fetchProductDetail(shopSlug: string, productSlug: string) 
     return { ok: false, message: error instanceof ApiError ? error.message : "Không thể tải chi tiết sản phẩm." };
   }
 }
+
 
 export async function fetchCategories() {
   try {

@@ -2,7 +2,8 @@
 
 import { useEffect, useState, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { Bell, CreditCard, LogOut, Plus, Store } from "lucide-react";
+import { Bell, CreditCard, LogOut, Plus, Store, Star } from "lucide-react";
+import { createReviewApi } from "@/services/review-api";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Select, Textarea } from "@/components/ui/input";
 import { Panel, Section } from "@/components/ui/containers";
@@ -12,8 +13,7 @@ import { DataTable } from "@/components/ui/data-table";
 import { cn } from "@/lib/utils";
 import {
   MetricCard,
-  OrderTimeline,
-  RatingStars
+  OrderTimeline
 } from "@/components/shared/cards";
 import { useMarketplaceStore } from "@/store/use-marketplace-store";
 import {
@@ -414,6 +414,11 @@ export default function AccountPage() {
 
   function OrderDetailPage({ orderCode, audience }: { orderCode?: string; audience: "customer" | "seller" }) {
     const order = store.state.orders.find((item) => (audience === "customer" ? item.orderCode === orderCode : item.id === orderCode || item.orderCode === orderCode));
+    const [reviewingItem, setReviewingItem] = useState<OrderItem | null>(null);
+    const [rating, setRating] = useState(5);
+    const [comment, setComment] = useState("");
+    const [reviewedItemIds, setReviewedItemIds] = useState<Record<string, boolean>>({});
+    const [submittingReview, setSubmittingReview] = useState(false);
     
     useEffect(() => {
       if (!order && orderCode) {
@@ -446,6 +451,25 @@ export default function AccountPage() {
       window.location.href = `/payment/${payment.paymentCode}`;
     };
 
+    const handleReviewSubmit = async () => {
+      if (!reviewingItem) return;
+      setSubmittingReview(true);
+      try {
+        await createReviewApi({
+          order_item_id: Number(reviewingItem.id),
+          rating,
+          comment: comment.trim() || undefined
+        });
+        showToast("Đã gửi đánh giá thành công!", "success");
+        setReviewedItemIds((prev) => ({ ...prev, [reviewingItem.id]: true }));
+        setReviewingItem(null);
+      } catch (err: any) {
+        showToast(err?.message || "Lỗi khi gửi đánh giá.", "danger");
+      } finally {
+        setSubmittingReview(false);
+      }
+    };
+
     const shop = shopById(order.sellerId);
     
     return (
@@ -460,13 +484,32 @@ export default function AccountPage() {
               </div>
               <div className="mt-4 space-y-3">
                 {order.items.map((item) => (
-                  <div key={item.id} className="flex gap-3 border-t border-line pt-3">
+                  <div key={item.id} className="flex gap-3 border-t border-line pt-3 items-center">
                     <img src={item.productImageSnapshot} alt={item.productNameSnapshot} className="h-16 w-16 rounded-panel object-cover" />
                     <div className="min-w-0 flex-1">
                       <p className="font-bold">{item.productNameSnapshot}</p>
                       <p className="text-sm text-muted">{item.variantNameSnapshot} - SKU {item.skuSnapshot}</p>
                     </div>
-                    <p className="font-bold">{formatVnd(item.subtotal)}</p>
+                    <div className="flex flex-col items-end gap-1">
+                      <p className="font-bold">{formatVnd(item.subtotal)}</p>
+                      {order.orderStatus === "COMPLETED" && audience === "customer" && (
+                        reviewedItemIds[item.id] || item.isReviewed ? (
+                          <span className="text-xs text-muted">Đã đánh giá</span>
+                        ) : (
+                          <Button
+                            variant="secondary"
+                            className="text-xs py-1 px-2.5 h-auto mt-1"
+                            onClick={() => {
+                              setReviewingItem(item);
+                              setRating(5);
+                              setComment("");
+                            }}
+                          >
+                            Đánh giá
+                          </Button>
+                        )
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -519,9 +562,61 @@ export default function AccountPage() {
             ) : null}
           </Panel>
         </div>
+
+        {/* Review Modal */}
+        {reviewingItem && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+            <div className="w-full max-w-md rounded-panel bg-white p-6 shadow-lg">
+              <h3 className="text-lg font-bold">Đánh giá sản phẩm</h3>
+              <p className="mt-1 text-sm text-muted">{reviewingItem.productNameSnapshot}</p>
+              
+              <div className="mt-4 flex items-center justify-center gap-2">
+                {[1, 2, 3, 4, 5].map((star) => (
+                  <button
+                    key={star}
+                    type="button"
+                    onClick={() => setRating(star)}
+                    className="p-1 text-yellow-400 transition hover:scale-110"
+                  >
+                    <Star
+                      className="h-8 w-8"
+                      fill={star <= rating ? "currentColor" : "none"}
+                    />
+                  </button>
+                ))}
+              </div>
+
+              <div className="mt-4">
+                <Textarea
+                  placeholder="Nhập nhận xét của bạn về sản phẩm..."
+                  value={comment}
+                  onChange={(e) => setComment(e.target.value)}
+                  className="min-h-[100px]"
+                />
+              </div>
+
+              <div className="mt-6 flex justify-end gap-2">
+                <Button
+                  variant="secondary"
+                  disabled={submittingReview}
+                  onClick={() => setReviewingItem(null)}
+                >
+                  Hủy
+                </Button>
+                <Button
+                  disabled={submittingReview}
+                  onClick={handleReviewSubmit}
+                >
+                  {submittingReview ? "Đang gửi..." : "Gửi đánh giá"}
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
       </Section>
     );
   }
+
 
   function NotificationsPage() {
     const notifications = store.state.notifications.filter((item) => item.userId === store.getCurrentUser()?.id);
@@ -547,53 +642,13 @@ export default function AccountPage() {
   }
 
   function ReviewsModule({ product }: { product?: Product }) {
-    const relatedItems = store.state.orders
-      .filter((order) => order.orderStatus === "COMPLETED")
-      .flatMap((order) => order.items)
-      .filter((item) => !product || item.productId === product.id);
     return (
-      <div className="grid gap-4 lg:grid-cols-[1fr_360px]">
-        <Panel>
-          {relatedItems.length ? (
-            <div className="space-y-4">
-              {relatedItems.slice(0, 5).map((item, index) => (
-                <div key={item.id} className="border-b border-line pb-4 last:border-b-0 last:pb-0">
-                  <div className="flex items-center gap-2">
-                    <RatingStars rating={4.2 + (index % 4) * 0.2} />
-                    <span className="text-sm font-semibold text-ink">Đánh giá đã mua hàng</span>
-                  </div>
-                  <p className="mt-2 text-sm leading-6 text-muted">
-                    Sản phẩm {item.productNameSnapshot} đúng mô tả, đóng gói cẩn thận.
-                  </p>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <EmptyState title="Chưa có đánh giá" />
-          )}
-        </Panel>
-        <Panel>
-          <h3 className="font-bold text-ink">Viết đánh giá</h3>
-          <div className="mt-4 grid gap-3">
-            <Field label="Rating">
-              <Select>
-                <option>5 sao</option>
-                <option>4 sao</option>
-                <option>3 sao</option>
-                <option>2 sao</option>
-                <option>1 sao</option>
-              </Select>
-            </Field>
-            <Field label="Nội dung">
-              <Textarea placeholder="Chia sẻ trải nghiệm của bạn" />
-            </Field>
-            <Field label="Ảnh đánh giá">
-              <Input type="file" multiple />
-            </Field>
-            <Button onClick={() => showToast("Đã lưu đánh giá.", "success")}>Gửi đánh giá</Button>
-          </div>
-        </Panel>
-      </div>
+      <Section title="Đánh giá của tôi">
+        <EmptyState
+          title="Tính năng đang cập nhật"
+          description="Lịch sử đánh giá sản phẩm sẽ được hiển thị tại đây khi hệ thống review được tích hợp."
+        />
+      </Section>
     );
   }
 

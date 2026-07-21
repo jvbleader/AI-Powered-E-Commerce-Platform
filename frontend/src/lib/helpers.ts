@@ -65,12 +65,13 @@ export const roleLabel: Record<Role | "GUEST", string> = {
 };
 
 export const sellerStatusLabel: Record<SellerStatus, string> = {
-  PENDING: "Chờ duyệt",
-  APPROVED: "Đã duyệt",
-  REJECTED: "Bị từ chối",
-  SUSPENDED: "Tạm ngưng",
-  CLOSED: "Đã đóng"
+  PENDING: "Chưa hoạt động",
+  APPROVED: "Đang hoạt động",
+  REJECTED: "Từ chối",
+  SUSPENDED: "Đã bị khóa",
+  CLOSED: "Đã đóng cửa"
 };
+
 
 export const productStatusLabel: Record<Product["status"], string> = {
   ACTIVE: "Đang bán",
@@ -143,7 +144,7 @@ export const filterProducts = (
       (!category || product.categoryIds.includes(category.id)) &&
       (!shop || product.sellerId === shop.id) &&
       (!query.sellerId || product.sellerId === query.sellerId) &&
-      (!query.rating || product.averageRating >= query.rating) &&
+      (!query.rating || product.averageRating >= query.rating || product.reviewCount === 0) &&
       (!query.minPrice || price >= query.minPrice) &&
       (!query.maxPrice || price <= query.maxPrice)
     );
@@ -153,10 +154,15 @@ export const filterProducts = (
     if (query.sort === "price-asc") return getProductPriceRange(a, variants).min - getProductPriceRange(b, variants).min;
     if (query.sort === "price-desc") return getProductPriceRange(b, variants).min - getProductPriceRange(a, variants).min;
     if (query.sort === "sold") return b.soldCount - a.soldCount;
-    if (query.sort === "rating") return b.averageRating - a.averageRating;
+    if (query.sort === "rating") {
+      if (a.reviewCount === 0 && b.reviewCount > 0) return 1;
+      if (b.reviewCount === 0 && a.reviewCount > 0) return -1;
+      return b.averageRating - a.averageRating;
+    }
     return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
   });
 };
+
 
 export const searchSuggestions = (
   keyword: string,

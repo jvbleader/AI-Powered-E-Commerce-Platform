@@ -1,13 +1,12 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import {
   Bell,
   Bot,
   ChevronDown,
   Compass,
-  Facebook,
   Grid,
   Heart,
   HelpCircle,
@@ -16,7 +15,6 @@ import {
   Menu,
   MessageSquare,
   Package,
-  PhoneCall,
   Search,
   Settings,
   ShieldCheck,
@@ -28,6 +26,7 @@ import {
   User,
   X
 } from "lucide-react";
+
 import { searchSuggestions } from "@/lib/helpers";
 import { useMarketplaceStore } from "@/store/use-marketplace-store";
 import { BRAND_NAME } from "@/lib/constants";
@@ -45,29 +44,7 @@ const CATEGORY_ICONS: Record<string, string> = {
   "thuc-pham": "🍎"
 };
 
-const MOCK_NOTIFICATIONS = [
-  {
-    id: "1",
-    title: "Đơn hàng #SH-9042 đang giao",
-    desc: "Tài xế đang vận chuyển đơn hàng đến bạn.",
-    time: "5 phút trước",
-    unread: true
-  },
-  {
-    id: "2",
-    title: "Voucher 50K từ Shepoo AI",
-    desc: "Mã giảm giá cho danh mục Điện tử sắp hết hạn.",
-    time: "2 giờ trước",
-    unread: true
-  },
-  {
-    id: "3",
-    title: "Sản phẩm yêu thích giảm giá",
-    desc: "Áo sơ mi Oxford giảm 20% trong hôm nay.",
-    time: "1 ngày trước",
-    unread: false
-  }
-];
+
 
 export function MarketplaceHeader() {
   const store = useMarketplaceStore();
@@ -80,11 +57,15 @@ export function MarketplaceHeader() {
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const [cartOpen, setCartOpen] = useState(false);
-  const [unreadCount, setUnreadCount] = useState(2);
+  const [catMoreOpen, setCatMoreOpen] = useState(false);
+  const notifications = store.state.notifications;
+  const [readIds, setReadIds] = useState<Set<string>>(new Set());
+  const unreadCount = notifications.filter((n) => !readIds.has(n.id)).length;
 
   const searchInputRef = useRef<HTMLInputElement>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
   const notifRef = useRef<HTMLDivElement>(null);
+  const catMoreRef = useRef<HTMLDivElement>(null);
 
   const suggestions = searchSuggestions(
     query,
@@ -118,6 +99,9 @@ export function MarketplaceHeader() {
       }
       if (notifRef.current && !notifRef.current.contains(event.target as Node)) {
         setNotifOpen(false);
+      }
+      if (catMoreRef.current && !catMoreRef.current.contains(event.target as Node)) {
+        setCatMoreOpen(false);
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
@@ -159,7 +143,7 @@ export function MarketplaceHeader() {
   return (
     <header className="fixed inset-x-0 top-0 z-50 w-full pointer-events-none isolate">
       {/* TOP ANNOUNCEMENT BAR (Permanently fixed at top edge at all times) */}
-      <div className="bg-slate-900 text-slate-300 text-[11px] py-1.5 px-4 border-b border-slate-850 w-full pointer-events-auto">
+      <div className="bg-slate-900 text-slate-300 text-[11px] py-1.5 px-4 border-b border-slate-800 w-full pointer-events-auto">
         <div className="mx-auto max-w-7xl flex items-center justify-between gap-4">
           <div className="flex items-center gap-3 font-medium text-slate-300 overflow-x-auto no-scrollbar">
             <a href="/seller" className="hover:text-emerald-400 transition-colors flex items-center gap-1 shrink-0">
@@ -170,25 +154,11 @@ export function MarketplaceHeader() {
             <a href="/seller/register" className="hover:text-emerald-400 transition-colors shrink-0">
               Trở thành người bán
             </a>
-            <span className="text-slate-800">|</span>
-            <a
-              href="https://facebook.com"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="hover:text-emerald-400 transition-colors flex items-center gap-1 shrink-0"
-            >
-              <Facebook className="h-3.5 w-3.5 text-blue-400" />
-              Fanpage Facebook
-            </a>
           </div>
 
           <div className="hidden md:flex items-center gap-5 text-slate-400 shrink-0 font-medium">
             <a href="/chat" className="hover:text-emerald-400 transition-colors flex items-center gap-1">
               <Bot className="h-3 w-3" /> Hỗ trợ AI
-            </a>
-            <span className="text-slate-800">|</span>
-            <a href="tel:19008888" className="hover:text-emerald-400 transition-colors flex items-center gap-1">
-              <PhoneCall className="h-3 w-3" /> Hotline: 1900-SHEPOO
             </a>
             <span className="text-slate-800">|</span>
             <span className="text-slate-300 font-semibold">🇻🇳 VN / VND</span>
@@ -261,7 +231,7 @@ export function MarketplaceHeader() {
 
                 {/* SEARCH SUGGESTION DROPDOWN */}
                 {(isSearchFocused || query) && (
-                  <div className="absolute left-0 right-0 top-full mt-2 z-50 animate-scale-in rounded-2xl border border-slate-200/90 bg-white/95 p-3 shadow-2xl backdrop-blur-xl max-h-[80vh] overflow-y-auto">
+                  <div className="absolute left-0 right-0 top-full mt-2 z-50 animate-scale-in rounded-2xl border border-slate-200 bg-white p-3 shadow-2xl max-h-[80vh] overflow-y-auto">
                     {query ? (
                       suggestions.length ? (
                         <div className="space-y-1">
@@ -371,13 +341,13 @@ export function MarketplaceHeader() {
 
                 {/* NOTIFICATION POPOVER */}
                 {notifOpen && (
-                  <div className="absolute right-0 top-11 z-50 w-80 animate-scale-in rounded-2xl border border-slate-200 bg-white/95 p-3 shadow-2xl backdrop-blur-xl before:absolute before:-top-3 before:left-0 before:right-0 before:h-3 before:content-['']">
+                  <div className="absolute right-0 top-11 z-50 w-80 animate-scale-in rounded-2xl border border-slate-200 bg-white p-3 shadow-2xl before:absolute before:-top-3 before:left-0 before:right-0 before:h-3 before:content-['']">
                     <div className="flex items-center justify-between border-b border-slate-100 pb-2 px-1">
                       <span className="font-heading text-xs font-bold text-slate-900">Thông báo mới</span>
                       {unreadCount > 0 && (
                         <button
                           type="button"
-                          onClick={() => setUnreadCount(0)}
+                          onClick={() => setReadIds(new Set(notifications.map((n) => n.id)))}
                           className="text-[10px] font-bold text-emerald-600 hover:underline"
                         >
                           Đánh dấu đã đọc
@@ -385,20 +355,32 @@ export function MarketplaceHeader() {
                       )}
                     </div>
                     <div className="mt-2 space-y-1 max-h-64 overflow-y-auto">
-                      {MOCK_NOTIFICATIONS.map((n) => (
-                        <div
-                          key={n.id}
-                          className={`rounded-xl p-2.5 text-xs transition-colors ${
-                            n.unread ? "bg-emerald-50/60" : "hover:bg-slate-50"
-                          }`}
-                        >
-                          <div className="font-bold text-slate-900 flex items-center justify-between">
-                            <span>{n.title}</span>
-                            <span className="text-[9px] font-medium text-slate-400">{n.time}</span>
-                          </div>
-                          <p className="mt-0.5 text-[11px] text-slate-600 leading-snug">{n.desc}</p>
+                      {notifications.length === 0 ? (
+                        <div className="py-6 text-center text-[11px] text-slate-400">
+                          <Bell className="mx-auto h-6 w-6 text-slate-200 mb-1.5" />
+                          Không có thông báo nào
                         </div>
-                      ))}
+                      ) : (
+                        notifications.map((n) => {
+                          const isUnread = !readIds.has(n.id);
+                          return (
+                            <div
+                              key={n.id}
+                              className={`rounded-xl p-2.5 text-xs transition-colors ${
+                                isUnread ? "bg-emerald-50/60" : "hover:bg-slate-50"
+                              }`}
+                            >
+                              <div className="font-bold text-slate-900 flex items-center justify-between">
+                                <span>{n.title}</span>
+                                <span className="text-[9px] font-medium text-slate-400">
+                                  {new Date(n.createdAt).toLocaleDateString("vi-VN")}
+                                </span>
+                              </div>
+                              <p className="mt-0.5 text-[11px] text-slate-600 leading-snug">{n.content}</p>
+                            </div>
+                          );
+                        })
+                      )}
                     </div>
                   </div>
                 )}
@@ -423,7 +405,7 @@ export function MarketplaceHeader() {
                   <ShoppingCart className="h-4 w-4" aria-hidden="true" />
                   <span>Giỏ hàng</span>
                   {selectedCount > 0 && (
-                    <span className="animate-bounce-subtle rounded-full bg-emerald-600 px-2 py-0.5 text-[10px] font-black text-white shadow-sm shadow-emerald-600/30">
+                    <span className="animate-bounce-subtle rounded-full bg-emerald-600 px-2 py-0.5 text-[10px] font-black text-white shadow-sm">
                       {selectedCount}
                     </span>
                   )}
@@ -431,7 +413,7 @@ export function MarketplaceHeader() {
 
                 {/* CART HOVER POPOVER */}
                 {cartOpen && (
-                  <div className="absolute right-0 top-11 z-50 w-80 animate-scale-in rounded-2xl border border-slate-200 bg-white/95 p-3 shadow-2xl backdrop-blur-xl before:absolute before:-top-3 before:left-0 before:right-0 before:h-3 before:content-['']">
+                  <div className="absolute right-0 top-11 z-50 w-80 animate-scale-in rounded-2xl border border-slate-200 bg-white p-3 shadow-2xl before:absolute before:-top-3 before:left-0 before:right-0 before:h-3 before:content-['']">
                     <div className="flex items-center justify-between border-b border-slate-100 pb-2 px-1">
                       <span className="font-heading text-xs font-bold text-slate-900">Giỏ hàng mới thêm</span>
                       <a href="/cart" className="text-[10px] font-bold text-emerald-600 hover:underline">
@@ -502,7 +484,7 @@ export function MarketplaceHeader() {
 
                   {/* MENU POPUP */}
                   {userMenuOpen && (
-                    <div className="absolute right-0 top-11 z-50 w-64 animate-scale-in rounded-2xl border border-slate-200 bg-white p-2 shadow-2xl backdrop-blur-xl before:absolute before:-top-3 before:left-0 before:right-0 before:h-3 before:content-['']">
+                    <div className="absolute right-0 top-11 z-50 w-64 animate-scale-in rounded-2xl border border-slate-200 bg-white p-2 shadow-2xl before:absolute before:-top-3 before:left-0 before:right-0 before:h-3 before:content-['']">
                       <div className="border-b border-slate-100 p-2.5">
                         <p className="font-heading text-xs font-bold text-slate-900 truncate">{currentUser.fullName}</p>
                         <p className="text-[11px] text-slate-500 truncate">{currentUser.email}</p>
@@ -573,7 +555,7 @@ export function MarketplaceHeader() {
                   </a>
                   <a
                     href="/register"
-                    className={`rounded-xl bg-emerald-600 font-bold text-white hover:bg-emerald-500 transition-all duration-300 shadow-md shadow-emerald-600/20 ${
+                    className={`rounded-xl bg-emerald-600 font-bold text-white hover:bg-emerald-500 transition-all duration-300 shadow-md ${
                       isScrolled ? "px-3 py-1.5 text-xs" : "px-3.5 py-2 text-xs"
                     }`}
                   >
@@ -592,7 +574,7 @@ export function MarketplaceHeader() {
                 : "max-h-14 opacity-100 mt-2.5 transform-none"
             }`}
           >
-            <div className="relative flex items-center justify-center gap-2 overflow-x-auto no-scrollbar mask-gradient-x py-1 px-4">
+            <div className="relative flex items-center justify-center gap-2 py-1 px-4">
               <a
                 href="/products"
                 className={`shrink-0 inline-flex items-center rounded-xl border px-3 py-1.5 text-xs font-bold transition-all shadow-2xs ${
@@ -604,7 +586,7 @@ export function MarketplaceHeader() {
                 Tất cả sản phẩm
               </a>
 
-              {store.state.categories.map((category) => {
+              {store.state.categories.slice(0, 6).map((category) => {
                 const isActive = pathname === `/categories/${category.slug}`;
                 return (
                   <a
@@ -612,7 +594,7 @@ export function MarketplaceHeader() {
                     href={`/categories/${category.slug}`}
                     className={`shrink-0 inline-flex items-center rounded-xl border px-3 py-1.5 text-xs font-bold transition-all shadow-2xs ${
                       isActive
-                        ? "border-emerald-500 bg-emerald-500 text-white shadow-md shadow-emerald-500/20"
+                        ? "border-emerald-500 bg-emerald-500 text-white shadow-md"
                         : "border-slate-200 bg-white/90 text-slate-700 hover:border-emerald-400 hover:bg-emerald-50 hover:text-emerald-700"
                     }`}
                   >
@@ -620,6 +602,57 @@ export function MarketplaceHeader() {
                   </a>
                 );
               })}
+              {store.state.categories.length > 6 && (
+                <div
+                  className="relative shrink-0"
+                  ref={catMoreRef}
+                >
+                  <button
+                    type="button"
+                    onClick={() => setCatMoreOpen((v) => !v)}
+                    className={`inline-flex items-center gap-1 rounded-xl border px-3 py-1.5 text-xs font-bold shadow-2xs transition-all ${
+                      catMoreOpen
+                        ? "border-emerald-400 bg-emerald-50 text-emerald-700"
+                        : "border-slate-200 bg-white/90 text-slate-700 hover:border-emerald-400 hover:bg-emerald-50 hover:text-emerald-700"
+                    }`}
+                  >
+                    <span>Xem thêm</span>
+                    <ChevronDown className={`h-3.5 w-3.5 transition-transform duration-200 ${catMoreOpen ? "rotate-180" : ""}`} />
+                  </button>
+                  {catMoreOpen && (() => {
+                    const rect = catMoreRef.current?.getBoundingClientRect();
+                    return rect ? (
+                      <div
+                        style={{
+                          position: "fixed",
+                          top: rect.bottom + 2,
+                          right: window.innerWidth - rect.right,
+                          zIndex: 9999
+                        }}
+                        className="w-52 rounded-xl border border-slate-200 bg-white shadow-2xl flex flex-col p-1"
+                      >
+                        {store.state.categories.slice(6).map((category) => {
+                          const isActive = pathname === `/categories/${category.slug}`;
+                          return (
+                            <a
+                              key={category.id}
+                              href={`/categories/${category.slug}`}
+                              onClick={() => setCatMoreOpen(false)}
+                              className={`rounded-lg px-3 py-2 text-xs font-bold transition-all ${
+                                isActive
+                                  ? "bg-emerald-50 text-emerald-700"
+                                  : "text-slate-700 hover:bg-slate-50 hover:text-emerald-700"
+                              }`}
+                            >
+                              {category.name}
+                            </a>
+                          );
+                        })}
+                      </div>
+                    ) : null;
+                  })()}
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -627,6 +660,7 @@ export function MarketplaceHeader() {
       </header>
     );
 }
+
 
 export function MarketplaceFooter() {
   return (

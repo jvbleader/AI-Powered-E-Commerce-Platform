@@ -10,7 +10,7 @@ export default function AdminDashboardPage() {
   const completed = store.state.orders.filter((order) => order.orderStatus === "COMPLETED");
 
   return (
-    <Section title="Admin dashboard">
+    <Section title="Tổng quan">
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <MetricCard
           label="Doanh thu toàn sàn"

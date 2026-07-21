@@ -47,24 +47,6 @@ export default function AuthPage({ mode: initialMode }: { mode: "login" | "regis
   const [formErrors, setFormErrors] = useState<AuthFormErrors>({});
   const [submitting, setSubmitting] = useState(false);
 
-  // 1-Click Quick Demo Account Switcher
-  const fillDemoAccount = (role: "buyer" | "seller" | "admin") => {
-    setMode("login");
-    setFormErrors({});
-    if (role === "buyer") {
-      setEmail("buyer@shepoo.com");
-      setPassword("12345678");
-      showToast("Đã điền tự động tài khoản Khách hàng Demo!", "info");
-    } else if (role === "seller") {
-      setEmail("seller@shepoo.com");
-      setPassword("12345678");
-      showToast("Đã điền tự động tài khoản Người bán Demo!", "info");
-    } else if (role === "admin") {
-      setEmail("admin@shepoo.com");
-      setPassword("12345678");
-      showToast("Đã điền tự động tài khoản Admin Demo!", "info");
-    }
-  };
 
   // Real-time password strength calculation
   const getPasswordStrength = () => {
@@ -136,18 +118,13 @@ export default function AuthPage({ mode: initialMode }: { mode: "login" | "regis
           {/* Top Logo & Tag */}
           <div className="relative z-10">
             <a href="/" className="inline-flex items-center gap-3">
-              <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-500 font-heading text-xl font-black text-slate-950 shadow-lg shadow-emerald-500/30">
+              <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-500 font-heading text-xl font-black text-slate-950 shadow-lg">
                 S
               </span>
               <span className="font-heading text-2xl font-black tracking-tight text-white">{BRAND_NAME}</span>
             </a>
 
             <div className="mt-10 space-y-4">
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3.5 py-1 text-xs font-bold text-emerald-300">
-                <Sparkles className="h-3.5 w-3.5 text-emerald-400 animate-pulse" />
-                Xác thực tài khoản Porcelain
-              </span>
-
               <h2 className="font-heading text-3xl font-extrabold leading-tight text-white">
                 Truy cập hệ sinh thái mua sắm <span className="text-gradient-neon">thông minh</span>
               </h2>
@@ -174,52 +151,20 @@ export default function AuthPage({ mode: initialMode }: { mode: "login" | "regis
             </div>
           </div>
 
-          {/* Bottom Trust Badge */}
-          <div className="relative z-10 rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur-md">
+          <div className="relative z-10 rounded-2xl border border-white/10 bg-white/5 p-4">
             <div className="flex items-center gap-1 text-amber-400">
               {[...Array(5)].map((_, i) => (
                 <Star key={i} className="h-4 w-4 fill-amber-400" />
               ))}
-              <span className="ml-2 font-heading text-xs font-bold text-white">4.9 / 5.0 Rating</span>
             </div>
             <p className="mt-2 text-xs font-medium text-slate-300">
-              "Đăng nhập 1-Click nhanh chóng, trải nghiệm mua sắm vô cùng tuyệt vời!"
+              "Đăng nhập nhanh chóng, trải nghiệm mua sắm vô cùng tuyệt vời!"
             </p>
           </div>
         </div>
 
         {/* RIGHT AUTH FORM PANEL (Clean Porcelain Mode) */}
         <div className="flex flex-col justify-center p-6 sm:p-10 lg:col-span-7 bg-white/90">
-          {/* 1-CLICK QUICK DEMO FILLER RIBBON */}
-          <div className="mb-6 rounded-2xl border border-emerald-200 bg-emerald-50/70 p-3.5">
-            <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-800">
-              <Zap className="h-4 w-4 fill-emerald-600 text-emerald-600 animate-pulse" />
-              <span>Thử Nghiệm Nhanh - 1-Click Demo Login:</span>
-            </div>
-            <div className="mt-2.5 flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() => fillDemoAccount("buyer")}
-                className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-800 hover:border-emerald-500 hover:bg-emerald-50 hover:text-emerald-700 transition-colors shadow-sm"
-              >
-                👤 Khách Hàng Demo
-              </button>
-              <button
-                type="button"
-                onClick={() => fillDemoAccount("seller")}
-                className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-800 hover:border-amber-500 hover:bg-amber-50 hover:text-amber-700 transition-colors shadow-sm"
-              >
-                🏪 Người Bán Demo
-              </button>
-              <button
-                type="button"
-                onClick={() => fillDemoAccount("admin")}
-                className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-800 hover:border-indigo-500 hover:bg-indigo-50 hover:text-indigo-700 transition-colors shadow-sm"
-              >
-                ⚡ Admin Demo
-              </button>
-            </div>
-          </div>
 
           {/* Header Switcher Tabs */}
           <div className="mb-6 flex items-center justify-between border-b border-slate-100 pb-4">
@@ -317,7 +262,7 @@ export default function AuthPage({ mode: initialMode }: { mode: "login" | "regis
                   type={mode === "login" ? "text" : "email"}
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder={mode === "login" ? "buyer@shepoo.com hoặc 0901234567" : "name@example.com"}
+                  placeholder={mode === "login" ? "email@example.com hoặc 0901234567" : "name@example.com"}
                   autoComplete={mode === "login" ? "username" : "email"}
                   className={`w-full rounded-xl border bg-slate-50 py-2.5 pl-10 pr-4 text-sm font-medium text-slate-900 transition-colors focus:bg-white focus:outline-none ${
                     formErrors.email
@@ -410,7 +355,7 @@ export default function AuthPage({ mode: initialMode }: { mode: "login" | "regis
             <Button
               type="submit"
               disabled={submitting}
-              className="mt-6 w-full rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 py-3 text-sm font-bold text-white shadow-lg shadow-emerald-600/25 transition-all hover:from-emerald-500 hover:to-teal-500 active:scale-[0.99] disabled:opacity-70"
+              className="mt-6 w-full rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 py-3 text-sm font-bold text-white shadow-lg transition-all hover:from-emerald-500 hover:to-teal-500 active:scale-[0.99] disabled:opacity-70"
             >
               {submitting ? (
                 <div className="flex items-center justify-center gap-2">

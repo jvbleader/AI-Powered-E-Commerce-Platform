@@ -19,9 +19,11 @@ import {
   productStatusLabel
 } from "@/lib/helpers";
 import { fetchProductDetail } from "@/services/product-api";
+import { fetchProductReviewsApi, ProductReview } from "@/services/review-api";
 import { useMarketplaceStore } from "@/store/use-marketplace-store";
 import NotFoundPage from "@/components/shared/not-found-page";
 import type { Product, ProductVariant, Shop } from "@/types/models";
+
 
 export default function ProductDetailPage() {
   const params = useParams();
@@ -87,11 +89,12 @@ export default function ProductDetailPage() {
         </Panel>
         <Panel>
           <div className="flex flex-wrap items-center gap-2">
-            <StatusBadge status={product.status} label={productStatusLabel[product.status]} />
+            {product.status === "OUT_OF_STOCK" && <StatusBadge status="OUT_OF_STOCK" label="Hết hàng" />}
             <a href={`/shops/${shop.shopSlug}`} className="rounded-panel border border-line px-2 py-1 text-xs font-semibold text-primary">
               {shop.shopName}
             </a>
           </div>
+
           <h1 className="mt-3 text-3xl font-black text-ink">{product.name}</h1>
           <div className="mt-3 flex flex-wrap gap-4 text-sm text-muted">
             <RatingStars rating={product.averageRating} count={product.reviewCount} />
@@ -202,53 +205,70 @@ export default function ProductDetailPage() {
   }
 
   function ReviewsModule({ product }: { product?: Product }) {
-    const relatedItems = store.state.orders
-      .filter((order) => order.orderStatus === "COMPLETED")
-      .flatMap((order) => order.items)
-      .filter((item) => !product || item.productId === product.id);
+    const [reviews, setReviews] = useState<ProductReview[]>([]);
+    const [loadingReviews, setLoadingReviews] = useState(true);
+
+    useEffect(() => {
+      if (!product?.id) {
+        setLoadingReviews(false);
+        return;
+      }
+
+      let isMounted = true;
+      setLoadingReviews(true);
+      fetchProductReviewsApi(product.id)
+        .then((res) => {
+          if (isMounted && res?.items) {
+            setReviews(res.items);
+          }
+        })
+        .catch(() => {})
+        .finally(() => {
+          if (isMounted) setLoadingReviews(false);
+        });
+      return () => { isMounted = false; };
+    }, [product?.id]);
+
+
+    if (loadingReviews) {
+      return (
+        <Panel>
+          <p className="text-center text-sm text-muted">Đang tải đánh giá...</p>
+        </Panel>
+      );
+    }
+
+    if (!reviews.length) {
+      return (
+        <Panel>
+          <EmptyState title="Chưa có đánh giá" description="Chưa có ai đánh giá sản phẩm này." />
+        </Panel>
+      );
+    }
+
+
     return (
-      <div className="grid gap-4 lg:grid-cols-[1fr_360px]">
-        <Panel>
-          {relatedItems.length ? (
-            <div className="space-y-4">
-              {relatedItems.slice(0, 5).map((item, index) => (
-                <div key={item.id} className="border-b border-line pb-4 last:border-b-0 last:pb-0">
-                  <div className="flex items-center gap-2">
-                    <RatingStars rating={4.2 + (index % 4) * 0.2} />
-                    <span className="text-sm font-semibold text-ink">Đánh giá đã mua hàng</span>
-                  </div>
-                  <p className="mt-2 text-sm leading-6 text-muted">
-                    Sản phẩm {item.productNameSnapshot} đúng mô tả, đóng gói cẩn thận.
-                  </p>
+      <Panel className="space-y-4">
+        {reviews.map((rev) => (
+          <div key={rev.id} className="border-b border-line pb-4 last:border-0 last:pb-0">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center font-bold text-primary text-xs">
+                  {rev.user?.full_name?.charAt(0)?.toUpperCase() || "U"}
                 </div>
-              ))}
+                <div>
+                  <p className="text-sm font-bold">{rev.user?.full_name || "Người dùng"}</p>
+                  <p className="text-xs text-muted">{formatDate(rev.created_at)}</p>
+                </div>
+              </div>
+              <RatingStars rating={rev.rating} />
             </div>
-          ) : (
-            <EmptyState title="Chưa có đánh giá" />
-          )}
-        </Panel>
-        <Panel>
-          <h3 className="font-bold text-ink">Viết đánh giá</h3>
-          <div className="mt-4 grid gap-3">
-            <Field label="Rating">
-              <Select>
-                <option>5 sao</option>
-                <option>4 sao</option>
-                <option>3 sao</option>
-                <option>2 sao</option>
-                <option>1 sao</option>
-              </Select>
-            </Field>
-            <Field label="Nội dung">
-              <Textarea placeholder="Chia sẻ trải nghiệm của bạn" />
-            </Field>
-            <Field label="Ảnh đánh giá">
-              <Input type="file" multiple />
-            </Field>
-            <Button onClick={() => showToast("Đã lưu đánh giá.", "success")}>Gửi đánh giá</Button>
+
+            {rev.comment && <p className="mt-2 text-sm text-ink">{rev.comment}</p>}
           </div>
-        </Panel>
-      </div>
+        ))}
+      </Panel>
     );
   }
+
 }

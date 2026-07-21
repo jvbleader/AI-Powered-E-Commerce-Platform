@@ -40,7 +40,7 @@ export default function SupportersAdminPage() {
       phone,
       roles: ["SUPPORTER" as const],
       status: "ACTIVE" as const,
-      avatarUrl: "https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=240&q=80",
+      avatarUrl: "",
       emailVerified: true,
       phoneVerified: true
     };
@@ -53,10 +53,10 @@ export default function SupportersAdminPage() {
   };
 
   return (
-    <Section title="Supporter accounts">
+    <Section title="Tài khoản hỗ trợ viên">
       <div className="grid gap-4 lg:grid-cols-[1fr_360px]">
         <DataTable
-          columns={["Name", "Email", "Status"]}
+          columns={["Họ tên", "Email", "Trạng thái"]}
           rows={supporters.map((user) => [user.fullName, user.email, user.status])}
         />
         <Panel>
@@ -64,7 +64,7 @@ export default function SupportersAdminPage() {
           <div className="mt-3 grid gap-3">
             <Input placeholder="Họ tên" value={fullName} onChange={(e) => setFullName(e.target.value)} />
             <Input placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} />
-            <Input placeholder="Phone" value={phone} onChange={(e) => setPhone(e.target.value)} />
+            <Input placeholder="Số điện thoại" value={phone} onChange={(e) => setPhone(e.target.value)} />
             <Button onClick={handleSubmit}>Tạo</Button>
           </div>
         </Panel>

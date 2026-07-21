@@ -59,6 +59,7 @@ export default function ProductListing({
         min_price: minPrice ? Number(minPrice) : undefined,
         max_price: maxPrice ? Number(maxPrice) : undefined,
         seller_id: sellerId || undefined,
+        shop_slug: shopSlug || undefined,
         min_rating: rating ? Number(rating) : undefined
       });
       if (isMounted) {
@@ -83,7 +84,8 @@ export default function ProductListing({
       isMounted = false;
       clearTimeout(timer);
     };
-  }, [keyword, sort, categorySlug, page, sellerId, rating, minPrice, maxPrice]);
+  }, [keyword, sort, categorySlug, shopSlug, page, sellerId, rating, minPrice, maxPrice]);
+
 
   useEffect(() => {
     setPage(1);
@@ -100,16 +102,19 @@ export default function ProductListing({
           <Input type="number" value={maxPrice} onChange={(event) => setMaxPrice(event.target.value)} placeholder="Đến" />
         </div>
       </Field>
-      <Field label="Seller">
-        <Select value={sellerId} onChange={(event) => setSellerId(event.target.value)}>
-          <option value="">Tất cả shop</option>
-          {store.state.shops.filter((shop) => shop.status === "APPROVED").map((shop) => (
-            <option key={shop.id} value={shop.id}>
-              {shop.shopName}
-            </option>
-          ))}
-        </Select>
-      </Field>
+      {!shopSlug && (
+        <Field label="Seller">
+          <Select value={sellerId} onChange={(event) => setSellerId(event.target.value)}>
+            <option value="">Tất cả shop</option>
+            {store.state.shops.filter((shop) => shop.status === "APPROVED").map((shop) => (
+              <option key={shop.id} value={shop.id}>
+                {shop.shopName}
+              </option>
+            ))}
+          </Select>
+        </Field>
+      )}
+
       <Field label="Rating tối thiểu">
         <Select value={rating} onChange={(event) => setRating(event.target.value)}>
           <option value="">Tất cả</option>

@@ -32,10 +32,37 @@ import { hotKeywords } from "@/store/initial-state";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/feedback";
 import { ProductGridSkeleton } from "@/components/ui/skeletons";
+import { RatingStars } from "@/components/shared/cards";
 import { fetchRecommendedProducts, fetchPublicProducts } from "@/services/product-api";
 import { useMarketplaceStore } from "@/store/use-marketplace-store";
 import { BRAND_NAME } from "@/lib/constants";
 import type { Product, ProductVariant, Shop } from "@/types/models";
+import { sendChatMessage } from "@/services/chat-ai-api";
+
+/** Đếm ngược tới nửa đêm (end-of-day flash sale) */
+function FlashCountdown() {
+  const getSecondsToMidnight = () => {
+    const now = new Date();
+    const midnight = new Date(now);
+    midnight.setHours(24, 0, 0, 0);
+    return Math.max(0, Math.floor((midnight.getTime() - now.getTime()) / 1000));
+  };
+  const [secs, setSecs] = useState(getSecondsToMidnight);
+  useEffect(() => {
+    const id = setInterval(() => setSecs(getSecondsToMidnight()), 1000);
+    return () => clearInterval(id);
+  }, []);
+  const h = String(Math.floor(secs / 3600)).padStart(2, "0");
+  const m = String(Math.floor((secs % 3600) / 60)).padStart(2, "0");
+  const s = String(secs % 60).padStart(2, "0");
+  return (
+    <>
+      <span className="rounded-lg bg-amber-100 px-2 py-1 border border-amber-200 shadow-2xs">{h}</span> :
+      <span className="rounded-lg bg-amber-100 px-2 py-1 border border-amber-200 shadow-2xs">{m}</span> :
+      <span className="rounded-lg bg-amber-100 px-2 py-1 border border-amber-200 shadow-2xs animate-pulse">{s}</span>
+    </>
+  );
+}
 
 const heroSlides = [
   {
@@ -152,6 +179,7 @@ export default function HomePageComponent() {
   const [activeTab, setActiveTab] = useState<"recommended" | "newest">("recommended");
   const [aiPrompt, setAiPrompt] = useState("");
   const [aiResponse, setAiResponse] = useState<string | null>(null);
+  const [isLoadingAi, setIsLoadingAi] = useState(false);
 
   const [currentHeroSlide, setCurrentHeroSlide] = useState(0);
   const [isAutoPlaying, setIsAutoPlaying] = useState(true);
@@ -172,8 +200,8 @@ export default function HomePageComponent() {
     const loadHomeData = async () => {
       setLoading(true);
       const [recommendRes, newestRes] = await Promise.all([
-        fetchRecommendedProducts(8),
-        fetchPublicProducts({ sort_by: "newest", size: 8 })
+        fetchRecommendedProducts(20),
+        fetchPublicProducts({ sort_by: "newest", size: 20 })
       ]);
       if (isMounted) {
         if (recommendRes.ok && recommendRes.products) {
@@ -207,15 +235,26 @@ export default function HomePageComponent() {
     };
   }, []);
 
-  const approvedShops = localShops.filter((shop) => shop.status === "APPROVED");
+  const approvedShops = localShops.filter((shop) => shop.status === "APPROVED").sort((a, b) => (b.totalSold || 0) - (a.totalSold || 0));
   const heroProduct = bestSellers[0];
   const heroShop = heroProduct ? localShops.find((shop) => shop.id === heroProduct.sellerId) : undefined;
   const heroVariant = heroProduct ? localVariants.find((v) => v.productId === heroProduct.id) : undefined;
 
-  const handleAiSearch = (e: React.FormEvent) => {
+  const handleAiSearch = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!aiPrompt.trim()) return;
-    setAiResponse(`Shepoo AI gợi ý: Dựa trên nhu cầu "${aiPrompt.trim()}", các sản phẩm bên dưới có đánh giá tốt nhất và ưu đãi giảm đến 30%!`);
+    setIsLoadingAi(true);
+    setAiResponse(null);
+    try {
+      const res = await sendChatMessage(aiPrompt);
+      setAiResponse(res.reply || `Đã phân tích: ${aiPrompt}`);
+    } catch (error) {
+      console.error(error);
+      showToast("Gặp lỗi khi gọi AI. Vui lòng thử lại sau.", "danger");
+      setAiResponse("Xin lỗi, hệ thống AI đang bận. Vui lòng thử lại sau.");
+    } finally {
+      setIsLoadingAi(false);
+    }
   };
 
   return (
@@ -280,7 +319,7 @@ export default function HomePageComponent() {
                 <div className="flex flex-wrap items-center gap-3 pt-2">
                   <Button
                     onClick={() => router.push(activeSlide.ctaPrimaryLink)}
-                    className="rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 px-6 py-3 text-sm font-bold text-white shadow-lg shadow-emerald-600/25 transition-all duration-200 hover:from-emerald-500 hover:to-teal-500 hover:shadow-emerald-600/40 active:scale-95"
+                    className="rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 px-6 py-3 text-sm font-bold text-white shadow-lg transition-all duration-200 hover:from-emerald-500 hover:to-teal-500 active:scale-95"
                   >
                     {activeSlide.ctaPrimary}
                     <ArrowUpRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
@@ -351,7 +390,7 @@ export default function HomePageComponent() {
                     aria-label={`Chuyển đến slide ${index + 1}`}
                     className={`h-2.5 rounded-full transition-all duration-300 ${
                       currentHeroSlide === index
-                        ? "w-8 bg-emerald-600 shadow-xs shadow-emerald-600/50"
+                        ? "w-8 bg-emerald-600 shadow-xs"
                         : "w-2.5 bg-slate-300 hover:bg-slate-400"
                     }`}
                   />
@@ -393,7 +432,11 @@ export default function HomePageComponent() {
                 <Flame className="h-3.5 w-3.5 fill-amber-500 text-amber-500 animate-bounce-subtle" />
                 Siêu Phẩm Nổi Bật
               </span>
-              <span className="text-xs font-bold text-rose-600 bg-rose-50 px-2 py-0.5 rounded-md border border-rose-200 animate-pulse">Giảm 25%</span>
+              {heroVariant?.salePrice && heroVariant.salePrice < heroVariant.price ? (
+                <span className="text-xs font-bold text-rose-600 bg-rose-50 px-2 py-0.5 rounded-md border border-rose-200 animate-pulse">
+                  Giảm {Math.round((1 - heroVariant.salePrice / heroVariant.price) * 100)}%
+                </span>
+              ) : null}
             </div>
 
             {heroProduct ? (
@@ -410,27 +453,17 @@ export default function HomePageComponent() {
                   <p className="text-xs font-semibold text-slate-500">{heroShop?.shopName || "Verified Shop"}</p>
                   <h3 className="line-clamp-1 font-heading text-lg font-bold text-slate-900">{heroProduct.name}</h3>
 
-                  <div className="mt-2 flex items-center justify-between">
+                  <div className="mt-2 flex flex-col gap-1.5">
                     <p className="font-heading text-2xl font-black text-emerald-700">
-                      {heroVariant ? `${heroVariant.price.toLocaleString("vi-VN")} ₫` : "---"}
+                      {heroVariant ? `${(heroVariant.salePrice ?? heroVariant.price).toLocaleString("vi-VN")} ₫` : "---"}
                     </p>
-                    <div className="flex items-center gap-1 text-xs font-bold text-amber-600">
-                      <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
-                      <span>4.9 (120+ bán)</span>
+                    <div className="flex items-center gap-3">
+                      <RatingStars rating={heroProduct.averageRating} count={heroProduct.reviewCount} />
+                      <span className="text-xs font-semibold text-slate-500">| {heroProduct.soldCount}+ đã bán</span>
                     </div>
                   </div>
                 </div>
 
-                {/* Stock Scarcity Progress */}
-                <div className="space-y-1">
-                  <div className="flex justify-between text-[11px] font-bold text-slate-500">
-                    <span>Đã bán 85%</span>
-                    <span className="text-amber-600 animate-pulse">Chỉ còn 3 sản phẩm!</span>
-                  </div>
-                  <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100">
-                    <div className="h-full w-[85%] rounded-full bg-gradient-to-r from-amber-500 to-rose-500 animate-gradient-flow" />
-                  </div>
-                </div>
 
                 <a
                   href={`/shops/${heroShop?.shopSlug || "shop"}/products/${heroProduct.slug}`}
@@ -462,9 +495,7 @@ export default function HomePageComponent() {
 
               <div className="flex items-center gap-1.5 font-mono text-xs font-extrabold text-amber-700">
                 <Clock className="h-4 w-4 text-amber-600 animate-spin-slow" />
-                <span className="rounded-lg bg-amber-100 px-2 py-1 border border-amber-200 shadow-2xs">04</span> :
-                <span className="rounded-lg bg-amber-100 px-2 py-1 border border-amber-200 shadow-2xs">28</span> :
-                <span className="rounded-lg bg-amber-100 px-2 py-1 border border-amber-200 shadow-2xs animate-pulse">19</span>
+                <FlashCountdown />
               </div>
             </div>
 
@@ -504,45 +535,29 @@ export default function HomePageComponent() {
               />
               <button
                 type="submit"
-                className="shrink-0 rounded-xl bg-indigo-600 px-4 py-2 text-xs font-bold text-white transition-all duration-200 hover:bg-indigo-500 active:scale-95 shadow-md shadow-indigo-500/20"
+                disabled={isLoadingAi}
+                className="shrink-0 rounded-xl bg-indigo-600 px-4 py-2 text-xs font-bold text-white transition-all duration-200 hover:bg-indigo-500 active:scale-95 shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Hỏi AI
+                {isLoadingAi ? "Đang nghĩ..." : "Hỏi AI"}
               </button>
             </form>
 
-            {aiResponse && (
+            {(aiResponse || isLoadingAi) && (
               <div className="mt-3 animate-scale-in rounded-xl border border-indigo-200 bg-indigo-50 p-3 text-xs font-medium text-indigo-900 shadow-2xs">
-                {aiResponse}
+                {isLoadingAi && !aiResponse ? (
+                  <div className="flex items-center gap-2">
+                    <div className="h-3 w-3 rounded-full bg-indigo-400 animate-bounce"></div>
+                    <div className="h-3 w-3 rounded-full bg-indigo-400 animate-bounce" style={{ animationDelay: '0.1s' }}></div>
+                    <div className="h-3 w-3 rounded-full bg-indigo-400 animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                  </div>
+                ) : (
+                  <div className="prose prose-sm prose-indigo max-w-none">
+                    {aiResponse}
+                  </div>
+                )}
               </div>
             )}
           </div>
-        </div>
-      </section>
-
-      {/* SECTION 3: BENTO CATEGORY MATRIX */}
-      <section className="mx-auto max-w-7xl animate-fade-in-up">
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="font-heading text-xl font-extrabold text-slate-900 sm:text-2xl">Danh Mục Mua Sắm</h2>
-        </div>
-
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
-          {store.state.categories.map((cat) => (
-            <a
-              key={cat.id}
-              href={`/categories/${cat.slug}`}
-              className="bento-card group hover-lift flex items-center gap-3 rounded-2xl p-4 transition-all duration-300 bg-white/90 border-slate-200/80"
-            >
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700 group-hover:bg-emerald-600 group-hover:text-white group-hover:rotate-6 transition-all duration-300">
-                <Layers className="h-5 w-5" />
-              </div>
-              <div>
-                <h4 className="font-heading text-sm font-bold text-slate-800 group-hover:text-emerald-700 transition-colors">
-                  {cat.name}
-                </h4>
-                <p className="text-[11px] font-medium text-slate-400 group-hover:translate-x-1 transition-transform duration-200">Khám phá &rarr;</p>
-              </div>
-            </a>
-          ))}
         </div>
       </section>
 
@@ -561,7 +576,7 @@ export default function HomePageComponent() {
                 activeTab === "recommended" ? "bg-white text-emerald-700 shadow-sm" : "text-slate-600 hover:text-slate-900"
               }`}
             >
-              🔥 Nổi Bật
+              Nổi Bật
             </button>
             <button
               onClick={() => setActiveTab("newest")}
@@ -569,7 +584,7 @@ export default function HomePageComponent() {
                 activeTab === "newest" ? "bg-white text-emerald-700 shadow-sm" : "text-slate-600 hover:text-slate-900"
               }`}
             >
-              ✨ Mới Nhất
+              Mới Nhất
             </button>
           </div>
         </div>
@@ -578,17 +593,13 @@ export default function HomePageComponent() {
           {loading ? (
             <ProductGridSkeleton count={4} />
           ) : (activeTab === "recommended" ? bestSellers : newest).length > 0 ? (
-            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
               {(activeTab === "recommended" ? bestSellers : newest).map((product) => (
                 <CyberProductCard
                   key={product.id}
                   product={product}
                   variant={localVariants.find((v) => v.productId === product.id)}
                   shop={localShops.find((s) => s.id === product.sellerId)}
-                  onAddToCart={async (variantId) => {
-                    const result = await store.addToCart(variantId, 1);
-                    showToast(result.message, result.ok ? "success" : "danger");
-                  }}
                 />
               ))}
             </div>
@@ -600,7 +611,7 @@ export default function HomePageComponent() {
 
       {/* SECTION 5: VERIFIED SHOPS MATRIX */}
       <section className="mx-auto max-w-7xl">
-        <h2 className="mb-4 font-heading text-xl font-extrabold text-slate-900 sm:text-2xl">Gian Hàng Đối Tác Verified</h2>
+        <h2 className="mb-4 font-heading text-xl font-extrabold text-slate-900 sm:text-2xl">Shop nổi bật</h2>
 
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {approvedShops.slice(0, 6).map((shop) => (
@@ -632,16 +643,14 @@ export default function HomePageComponent() {
 function CyberProductCard({
   product,
   variant,
-  shop,
-  onAddToCart
+  shop
 }: {
   product: Product;
   variant?: ProductVariant;
   shop?: Shop;
-  onAddToCart: (variantId: string) => void;
 }) {
   return (
-    <div className="bento-card group flex flex-col justify-between overflow-hidden rounded-2xl border border-slate-200/80 bg-white/90 p-4 transition-all hover:-translate-y-1 hover:border-slate-300">
+    <a href={`/shops/${shop?.shopSlug || "shop"}/products/${product.slug}`} className="bento-card group flex flex-col justify-between overflow-hidden rounded-2xl border border-slate-200/80 bg-white/90 p-4 transition-all hover:-translate-y-1 hover:border-slate-300">
       <div>
         <div className="relative aspect-square w-full overflow-hidden rounded-xl bg-slate-50">
           <img
@@ -649,11 +658,6 @@ function CyberProductCard({
             alt={product.name}
             className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
           />
-          <div className="absolute left-2 top-2">
-            <span className="rounded-md bg-white/90 px-2 py-0.5 text-[10px] font-bold text-emerald-700 border border-emerald-200 shadow-sm">
-              Verified
-            </span>
-          </div>
         </div>
 
         <div className="mt-3">
@@ -661,25 +665,20 @@ function CyberProductCard({
           <h4 className="line-clamp-1 font-heading text-sm font-bold text-slate-900 group-hover:text-emerald-700">
             {product.name}
           </h4>
+          <div className="mt-1.5 flex items-center justify-between gap-1">
+            <RatingStars rating={product.averageRating} count={product.reviewCount} />
+            <span className="text-[11px] font-semibold text-slate-600">Đã bán <span className="text-emerald-600 font-bold">{product.soldCount.toLocaleString("vi-VN")}</span></span>
+          </div>
         </div>
       </div>
 
-      <div className="mt-4 border-t border-slate-100 pt-3 flex items-center justify-between">
-        <div>
-          <p className="text-[10px] text-slate-400">Giá bán</p>
-          <p className="font-heading text-base font-extrabold text-emerald-700">
-            {variant ? `${variant.price.toLocaleString("vi-VN")} ₫` : "---"}
-          </p>
-        </div>
-
-        <button
-          onClick={() => variant && onAddToCart(variant.id)}
-          className="rounded-xl bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-500 transition-colors shadow-sm"
-        >
-          + Thêm
-        </button>
+      <div className="mt-3 border-t border-slate-100 pt-3">
+        <p className="text-[10px] text-slate-400">Giá bán</p>
+        <p className="font-heading text-base font-extrabold text-emerald-700">
+          {variant ? `${variant.price.toLocaleString("vi-VN")} ₫` : "---"}
+        </p>
       </div>
-    </div>
+    </a>
   );
 }
 

@@ -18,7 +18,7 @@ def prepare_messages(message: str, history: List[Dict[str, str]] = None):
         history = []
         
     messages = [
-        SystemMessage(content="Bạn là trợ lý AI của Shepoo — nền tảng thương mại điện tử. Hãy hỗ trợ khách hàng tìm sản phẩm, giải đáp thắc mắc về đơn hàng, và tư vấn mua sắm một cách ngắn gọn, súc tích và thân thiện.")
+        SystemMessage(content="Bạn là trợ lý AI của Shepoo — nền tảng thương mại điện tử. Hãy hỗ trợ khách hàng tìm sản phẩm, giải đáp thắc mắc về đơn hàng, và tư vấn mua sắm một cách ngắn gọn, súc tích và thân thiện. Chỉ trả lời dựa trên các kiến thức về shepoo mà bạn được tiếp cận, nếu bạn không có kiến thức về vấn đề nào, từ chối trả lời nó!")
     ]
     
     for h in history:

@@ -329,14 +329,23 @@ async def get_public_products(
     keyword: Optional[str] = None,
     category_slug: Optional[str] = None,
     sort_by: Optional[str] = None,
+    min_price: Optional[float] = None,
+    max_price: Optional[float] = None,
+    seller_id: Optional[int] = None,
+    shop_slug: Optional[str] = None,
+    min_rating: Optional[float] = None,
     skip: int = 0,
     limit: int = 20,
 ) -> tuple[List[Product], int]:
     base_filter = (
         select(Product)
         .join(SellerProfile, Product.seller_id == SellerProfile.id)
-        .filter(Product.status == "ACTIVE", SellerProfile.status == "APPROVED")
+        .filter(Product.status.in_(["ACTIVE", "OUT_OF_STOCK"]), SellerProfile.status == "APPROVED")
     )
+
+
+    if shop_slug:
+        base_filter = base_filter.filter(SellerProfile.shop_slug == shop_slug)
 
     if category_slug:
         base_filter = (
@@ -353,6 +362,27 @@ async def get_public_products(
                 Product.name.ilike(search_pattern),
                 Product.short_description.ilike(search_pattern),
             )
+        )
+        
+    if min_price is not None or max_price is not None:
+        price_filter = (
+            select(1)
+            .where(ProductVariant.product_id == Product.id)
+            .correlate(Product)
+        )
+        if min_price is not None:
+            price_filter = price_filter.where(ProductVariant.price >= min_price)
+        if max_price is not None:
+            price_filter = price_filter.where(ProductVariant.price <= max_price)
+        base_filter = base_filter.filter(price_filter.exists())
+
+    if seller_id is not None:
+        base_filter = base_filter.filter(Product.seller_id == seller_id)
+
+
+    if min_rating is not None:
+        base_filter = base_filter.filter(
+            or_(Product.average_rating >= min_rating, Product.review_count == 0)
         )
 
     # Get total count

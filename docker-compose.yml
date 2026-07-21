@@ -27,13 +27,15 @@ services:
     depends_on:
       mysql:
         condition: service_healthy
+    volumes:
+      - ./backend:/app
     environment:
       APP_ENV: development
       PYTHONPATH: /app/app:/app
       PORT: "8000"
       INIT_DB_ON_START: ${INIT_DB_ON_START:-true}
-      DATABASE_URL: mysql+asyncmy://${MYSQL_USER:-ecommerce_user}:${MYSQL_PASSWORD:-ecommerce_password}@mysql:3306/${MYSQL_DATABASE:-ecommerce_db}
-      ASYNC_DATABASE_URL: mysql+asyncmy://${MYSQL_USER:-ecommerce_user}:${MYSQL_PASSWORD:-ecommerce_password}@mysql:3306/${MYSQL_DATABASE:-ecommerce_db}
+      DATABASE_URL: mysql+asyncmy://${MYSQL_USER:-ecommerce_user}:Phamhai271105%40@mysql:3306/${MYSQL_DATABASE:-ecommerce_db}
+      ASYNC_DATABASE_URL: mysql+asyncmy://${MYSQL_USER:-ecommerce_user}:Phamhai271105%40@mysql:3306/${MYSQL_DATABASE:-ecommerce_db}
       ACCESS_TOKEN_SECRET: ${ACCESS_TOKEN_SECRET:-dev-access-token-secret-change-me}
       TOKEN_HASH_PEPPER: ${TOKEN_HASH_PEPPER:-dev-token-hash-pepper-change-me}
       ACCESS_TOKEN_TTL_MINUTES: ${ACCESS_TOKEN_TTL_MINUTES:-15}
@@ -59,6 +61,7 @@ services:
       API_KEY_OPENROUTER: ${API_KEY_OPENROUTER:-}
       BASE_URL_OPENROUTER: ${BASE_URL_OPENROUTER:-https://openrouter.ai/api/v1}
       MODEL_OPENROUTER: ${MODEL_OPENROUTER:-}
+      WATCHFILES_FORCE_POLLING: "true"  # Fix hot-reload on Docker Desktop Windows (no inotify)
     ports:
       - "${BACKEND_PORT:-8000}:8000"
     healthcheck:
@@ -75,6 +78,10 @@ services:
     depends_on:
       backend:
         condition: service_healthy
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - /app/.next
     environment:
       NODE_ENV: development
       NEXT_TELEMETRY_DISABLED: "1"
