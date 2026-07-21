@@ -3,8 +3,8 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from core.database import get_db
-from dependencies.auth import get_current_user
+from core.database import DBSession
+from dependencies.auth import CurrentUser
 from models.user import User
 from schemas.payment_schema import (
     MockPaymentCallbackRequest,
@@ -20,9 +20,9 @@ router = APIRouter(prefix="/payments", tags=["Payment"])
     "/create", response_model=PaymentResponse, status_code=status.HTTP_201_CREATED
 )
 async def create_payment(
-    user: Annotated[User, Depends(get_current_user)],
+    user: CurrentUser,
     data: PaymentCreateRequest,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: DBSession,
 ):
     try:
         payment = await payment_service.create_payment(user, data, db)
@@ -36,7 +36,7 @@ async def create_payment(
 @router.post("/mock-callback", response_model=PaymentResponse)
 async def mock_callback(
     data: MockPaymentCallbackRequest,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: DBSession,
 ):
     try:
         # Trong thực tế, endpoint callback thường được xác thực bằng chữ ký (signature)
@@ -47,3 +47,4 @@ async def mock_callback(
     except Exception:
         await db.rollback()
         raise
+

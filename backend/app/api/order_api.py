@@ -3,8 +3,8 @@ from typing import Annotated, List
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from core.database import get_db
-from dependencies.auth import get_current_user
+from core.database import DBSession
+from dependencies.auth import CurrentUser
 from models.user import User
 from schemas.auth_schema import MessageResponse
 from schemas.order_schema import (
@@ -25,9 +25,9 @@ router = APIRouter(prefix="/orders", tags=["Order"])
     status_code=status.HTTP_201_CREATED,
 )
 async def checkout_cart(
-    user: Annotated[User, Depends(get_current_user)],
+    user: CurrentUser,
     data: CheckoutCartRequest,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: DBSession,
 ):
     try:
         orders = await order_service.checkout_from_cart(user, data, db)
@@ -44,9 +44,9 @@ async def checkout_cart(
     status_code=status.HTTP_201_CREATED,
 )
 async def checkout_direct(
-    user: Annotated[User, Depends(get_current_user)],
+    user: CurrentUser,
     data: CheckoutDirectRequest,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: DBSession,
 ):
     try:
         orders = await order_service.checkout_direct(user, data, db)
@@ -59,8 +59,8 @@ async def checkout_direct(
 
 @router.get("", response_model=OrderListResponse)
 async def get_my_orders(
-    user: Annotated[User, Depends(get_current_user)],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    user: CurrentUser,
+    db: DBSession,
 ):
     orders = await order_service.get_user_orders(user, db)
     return OrderListResponse(items=orders, total=len(orders))
@@ -69,8 +69,8 @@ async def get_my_orders(
 @router.get("/{order_code}", response_model=OrderResponse)
 async def get_order_detail(
     order_code: str,
-    user: Annotated[User, Depends(get_current_user)],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    user: CurrentUser,
+    db: DBSession,
 ):
     return await order_service.get_order_detail(user, order_code, db)
 
@@ -78,8 +78,8 @@ async def get_order_detail(
 @router.patch("/{order_code}/confirm-receipt", response_model=OrderResponse)
 async def confirm_receipt(
     order_code: str,
-    user: Annotated[User, Depends(get_current_user)],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    user: CurrentUser,
+    db: DBSession,
 ):
     try:
         order = await order_service.confirm_receipt(user, order_code, db)
@@ -96,8 +96,8 @@ async def confirm_receipt(
 async def cancel_order(
     order_code: str,
     data: CancelOrderRequest,
-    user: Annotated[User, Depends(get_current_user)],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    user: CurrentUser,
+    db: DBSession,
 ):
     try:
         order = await order_service.cancel_order(user, order_code, data.reason, db)
@@ -107,3 +107,4 @@ async def cancel_order(
     except Exception:
         await db.rollback()
         raise
+

@@ -17,6 +17,13 @@ engine = create_async_engine(ASYNC_DATABASE_URL, pool_pre_ping=True)
 AsyncSessionLocal = async_sessionmaker(engine, expire_on_commit=False)
 
 
+from typing import Annotated
+from fastapi import Depends
+
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
     async with AsyncSessionLocal() as session:
         yield session
+
+
+DBSession = Annotated[AsyncSession, Depends(get_db)]
+

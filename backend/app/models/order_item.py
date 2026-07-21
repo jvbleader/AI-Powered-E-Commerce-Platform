@@ -68,3 +68,7 @@ class OrderItem(Base):
         back_populates="order_item",
         uselist=False,
     )
+
+    @property
+    def is_reviewed(self) -> bool:
+        return self.review is not None

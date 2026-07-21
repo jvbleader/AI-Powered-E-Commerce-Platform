@@ -1,6 +1,6 @@
 from datetime import datetime
 from decimal import Decimal
-from typing import List, Optional
+from typing import Any, List, Optional
 
 from pydantic import BaseModel, Field
 
@@ -50,6 +50,14 @@ class OrderItemResponse(BaseModel):
     unit_price: Decimal
     quantity: int
     subtotal: Decimal
+    is_reviewed: bool = False
+
+    @classmethod
+    def model_validate(cls, obj: Any, *args, **kwargs):
+        inst = super().model_validate(obj, *args, **kwargs)
+        if hasattr(obj, "review") and getattr(obj, "review", None) is not None:
+            inst.is_reviewed = True
+        return inst
 
     class Config:
         from_attributes = True

@@ -139,7 +139,8 @@ export const normalizeBackendOrder = (
     skuSnapshot: item.sku_snapshot || "",
     unitPrice: Number(item.unit_price),
     quantity: item.quantity,
-    subtotal: Number(item.subtotal)
+    subtotal: Number(item.subtotal),
+    isReviewed: Boolean(item.is_reviewed)
   })),
   shipment: backendOrder.shipment ? {
     shippingProviderName: backendOrder.shipment.shipping_provider_name || "Chưa có thông tin",

@@ -2,7 +2,7 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel
-from core.database import get_db
+from core.database import DBSession
 import services.product_public_service as product_public_service
 import repositories.seller_profile_repository as seller_profile_repo
 from schemas.product_public_schema import (
@@ -10,7 +10,7 @@ from schemas.product_public_schema import (
     ProductDetailPublicResponse,
     ProductListResponse,
 )
-from dependencies.auth import get_current_user_optional
+from dependencies.auth import CurrentUserOptional
 
 router = APIRouter(prefix="", tags=["Public Products"])
 
@@ -38,6 +38,7 @@ class ShopPublicDetailResponse(BaseModel):
 
 @router.get("/products", response_model=ProductListResponse)
 async def get_products(
+    db: DBSession,
     keyword: Optional[str] = Query(None, description="Search by name or description"),
     category: Optional[str] = Query(None, description="Filter by category slug"),
     sort_by: Optional[str] = Query(
@@ -51,7 +52,6 @@ async def get_products(
     min_rating: Optional[float] = Query(None, description="Minimum average rating"),
     page: int = Query(1, ge=1),
     size: int = Query(20, ge=1, le=100),
-    db: AsyncSession = Depends(get_db),
 ):
     return await product_public_service.get_public_product_list(
         db=db,
@@ -70,9 +70,9 @@ async def get_products(
 
 @router.get("/products/recommendations", response_model=List[ProductPublicResponse])
 async def get_product_recommendations(
+    current_user: CurrentUserOptional,
+    db: DBSession,
     limit: int = Query(10, ge=1, le=50),
-    current_user=Depends(get_current_user_optional),
-    db: AsyncSession = Depends(get_db),
 ):
     user_id = current_user.id if current_user else None
     return await product_public_service.get_product_recommendations(
@@ -82,7 +82,7 @@ async def get_product_recommendations(
 
 @router.get("/shops/{shop_slug}", response_model=ShopPublicDetailResponse)
 async def get_public_shop_detail(
-    shop_slug: str, db: AsyncSession = Depends(get_db)
+    shop_slug: str, db: DBSession
 ):
     seller = await seller_profile_repo.get_seller_profile_by_shop_slug(shop_slug, db)
     if not seller or seller.status != "APPROVED":
@@ -109,15 +109,16 @@ async def get_public_shop_detail(
     )
 
 
-
 @router.get(
     "/shops/{shop_slug}/products/{product_slug}",
     response_model=ProductDetailPublicResponse,
 )
 async def get_product_detail(
-    shop_slug: str, product_slug: str, db: AsyncSession = Depends(get_db)
+    shop_slug: str, product_slug: str, db: DBSession
 ):
     return await product_public_service.get_public_product_detail(
         db=db, shop_slug=shop_slug, product_slug=product_slug
     )
+
+
 

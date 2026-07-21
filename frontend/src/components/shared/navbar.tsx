@@ -373,7 +373,7 @@ export function MarketplaceHeader() {
                               <div className="font-bold text-slate-900 flex items-center justify-between">
                                 <span>{n.title}</span>
                                 <span className="text-[9px] font-medium text-slate-400">
-                                  {new Date(n.createdAt).toLocaleDateString("vi-VN")}
+                                  {formatDate(n.createdAt)}
                                 </span>
                               </div>
                               <p className="mt-0.5 text-[11px] text-slate-600 leading-snug">{n.content}</p>

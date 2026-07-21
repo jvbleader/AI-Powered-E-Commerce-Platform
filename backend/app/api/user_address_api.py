@@ -2,8 +2,8 @@ from typing import Annotated, List
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from core.database import get_db
-from dependencies.auth import get_current_user
+from core.database import DBSession
+from dependencies.auth import CurrentUser
 from models.user import User
 from schemas.user_address_schema import (
     UserAddressCreate,
@@ -18,8 +18,8 @@ router = APIRouter(prefix="/addresses", tags=["User Addresses"])
 
 @router.get("", response_model=List[UserAddressResponse])
 async def get_my_addresses(
-    user: Annotated[User, Depends(get_current_user)],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    user: CurrentUser,
+    db: DBSession,
 ):
     return await user_address_service.get_my_addresses(user, db)
 
@@ -28,9 +28,9 @@ async def get_my_addresses(
     "", response_model=UserAddressResponse, status_code=status.HTTP_201_CREATED
 )
 async def create_address(
-    user: Annotated[User, Depends(get_current_user)],
+    user: CurrentUser,
     data: UserAddressCreate,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: DBSession,
 ):
     try:
         result = await user_address_service.create_address(user, data, db)
@@ -44,9 +44,9 @@ async def create_address(
 @router.put("/{address_id}", response_model=UserAddressResponse)
 async def update_address(
     address_id: int,
-    user: Annotated[User, Depends(get_current_user)],
+    user: CurrentUser,
     data: UserAddressUpdate,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: DBSession,
 ):
     try:
         result = await user_address_service.update_address(user, address_id, data, db)
@@ -60,8 +60,8 @@ async def update_address(
 @router.delete("/{address_id}", response_model=MessageResponse)
 async def delete_address(
     address_id: int,
-    user: Annotated[User, Depends(get_current_user)],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    user: CurrentUser,
+    db: DBSession,
 ):
     try:
         await user_address_service.delete_address(user, address_id, db)
@@ -70,3 +70,4 @@ async def delete_address(
         await db.rollback()
         raise
     return MessageResponse(message="Đã xóa địa chỉ")
+

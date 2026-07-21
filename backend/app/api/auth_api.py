@@ -4,8 +4,8 @@ from fastapi import APIRouter, Depends, Request, Response, status
 from pydantic import EmailStr
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from core.database import get_db
-from dependencies.auth import get_current_user
+from core.database import DBSession
+from dependencies.auth import CurrentUser
 from models.user import User
 from repositories import user_role_repository
 from schemas.auth_schema import (
@@ -32,7 +32,7 @@ router = APIRouter(prefix="/auth", tags=["Auth"])
 @router.post(
     "/register", response_model=RegisterResponse, status_code=status.HTTP_200_OK
 )
-async def register(data: RegisterRequest, db: Annotated[AsyncSession, Depends(get_db)]):
+async def register(data: RegisterRequest, db: DBSession):
     try:
         result = await auth_service.register_user(data=data, db=db)
         await db.commit()
@@ -48,7 +48,7 @@ async def register(data: RegisterRequest, db: Annotated[AsyncSession, Depends(ge
     response_model=RouterStatusResponse,
     status_code=status.HTTP_202_ACCEPTED,
 )
-async def verify_email(token: str, db: Annotated[AsyncSession, Depends(get_db)]):
+async def verify_email(token: str, db: DBSession):
     try:
         await verify_email_service.verify_email(token=token, db=db)
         await db.commit()
@@ -65,7 +65,7 @@ async def verify_email(token: str, db: Annotated[AsyncSession, Depends(get_db)])
     status_code=status.HTTP_202_ACCEPTED,
 )
 async def send_verify_email(
-    email: str, full_name: str, db: Annotated[AsyncSession, Depends(get_db)]
+    email: str, full_name: str, db: DBSession
 ):
     try:
         await verify_email_service.send_email_token(email, full_name, db)
@@ -83,7 +83,7 @@ async def send_verify_email(
     status_code=status.HTTP_202_ACCEPTED,
 )
 async def verify_phone(
-    phone: str, otp: str, db: Annotated[AsyncSession, Depends(get_db)]
+    phone: str, otp: str, db: DBSession
 ):
     try:
         await verify_phone_service.verify_phone(phone=phone, otp=otp, db=db)
@@ -100,7 +100,7 @@ async def verify_phone(
     response_model=None,
     status_code=status.HTTP_200_OK,
 )
-async def send_verify_phone(phone: str, db: Annotated[AsyncSession, Depends(get_db)]):
+async def send_verify_phone(phone: str, db: DBSession):
     try:
         await verify_phone_service.send_phone_otp(phone, db)
         await db.commit()
@@ -118,7 +118,7 @@ async def login(
     data: LoginRequest,
     request: Request,
     response: Response,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: DBSession,
 ):
     try:
         result = await auth_service.login(data, request, db)
@@ -139,7 +139,7 @@ async def login(
     status_code=status.HTTP_202_ACCEPTED,
 )
 async def refresh(
-    request: Request, response: Response, db: Annotated[AsyncSession, Depends(get_db)]
+    request: Request, response: Response, db: DBSession
 ):
     ref_token = request.cookies.get("refresh_token")
     try:
@@ -158,8 +158,8 @@ async def refresh(
     response_model=UserMeResponse,
 )
 async def get_me(
-    current_user: Annotated[User, Depends(get_current_user)],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: CurrentUser,
+    db: DBSession,
 ):
     return await auth_service.user_to_response(current_user, db)
 
@@ -170,8 +170,8 @@ async def get_me(
 )
 async def update_me(
     data: UserUpdateRequest,
-    current_user: Annotated[User, Depends(get_current_user)],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: CurrentUser,
+    db: DBSession,
 ):
     try:
         result = await auth_service.update_profile(current_user, data, db)
@@ -187,7 +187,7 @@ async def update_me(
     response_model=MessageResponse,
 )
 async def logout(
-    request: Request, response: Response, db: Annotated[AsyncSession, Depends(get_db)]
+    request: Request, response: Response, db: DBSession
 ):
     ref_token = request.cookies.get("refresh_token")
 
@@ -207,9 +207,9 @@ async def logout(
     response_model=MessageResponse,
 )
 async def logout_all(
-    user: Annotated[User, Depends(get_current_user)],
+    user: CurrentUser,
     response: Response,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: DBSession,
 ):
     try:
         await auth_service.logout_all(user, db)
@@ -224,9 +224,9 @@ async def logout_all(
 
 @router.post("/change-password", response_model=MessageResponse)
 async def change_password(
-    user: Annotated[User, Depends(get_current_user)],
+    user: CurrentUser,
     data: ChangePasswordRequest,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: DBSession,
 ):
     try:
         await password_service.change_password(user=user, data=data, db=db)
@@ -240,7 +240,7 @@ async def change_password(
 
 @router.post("/reset-password", response_model=MessageResponse)
 async def reset_password(
-    token: str, data: ResetPasswordRequest, db: Annotated[AsyncSession, Depends(get_db)]
+    token: str, data: ResetPasswordRequest, db: DBSession
 ):
     try:
         await password_service.reset_pasword(token, data, db)
@@ -257,7 +257,7 @@ async def reset_password(
 )
 async def send_reset_password_email(
     email: EmailStr,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: DBSession,
 ):
     try:
         await password_service.send_reset_password_email(email, db)
@@ -267,3 +267,4 @@ async def send_reset_password_email(
         raise
 
     return MessageResponse(message="Đã gửi email.")
+

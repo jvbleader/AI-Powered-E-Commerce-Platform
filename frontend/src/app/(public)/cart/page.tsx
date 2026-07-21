@@ -63,9 +63,13 @@ export default function CartPage() {
                           onChange={(event) => store.updateCartItem(row.item.id, { isSelected: event.target.checked })}
                           aria-label={`Chọn ${row.product.name}`}
                         />
-                        <img src={row.product.thumbnailUrl} alt={row.product.name} className="h-20 w-20 rounded-panel object-cover" />
+                        <a href={`/shops/${group.shop.shopSlug}/products/${row.product.slug}`} className="block overflow-hidden rounded-panel">
+                          <img src={row.product.thumbnailUrl} alt={row.product.name} className="h-20 w-20 rounded-panel object-cover transition-transform hover:scale-105" />
+                        </a>
                         <div>
-                          <p className="font-bold text-ink">{row.product.name}</p>
+                          <a href={`/shops/${group.shop.shopSlug}/products/${row.product.slug}`} className="font-bold text-ink hover:text-primary hover:underline">
+                            {row.product.name}
+                          </a>
                           <p className="text-sm text-muted">Biến thể: {row.variant.variantName}</p>
                           {row.unavailable ? <p className="mt-1 text-sm font-semibold text-coral">{row.reason}</p> : null}
                           <PriceDisplay price={row.variant.price} salePrice={row.variant.salePrice} compact />

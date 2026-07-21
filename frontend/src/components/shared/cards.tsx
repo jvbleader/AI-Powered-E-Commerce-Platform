@@ -38,12 +38,10 @@ export function RatingStars({ rating, count }: { rating: number; count?: number 
     return <span className="text-xs text-slate-400">Chưa có đánh giá</span>;
   }
   return (
-
-    <span className="inline-flex items-center gap-1 text-xs">
-      <span className="inline-flex items-center" aria-label={`Đánh giá ${rating.toFixed(1)} trên 5 sao`}>
+    <span className="inline-flex items-center gap-1.5 text-xs">
+      <span className="inline-flex items-center gap-0.5" aria-label={`Đánh giá ${rating.toFixed(1)} trên 5 sao`}>
         {[1, 2, 3, 4, 5].map((star) => {
-          const filled = rating >= star;
-          const half = !filled && rating >= star - 0.5;
+          const fillPercentage = Math.max(0, Math.min(100, (rating - (star - 1)) * 100));
           return (
             <span
               key={star}
@@ -51,7 +49,10 @@ export function RatingStars({ rating, count }: { rating: number; count?: number 
               style={{
                 fontSize: "15px",
                 lineHeight: 1,
-                color: filled ? "#f59e0b" : half ? "#fcd34d" : "#d1d5db",
+                backgroundImage: `linear-gradient(90deg, #f59e0b ${fillPercentage}%, #cbd5e1 ${fillPercentage}%)`,
+                WebkitBackgroundClip: "text",
+                WebkitTextFillColor: "transparent",
+                display: "inline-block"
               }}
             >
               ★
@@ -59,7 +60,7 @@ export function RatingStars({ rating, count }: { rating: number; count?: number 
           );
         })}
       </span>
-      <span className="font-bold text-amber-600">{rating.toFixed(1)}</span>
+      <span className="font-bold text-amber-600 ml-0.5">{rating.toFixed(1)}</span>
       {typeof count === "number" ? <span className="text-slate-500">({count})</span> : null}
     </span>
   );

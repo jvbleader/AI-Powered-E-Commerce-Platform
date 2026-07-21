@@ -283,8 +283,8 @@ async def confirm_receipt(user: User, order_code: str, db: AsyncSession):
         inv = await inventory_repository.get_inventory_for_update(db, item.variant_id)
         if inv:
             qty_before = inv.quantity
-            inv.quantity -= item.quantity
-            inv.reserved_quantity -= item.quantity
+            inv.quantity = max(0, inv.quantity - item.quantity)
+            inv.reserved_quantity = max(0, inv.reserved_quantity - item.quantity)
             qty_after = inv.quantity
 
             await inventory_repository.add_inventory_transaction(
@@ -346,7 +346,7 @@ async def cancel_order(user: User, order_code: str, reason: str, db: AsyncSessio
         inv = await inventory_repository.get_inventory_for_update(db, item.variant_id)
         if inv:
             qty_before = inv.reserved_quantity
-            inv.reserved_quantity -= item.quantity
+            inv.reserved_quantity = max(0, inv.reserved_quantity - item.quantity)
             qty_after = inv.reserved_quantity
 
             await inventory_repository.add_inventory_transaction(

@@ -3,7 +3,7 @@ from typing import Annotated, Optional
 from fastapi import Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from core.database import get_db
+from core.database import DBSession, get_db
 from models.user import User
 from repositories import user_repositoriy
 from services import jwt_service
@@ -11,7 +11,7 @@ from repositories.user_role_repository import get_role_list_by_user_id
 
 
 async def get_current_user(
-    request: Request, db: Annotated[AsyncSession, Depends(get_db)]
+    request: Request, db: DBSession
 ) -> User:
     payload = getattr(request.state, "auth_payload", None)
 
@@ -46,7 +46,7 @@ async def get_current_user(
 
 
 async def get_current_user_optional(
-    request: Request, db: Annotated[AsyncSession, Depends(get_db)]
+    request: Request, db: DBSession
 ) -> Optional[User]:
     try:
         return await get_current_user(request, db)
@@ -54,9 +54,13 @@ async def get_current_user_optional(
         return None
 
 
+CurrentUser = Annotated[User, Depends(get_current_user)]
+CurrentUserOptional = Annotated[Optional[User], Depends(get_current_user_optional)]
+
+
 async def get_current_admin(
-    user: Annotated[User, Depends(get_current_user)],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    user: CurrentUser,
+    db: DBSession,
 ) -> User:
     if "ADMIN" not in await get_role_list_by_user_id(user.id, db):
         raise HTTPException(
@@ -68,8 +72,8 @@ async def get_current_admin(
 
 
 async def get_current_seller(
-    user: Annotated[User, Depends(get_current_user)],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    user: CurrentUser,
+    db: DBSession,
 ) -> User:
     if "SELLER" not in await get_role_list_by_user_id(user.id, db):
         raise HTTPException(
@@ -78,3 +82,8 @@ async def get_current_seller(
         )
 
     return user
+
+
+CurrentAdmin = Annotated[User, Depends(get_current_admin)]
+CurrentSeller = Annotated[User, Depends(get_current_seller)]
+

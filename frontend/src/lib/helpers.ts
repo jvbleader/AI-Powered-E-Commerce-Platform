@@ -22,15 +22,27 @@ export const formatVnd = (value: number) =>
     maximumFractionDigits: 0
   }).format(value);
 
-export const formatDate = (value?: string) => {
+export const formatDate = (value?: string | Date) => {
   if (!value) return "Chưa có";
+  let dateObj: Date;
+  if (typeof value === "string") {
+    let s = value.trim();
+    if (/^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(\.\d+)?$/.test(s)) {
+      s = s.replace(" ", "T") + "Z";
+    }
+    dateObj = new Date(s);
+  } else {
+    dateObj = value;
+  }
+  if (isNaN(dateObj.getTime())) return "Chưa có";
   return new Intl.DateTimeFormat("vi-VN", {
+    timeZone: "Asia/Ho_Chi_Minh",
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
     hour: "2-digit",
     minute: "2-digit"
-  }).format(new Date(value));
+  }).format(dateObj);
 };
 
 export const currentPrice = (variant: ProductVariant) => variant.salePrice ?? variant.price;

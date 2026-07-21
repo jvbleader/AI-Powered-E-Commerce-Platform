@@ -5,7 +5,7 @@ from typing import List, Dict, Optional
 import httpx
 import logging
 
-from dependencies.auth import get_current_user_optional
+from dependencies.auth import CurrentUserOptional
 from models.user import User
 from ai.ai_chat_service import send_chat_message, stream_chat_message
 
@@ -23,7 +23,7 @@ class ChatRequest(BaseModel):
 @router.post("", summary="Send message to AI assistant")
 async def chat_with_ai(
     request: ChatRequest,
-    current_user: Optional[User] = Depends(get_current_user_optional)
+    current_user: CurrentUserOptional
 ):
     try:
         history_dicts = [item.model_dump() for item in request.history] if request.history else []
@@ -45,8 +45,9 @@ async def chat_with_ai(
 @router.post("/stream", summary="Stream message from AI assistant")
 async def stream_chat_with_ai(
     request: ChatRequest,
-    current_user: Optional[User] = Depends(get_current_user_optional)
+    current_user: CurrentUserOptional
 ):
+
     history_dicts = [item.model_dump() for item in request.history] if request.history else []
     
     # Return StreamingResponse with media_type text/event-stream

@@ -4,8 +4,8 @@ from fastapi import APIRouter, Depends, Request, Response, status
 from pydantic import EmailStr
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from core.database import get_db
-from dependencies.auth import get_current_user
+from core.database import DBSession
+from dependencies.auth import CurrentUser
 from models.user import User
 from services.seller_application_service import (
     get_seller_me,
@@ -24,8 +24,8 @@ router = APIRouter(prefix="/seller", tags=["Seller"])
 
 @router.get(path="/me", response_model=SellerMeResponse)
 async def get_seller_me_api(
-    user: Annotated[User, Depends(get_current_user)],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    user: CurrentUser,
+    db: DBSession,
 ) -> SellerMeResponse:
     result = None
     try:
@@ -40,9 +40,9 @@ async def get_seller_me_api(
 
 @router.post(path="/application", response_model=SellerApplicationResponse)
 async def submit_application_api(
-    user: Annotated[User, Depends(get_current_user)],
+    user: CurrentUser,
     data: SellerApplicationRequest,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: DBSession,
 ) -> SellerApplicationResponse:
     result = None
     try:
@@ -57,8 +57,8 @@ async def submit_application_api(
 
 @router.get(path="/application", response_model=SellerApplicationResponse)
 async def get_my_application_api(
-    user: Annotated[User, Depends(get_current_user)],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    user: CurrentUser,
+    db: DBSession,
 ) -> SellerApplicationResponse:
     result = None
     try:
@@ -73,9 +73,9 @@ async def get_my_application_api(
 
 @router.put(path="/application", response_model=SellerApplicationResponse)
 async def update_my_application_api(
-    user: Annotated[User, Depends(get_current_user)],
+    user: CurrentUser,
     data: SellerApplicationRequest,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: DBSession,
 ):
     result = None
     try:
@@ -86,3 +86,4 @@ async def update_my_application_api(
         raise
 
     return result
+

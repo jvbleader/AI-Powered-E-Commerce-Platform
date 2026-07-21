@@ -421,14 +421,15 @@ export default function AccountPage() {
     const [submittingReview, setSubmittingReview] = useState(false);
     
     useEffect(() => {
-      if (!order && orderCode) {
+      const needsFetch = !order || !order.shipment || order.shipment.receiverName === "-";
+      if (orderCode && needsFetch) {
         if (audience === "customer") {
           store.fetchCustomerOrderDetail(orderCode);
         } else {
           store.fetchSellerOrderDetail(orderCode);
         }
       }
-    }, [order, orderCode, audience]);
+    }, [orderCode, audience, order]);
 
     if (!order) return <div className="flex justify-center p-8"><span className="loading loading-spinner"></span></div>;
 
@@ -461,6 +462,7 @@ export default function AccountPage() {
           comment: comment.trim() || undefined
         });
         showToast("Đã gửi đánh giá thành công!", "success");
+        reviewingItem.isReviewed = true;
         setReviewedItemIds((prev) => ({ ...prev, [reviewingItem.id]: true }));
         setReviewingItem(null);
       } catch (err: any) {
@@ -483,35 +485,44 @@ export default function AccountPage() {
                 <span className="text-sm text-muted">{shop?.shopName}</span>
               </div>
               <div className="mt-4 space-y-3">
-                {order.items.map((item) => (
-                  <div key={item.id} className="flex gap-3 border-t border-line pt-3 items-center">
-                    <img src={item.productImageSnapshot} alt={item.productNameSnapshot} className="h-16 w-16 rounded-panel object-cover" />
-                    <div className="min-w-0 flex-1">
-                      <p className="font-bold">{item.productNameSnapshot}</p>
-                      <p className="text-sm text-muted">{item.variantNameSnapshot} - SKU {item.skuSnapshot}</p>
+                {order.items.map((item) => {
+                  const targetProd = store.state.products.find((p) => p.id === item.productId || p.name === item.productNameSnapshot);
+                  const prodSlug = targetProd?.slug || item.productId || "product";
+                  const shopSlug = shop?.shopSlug || "shop";
+                  const prodUrl = `/shops/${shopSlug}/products/${prodSlug}`;
+
+                  return (
+                    <div key={item.id} className="flex gap-3 border-t border-line pt-3 items-center">
+                      <a href={prodUrl} className="block overflow-hidden rounded-panel">
+                        <img src={item.productImageSnapshot} alt={item.productNameSnapshot} className="h-16 w-16 rounded-panel object-cover transition-transform hover:scale-105" />
+                      </a>
+                      <div className="min-w-0 flex-1">
+                        <a href={prodUrl} className="font-bold hover:text-primary hover:underline">
+                          {item.productNameSnapshot}
+                        </a>
+                        <p className="text-sm text-muted">{item.variantNameSnapshot} - SKU {item.skuSnapshot}</p>
+                      </div>
+                      <div className="flex flex-col items-end gap-1">
+                        <p className="font-bold">{formatVnd(item.subtotal)}</p>
+                        {order.orderStatus === "COMPLETED" && audience === "customer" && (
+                          reviewedItemIds[item.id] || item.isReviewed ? null : (
+                            <Button
+                              variant="secondary"
+                              className="text-xs py-1 px-2.5 h-auto mt-1"
+                              onClick={() => {
+                                setReviewingItem(item);
+                                setRating(5);
+                                setComment("");
+                              }}
+                            >
+                              Đánh giá
+                            </Button>
+                          )
+                        )}
+                      </div>
                     </div>
-                    <div className="flex flex-col items-end gap-1">
-                      <p className="font-bold">{formatVnd(item.subtotal)}</p>
-                      {order.orderStatus === "COMPLETED" && audience === "customer" && (
-                        reviewedItemIds[item.id] || item.isReviewed ? (
-                          <span className="text-xs text-muted">Đã đánh giá</span>
-                        ) : (
-                          <Button
-                            variant="secondary"
-                            className="text-xs py-1 px-2.5 h-auto mt-1"
-                            onClick={() => {
-                              setReviewingItem(item);
-                              setRating(5);
-                              setComment("");
-                            }}
-                          >
-                            Đánh giá
-                          </Button>
-                        )
-                      )}
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </Panel>
             <Panel>

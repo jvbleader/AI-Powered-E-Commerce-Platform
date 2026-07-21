@@ -439,15 +439,22 @@ async def get_public_products(
 async def get_public_product_detail(
     db: AsyncSession, shop_slug: str, product_slug: str
 ) -> Optional[Product]:
+    filters = [
+        or_(
+            Product.slug == product_slug,
+            Product.public_id == product_slug,
+            Product.id == (int(product_slug) if product_slug.isdigit() else -1),
+        ),
+        Product.status == "ACTIVE",
+        SellerProfile.status == "APPROVED",
+    ]
+    if shop_slug and shop_slug != "shop":
+        filters.append(SellerProfile.shop_slug == shop_slug)
+
     query = (
         select(Product)
         .join(SellerProfile, Product.seller_id == SellerProfile.id)
-        .filter(
-            SellerProfile.shop_slug == shop_slug,
-            Product.slug == product_slug,
-            Product.status == "ACTIVE",
-            SellerProfile.status == "APPROVED",
-        )
+        .filter(*filters)
         .options(
             selectinload(Product.images),
             selectinload(Product.variants).selectinload(ProductVariant.inventory),

@@ -115,7 +115,7 @@ async def get_user_orders(db: AsyncSession, user_id: int) -> list[Order]:
     stmt = (
         select(Order)
         .options(
-            selectinload(Order.items),
+            selectinload(Order.items).selectinload(OrderItem.review),
             selectinload(Order.seller),
             selectinload(Order.shipment),
         )
@@ -132,7 +132,7 @@ async def get_order_by_code_and_user(
     stmt = (
         select(Order)
         .options(
-            selectinload(Order.items),
+            selectinload(Order.items).selectinload(OrderItem.review),
             selectinload(Order.seller),
             selectinload(Order.shipment),
         )

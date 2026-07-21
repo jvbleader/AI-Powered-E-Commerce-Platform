@@ -6,9 +6,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from schemas.user_schema import UserMeResponse, AdminCreateUserRequest, UserRolesUpdateRequest
 from services import auth_service
 
-from core.database import get_db
+from core.database import DBSession
 from models.user import User
-from dependencies.auth import get_current_admin
+from dependencies.auth import CurrentAdmin
 from schemas.seller_application_schema import (
     SellerApplicationResponse,
     SellerApplicationDetailResponse,
@@ -29,8 +29,8 @@ router = APIRouter(prefix="/admin", tags=["Admin"])
 @router.get(path="/seller-applications", response_model=list[SellerApplicationResponse])
 async def list_seller_applications_api(
     data: Annotated[ListSellerApplicationsRequest, Depends()],
-    user: Annotated[User, Depends(get_current_admin)],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    user: CurrentAdmin,
+    db: DBSession,
 ) -> list[SellerApplicationResponse]:
     result = None
     try:
@@ -51,8 +51,8 @@ async def list_seller_applications_api(
 )
 async def get_seller_application_detail_api(
     seller_public_id: str,
-    user: Annotated[User, Depends(get_current_admin)],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    user: CurrentAdmin,
+    db: DBSession,
 ) -> SellerApplicationDetailResponse:
     result = None
     try:
@@ -71,8 +71,8 @@ async def get_seller_application_detail_api(
 )
 async def approve_seller_application_api(
     seller_public_id: str,
-    user: Annotated[User, Depends(get_current_admin)],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    user: CurrentAdmin,
+    db: DBSession,
 ) -> SellerApplicationReviewResponse:
     result = None
     try:
@@ -92,8 +92,8 @@ async def approve_seller_application_api(
 async def reject_seller_application_api(
     data: RejectApplicationRequest,
     seller_public_id: str,
-    user: Annotated[User, Depends(get_current_admin)],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    user: CurrentAdmin,
+    db: DBSession,
 ) -> SellerApplicationReviewResponse:
     result = None
     try:
@@ -110,8 +110,8 @@ async def reject_seller_application_api(
 
 @router.get(path="/users", response_model=list[UserMeResponse])
 async def list_users_api(
-    user: Annotated[User, Depends(get_current_admin)],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    user: CurrentAdmin,
+    db: DBSession,
 ) -> list[UserMeResponse]:
     from sqlalchemy import select
     from models.user import User
@@ -129,8 +129,8 @@ async def list_users_api(
 @router.post(path="/users", response_model=UserMeResponse)
 async def create_user_api(
     data: AdminCreateUserRequest,
-    user: Annotated[User, Depends(get_current_admin)],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    user: CurrentAdmin,
+    db: DBSession,
 ) -> UserMeResponse:
     from datetime import datetime
     from repositories.user_repositoriy import (
@@ -188,8 +188,8 @@ async def create_user_api(
 async def update_user_roles_api(
     public_id: str,
     data: UserRolesUpdateRequest,
-    user: Annotated[User, Depends(get_current_admin)],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    user: CurrentAdmin,
+    db: DBSession,
 ) -> UserMeResponse:
     from sqlalchemy import delete
     from repositories.user_repositoriy import get_user_by_public_id
@@ -228,9 +228,10 @@ async def update_user_roles_api(
 @router.post(path="/users/{public_id}/toggle-lock", response_model=UserMeResponse)
 async def toggle_user_lock_api(
     public_id: str,
-    user: Annotated[User, Depends(get_current_admin)],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    user: CurrentAdmin,
+    db: DBSession,
 ) -> UserMeResponse:
+
     from datetime import datetime, timedelta
     from repositories.user_repositoriy import get_user_by_public_id
 
