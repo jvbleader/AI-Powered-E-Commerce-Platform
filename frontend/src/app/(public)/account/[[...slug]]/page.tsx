@@ -53,6 +53,12 @@ export default function AccountPage() {
 
   const user = store.getCurrentUser()!;
 
+  useEffect(() => {
+    if (user?.id) {
+      store.fetchCustomerOrders("", true);
+    }
+  }, [user?.id]);
+
   const nav = [
     ["overview", "/account", "Tổng quan"],
     ["profile", "/account/profile", "Hồ sơ"],

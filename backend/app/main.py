@@ -37,9 +37,21 @@ logging.basicConfig(
     format="%(asctime)s %(levelname)s %(name)s %(message)s",
 )
 
+from contextlib import asynccontextmanager
+from core.scheduler import start_scheduler, stop_scheduler
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    start_scheduler()
+    yield
+    stop_scheduler()
+
+
 app = FastAPI(
     title=os.getenv("APP_NAME", "Shepoo Ecommerce API"),
     version=os.getenv("APP_VERSION", "0.1.0"),
+    lifespan=lifespan,
 )
 
 app.middleware("http")(validate_auth_cookie_middleware)

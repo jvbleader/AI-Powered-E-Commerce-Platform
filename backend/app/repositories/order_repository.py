@@ -3,6 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, or_
 from sqlalchemy.orm import selectinload
 from models.order import Order
+from models.order_item import OrderItem
 from models.order_status_log import OrderStatusLog
 from models.base import utc_now
 
@@ -25,7 +26,10 @@ async def get_orders_by_seller_and_status(
 
     # Get items
     items_query = (
-        query.options(selectinload(Order.items), selectinload(Order.shipment))
+        query.options(
+            selectinload(Order.items).selectinload(OrderItem.review),
+            selectinload(Order.shipment),
+        )
         .order_by(Order.created_at.desc())
         .offset(skip)
         .limit(limit)
@@ -41,7 +45,10 @@ async def get_order_by_public_id_and_seller(
 ) -> Optional[Order]:
     query = (
         select(Order)
-        .options(selectinload(Order.items), selectinload(Order.shipment))
+        .options(
+            selectinload(Order.items).selectinload(OrderItem.review),
+            selectinload(Order.shipment),
+        )
         .filter(
             or_(Order.public_id == public_id, Order.order_code == public_id),
             Order.seller_id == seller_id,

@@ -52,6 +52,9 @@ export const useMarketplaceStore = create<MarketplaceStore>()((set, get, store) 
       .then(async (user) => {
         if (!cancelled) {
           set((prev) => ({ state: applyBackendUser(prev.state, user) }));
+          if (user.roles?.includes("SELLER")) {
+            get().getSellerApplication().catch(() => {});
+          }
           try {
             const cartResp = await fetchMyCart();
             set((prev) => {

@@ -69,12 +69,6 @@ async def confirm_seller_order(
             status_code=status.HTTP_404_NOT_FOUND, detail="Order not found"
         )
 
-    if order.seller_confirmed:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Order has already been confirmed.",
-        )
-
     if order.order_status not in ("PLACED",):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

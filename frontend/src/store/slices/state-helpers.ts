@@ -44,8 +44,7 @@ export const preferredRoleFor = (user: User) =>
           : "CUSTOMER";
 
 export const activeRoleForUser = (user: User, currentRole: Role | "GUEST") => {
-  if (currentRole === "CUSTOMER") return "CUSTOMER";
-  if (currentRole !== "GUEST" && user.roles.includes(currentRole)) return currentRole;
+  if (currentRole !== "GUEST" && user.roles.includes(currentRole as Role)) return currentRole;
   return preferredRoleFor(user);
 };
 

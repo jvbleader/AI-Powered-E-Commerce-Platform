@@ -301,6 +301,22 @@ async def confirm_receipt(user: User, order_code: str, db: AsyncSession):
                 ),
             )
 
+        # Update product sold_count
+        if item.product_id:
+            from models.product import Product
+            prod = await db.get(Product, item.product_id)
+            if prod:
+                prod.sold_count += item.quantity
+
+    # Update seller statistics (total_sold & total_revenue)
+    from models.seller_statistics import SellerStatistics
+    from sqlalchemy import select
+    seller_stats_res = await db.execute(select(SellerStatistics).where(SellerStatistics.seller_id == order.seller_id))
+    stats = seller_stats_res.scalar_one_or_none()
+    if stats:
+        stats.total_sold += sum(i.quantity for i in order.items)
+        stats.total_revenue += Decimal(str(order.total_amount))
+
     return order
 
 

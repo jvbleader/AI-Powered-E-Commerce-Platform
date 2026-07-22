@@ -55,6 +55,13 @@ export const createAuthSlice: StateCreator<MarketplaceStore, [], [], any> = (set
         const backendUser = await apiFetch<BackendUser>(AUTH_ROUTES.me);
         const user = normalizeBackendUser(backendUser);
         setState((prev: AppState) => applyBackendUser(prev, backendUser, false));
+        if (user.roles?.includes("SELLER")) {
+          try {
+            await get().getSellerApplication();
+          } catch (e) {
+            console.error("Failed to fetch seller application on login", e);
+          }
+        }
         try {
           const cartResp = await fetchMyCart();
           setState((prev: AppState) => ({
@@ -400,7 +407,7 @@ export const createAuthSlice: StateCreator<MarketplaceStore, [], [], any> = (set
       const { state, verificationContext } = get();
 
       const user = state.users.find((entry: any) => entry.id === state.sessionUserId);
-      if (role !== "GUEST" && role !== "CUSTOMER" && !user?.roles.includes(role)) {
+      if (role !== "GUEST" && !user?.roles.includes(role as Role)) {
         return false;
       }
 

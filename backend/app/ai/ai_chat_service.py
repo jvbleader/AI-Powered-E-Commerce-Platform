@@ -2,8 +2,14 @@ import json
 from typing import AsyncGenerator, Dict, Any, List
 from .ai_config import ai_settings
 
-from langchain_openai import ChatOpenAI
-from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
+try:
+    from langchain_openai import ChatOpenAI
+    from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
+    LANGCHAIN_AVAILABLE = True
+except ImportError:
+    ChatOpenAI = None
+    SystemMessage = HumanMessage = AIMessage = None
+    LANGCHAIN_AVAILABLE = False
 
 def get_llm(streaming: bool = False):
     return ChatOpenAI(

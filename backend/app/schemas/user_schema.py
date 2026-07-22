@@ -1,6 +1,6 @@
 from datetime import date, datetime
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, model_validator
 
 
 class UserMeResponse(BaseModel):
@@ -40,6 +40,18 @@ class AdminCreateUserRequest(BaseModel):
     password: str = Field(min_length=8)
     roles: list[str]
 
+    @model_validator(mode="after")
+    def validate_roles(self):
+        if "ADMIN" in self.roles and "SUPPORTER" in self.roles:
+            raise ValueError("Một tài khoản không thể cùng lúc có cả quyền Admin và Supporter.")
+        return self
+
 
 class UserRolesUpdateRequest(BaseModel):
     roles: list[str]
+
+    @model_validator(mode="after")
+    def validate_roles(self):
+        if "ADMIN" in self.roles and "SUPPORTER" in self.roles:
+            raise ValueError("Một tài khoản không thể cùng lúc có cả quyền Admin và Supporter.")
+        return self

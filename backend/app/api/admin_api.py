@@ -141,6 +141,13 @@ async def create_user_api(
     )
     from utils.hash_and_verify import hash_password
 
+    # Validate mutually exclusive roles
+    if "ADMIN" in data.roles and "SUPPORTER" in data.roles:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Một tài khoản không thể cùng lúc có cả quyền Admin và Supporter.",
+        )
+
     # Validate unique constraints
     if await get_user_by_email(email=data.email, db=db) is not None:
         raise HTTPException(
@@ -199,6 +206,12 @@ async def update_user_roles_api(
     if not target_user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Người dùng không tồn tại."
+        )
+
+    if "ADMIN" in data.roles and "SUPPORTER" in data.roles:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Một tài khoản không thể cùng lúc có cả quyền Admin và Supporter.",
         )
 
     # Prevent current admin from self-revoking ADMIN role
@@ -264,3 +277,13 @@ async def toggle_user_lock_api(
         raise
 
     return await auth_service.user_to_response(target_user, db)
+
+
+@router.post(path="/statistics/recalculate")
+async def recalculate_statistics_api(
+    user: CurrentAdmin,
+    db: DBSession,
+) -> dict:
+    from services.statistics_service import recalculate_all_statistics
+    return await recalculate_all_statistics(db)
+

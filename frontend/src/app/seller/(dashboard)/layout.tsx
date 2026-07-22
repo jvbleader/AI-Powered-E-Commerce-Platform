@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { RefreshCcw } from "lucide-react";
 import { Panel } from "@/components/ui/containers";
 import { DashboardFrame } from "@/components/dashboard-frame";
@@ -13,14 +13,31 @@ export default function SellerDashboardLayout({
   children: React.ReactNode;
 }) {
   const store = useMarketplaceStore();
+  const [loadingSeller, setLoadingSeller] = useState(true);
 
-  if (!store.ready) {
+  useEffect(() => {
+    let cancelled = false;
+    const user = store.getCurrentUser();
+    if (store.ready && user?.roles.includes("SELLER")) {
+      store.getSellerApplication()
+        .finally(() => {
+          if (!cancelled) setLoadingSeller(false);
+        });
+    } else if (store.ready) {
+      setLoadingSeller(false);
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [store.ready, store.getCurrentUser()?.id, store.getSellerApplication]);
+
+  if (!store.ready || loadingSeller) {
     return (
       <main className="mx-auto max-w-xl px-4 py-10">
         <Panel>
           <div className="flex items-center gap-3">
             <RefreshCcw className="h-5 w-5 animate-spin text-primary" aria-hidden="true" />
-            <p className="text-sm font-semibold text-muted">Đang tải...</p>
+            <p className="text-sm font-semibold text-muted">Đang tải thông tin shop...</p>
           </div>
         </Panel>
       </main>
@@ -47,3 +64,4 @@ export default function SellerDashboardLayout({
 
   return <DashboardFrame kind="seller">{children}</DashboardFrame>;
 }
+

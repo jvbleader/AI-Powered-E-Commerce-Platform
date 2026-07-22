@@ -79,7 +79,12 @@ export function DashboardFrame({
           ];
 
   const homeHref = roleHomePath(kind.toUpperCase() as any);
-  const canSwitchToBuyer = Boolean(store.getCurrentUser());
+  const currentUser = store.getCurrentUser();
+  const canSwitchToBuyer =
+    Boolean(currentUser) &&
+    Boolean(currentUser?.roles?.includes("CUSTOMER")) &&
+    kind !== "admin" &&
+    kind !== "supporter";
 
   return (
     <div className="min-h-screen bg-canvas">
@@ -127,7 +132,7 @@ export function DashboardFrame({
             ))}
           </nav>
         </aside>
-        <main>{children}</main>
+        <main className="min-w-0">{children}</main>
       </div>
     </div>
   );

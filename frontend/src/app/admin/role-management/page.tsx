@@ -41,7 +41,7 @@ export default function RoleManagementPage() {
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
-  const [selectedRoles, setSelectedRoles] = useState<string[]>(["CUSTOMER"]);
+  const [selectedRoles, setSelectedRoles] = useState<string[]>(["ADMIN"]);
   const [submitting, setSubmitting] = useState(false);
 
   // Fetch users from database on load
@@ -69,7 +69,19 @@ export default function RoleManagementPage() {
     const isAdding = !nextRoles.includes(roleToToggle as Role);
 
     if (isAdding) {
-      nextRoles.push(roleToToggle as Role);
+      if (roleToToggle === "ADMIN") {
+        nextRoles = nextRoles.filter((r) => r !== "SUPPORTER" && r !== "CUSTOMER");
+        nextRoles.push("ADMIN");
+      } else if (roleToToggle === "SUPPORTER") {
+        if (targetUser.id === store.getCurrentUser()?.id && targetUser.roles.includes("ADMIN")) {
+          showToast("Bạn không thể tự chuyển quyền Admin thành Supporter của chính mình.", "danger");
+          return;
+        }
+        nextRoles = nextRoles.filter((r) => r !== "ADMIN" && r !== "CUSTOMER");
+        nextRoles.push("SUPPORTER");
+      } else {
+        nextRoles.push(roleToToggle as Role);
+      }
     } else {
       // Prevent self-revoking admin role
       if (targetUser.id === store.getCurrentUser()?.id && roleToToggle === "ADMIN") {
@@ -138,7 +150,7 @@ export default function RoleManagementPage() {
       setEmail("");
       setPhone("");
       setPassword("");
-      setSelectedRoles(["CUSTOMER"]);
+      setSelectedRoles(["ADMIN"]);
       setActiveTab("assign");
     } catch (error: any) {
       console.error(error);
@@ -150,9 +162,18 @@ export default function RoleManagementPage() {
 
   const handleToggleRoleSelection = (role: string) => {
     if (selectedRoles.includes(role)) {
-      setSelectedRoles(selectedRoles.filter((r) => r !== role));
+      const next = selectedRoles.filter((r) => r !== role);
+      setSelectedRoles(next.length === 0 ? ["ADMIN"] : next);
     } else {
-      setSelectedRoles([...selectedRoles, role]);
+      if (role === "ADMIN") {
+        setSelectedRoles(["ADMIN"]);
+      } else if (role === "SUPPORTER") {
+        setSelectedRoles(["SUPPORTER"]);
+      } else if (role === "CUSTOMER") {
+        setSelectedRoles(["CUSTOMER"]);
+      } else {
+        setSelectedRoles([...selectedRoles.filter((r) => r !== "ADMIN" && r !== "SUPPORTER"), role]);
+      }
     }
   };
 
