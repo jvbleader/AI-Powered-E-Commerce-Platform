@@ -386,7 +386,7 @@ export const createAuthSlice: StateCreator<MarketplaceStore, [], [], any> = (set
       } catch {
         // Keep logout local even if the backend is offline.
       } finally {
-        setState((prev: AppState) => ({ ...prev, sessionUserId: undefined, activeRole: "GUEST" }));
+        setState((prev: AppState) => ({ ...prev, sessionUserId: undefined, activeRole: "GUEST", cartItems: [] }));
       }
     },
     logoutAll: async () => {
@@ -394,7 +394,7 @@ export const createAuthSlice: StateCreator<MarketplaceStore, [], [], any> = (set
 
       try {
         const result = await apiFetch<MessageResponse>(AUTH_ROUTES.logoutAll, { method: "POST" });
-        setState((prev: AppState) => ({ ...prev, sessionUserId: undefined, activeRole: "GUEST" }));
+        setState((prev: AppState) => ({ ...prev, sessionUserId: undefined, activeRole: "GUEST", cartItems: [] }));
         return { ok: true, message: result.message };
       } catch (error) {
         if (error instanceof ApiError) {

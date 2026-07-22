@@ -33,8 +33,11 @@ export const AUTH_ROUTES = {
 
 export const SELLER_ROUTES = {
   me: "/seller/me",
-  application: "/seller/application"
+  application: "/seller/application",
+  dashboardSummary: "/seller/dashboard-summary",
+  recalculateDashboardSummary: "/seller/dashboard-summary/recalculate"
 };
+
 
 export const ADMIN_SELLER_APPLICATION_ROUTES = {
   list: "/admin/seller-applications",

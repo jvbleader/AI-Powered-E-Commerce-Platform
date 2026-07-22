@@ -426,10 +426,10 @@ export default function HomePageComponent() {
           </div>
 
           {/* BENTO BOX 2: HERO SPOTLIGHT PRODUCT CARD (Spans 4 cols) */}
-          <div className="bento-card relative flex flex-col justify-between overflow-hidden rounded-3xl p-6 lg:col-span-4 border-amber-200 bg-white/90 hover-lift">
+          <div className="bento-card relative flex flex-col justify-between overflow-hidden rounded-3xl p-6 lg:col-span-4 border-rose-200/80 bg-white/90 hover-lift">
             <div className="flex items-center justify-between">
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-3 py-1 text-xs font-bold text-amber-700 border border-amber-200/80 shadow-2xs">
-                <Flame className="h-3.5 w-3.5 fill-amber-500 text-amber-500 animate-bounce-subtle" />
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-rose-50 px-3 py-1 text-xs font-extrabold text-rose-700 border border-rose-200 shadow-2xs">
+                <Flame className="h-3.5 w-3.5 fill-rose-500 text-rose-500 animate-bounce-subtle" />
                 Siêu Phẩm Nổi Bật
               </span>
               {heroVariant?.salePrice && heroVariant.salePrice < heroVariant.price ? (
@@ -486,15 +486,17 @@ export default function HomePageComponent() {
       <section className="mx-auto max-w-7xl animate-fade-in-up">
         <div className="grid gap-4 md:grid-cols-12">
           {/* BENTO BOX 3: FLASH DEALS COUNTDOWN TICKER (7 cols) */}
-          <div className="bento-card bento-card-amber rounded-3xl p-6 md:col-span-7 flex flex-col justify-between border-amber-200 bg-white/90 hover-lift">
+          <div className="bento-card bento-card-amber rounded-3xl p-6 md:col-span-7 flex flex-col justify-between border-orange-200/80 bg-white hover-lift">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="flex items-center gap-2 text-amber-600">
-                <Zap className="h-5 w-5 fill-amber-500 text-amber-500 animate-bounce-subtle" />
-                <span className="font-heading text-lg font-black uppercase text-slate-900 tracking-tight">Flash Deals Giờ Vàng</span>
+              <div className="flex items-center gap-2">
+                <Zap className="h-5 w-5 fill-red-500 text-red-500 animate-bounce-subtle" />
+                <span className="font-heading text-lg font-black uppercase tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-red-500 to-orange-500">
+                  Flash Deals Giờ Vàng
+                </span>
               </div>
 
-              <div className="flex items-center gap-1.5 font-mono text-xs font-extrabold text-amber-700">
-                <Clock className="h-4 w-4 text-amber-600 animate-spin-slow" />
+              <div className="flex items-center gap-1.5 font-mono text-xs font-extrabold text-red-500">
+                <Clock className="h-4 w-4 text-red-500 animate-spin-slow" />
                 <FlashCountdown />
               </div>
             </div>
@@ -503,15 +505,26 @@ export default function HomePageComponent() {
               Săn mã giảm giá sốc đến 50% cùng ưu đãi Miễn phí vận chuyển toàn quốc cho mọi đơn hàng từ 199k!
             </p>
 
-            <div className="mt-4 flex flex-wrap items-center gap-6 border-t border-slate-100 pt-4 text-xs font-semibold text-slate-700">
-              <div className="flex items-center gap-2">
-                <ShieldCheck className="h-4 w-4 text-emerald-600" />
-                <span>Bảo hành 100% chính hãng</span>
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-4">
+              <div className="flex flex-wrap items-center gap-4 text-xs font-semibold text-slate-700">
+                <div className="flex items-center gap-1.5">
+                  <ShieldCheck className="h-4 w-4 text-emerald-600" />
+                  <span>Chính hãng 100%</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <Truck className="h-4 w-4 text-orange-500" />
+                  <span>Giao thần tốc 2H</span>
+                </div>
               </div>
-              <div className="flex items-center gap-2">
-                <Truck className="h-4 w-4 text-amber-600" />
-                <span>Giao hàng thần tốc 2H</span>
-              </div>
+
+              <button
+                type="button"
+                onClick={() => showToast("Chức năng Săn Deal Giờ Vàng đang được chuẩn bị!", "info")}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-red-500 to-orange-500 hover:from-red-600 hover:to-orange-600 px-4 py-2 text-xs font-extrabold text-white shadow-md shadow-orange-500/20 transition-all active:scale-95 cursor-pointer"
+              >
+                <span>Săn Deal Ngay</span>
+                <ChevronRight className="h-3.5 w-3.5" />
+              </button>
             </div>
           </div>
 

@@ -67,6 +67,15 @@ export type BackendSellerMeResponse = {
   can_access_seller_dashboard: boolean;
 };
 
+export type BackendSellerDashboardSummary = {
+  total_revenue: number;
+  total_sold: number;
+  pending_orders: number;
+  total_products: number;
+  updated_at?: string | null;
+};
+
+
 export type BackendSellerApplication = {
   public_id: string;
   publicId?: string;
@@ -259,7 +268,9 @@ export type MarketplaceStore = {
   listSellerApplications: (status?: SellerStatus | "") => Promise<any>;
   getSellerApplicationDetail: (applicationId: string) => Promise<any>;
   reviewSellerApplication: (applicationId: string, action: string, reason?: string) => Promise<any>;
+  fetchSellerDashboardSummary: (recalculate?: boolean) => Promise<any>;
   saveShop: (updates: any) => Promise<any>;
+
 
   // ── Address slice ──
   fetchAddresses: () => Promise<any>;

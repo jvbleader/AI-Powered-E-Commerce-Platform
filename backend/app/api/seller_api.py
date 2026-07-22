@@ -1,6 +1,7 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Request, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+
 from pydantic import EmailStr
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -13,11 +14,14 @@ from services.seller_application_service import (
     get_my_seller_application,
     update_my_seller_application,
 )
+from services.seller_order_service import get_seller_dashboard_summary
 from schemas.seller_application_schema import (
     SellerMeResponse,
     SellerApplicationResponse,
     SellerApplicationRequest,
+    SellerDashboardSummaryResponse,
 )
+
 
 router = APIRouter(prefix="/seller", tags=["Seller"])
 
@@ -86,4 +90,46 @@ async def update_my_application_api(
         raise
 
     return result
+
+
+@router.get(path="/dashboard-summary", response_model=SellerDashboardSummaryResponse)
+async def get_dashboard_summary_api(
+    user: CurrentUser,
+    db: DBSession,
+) -> SellerDashboardSummaryResponse:
+    try:
+        result = await get_seller_dashboard_summary(user, db, recalculate=False)
+        await db.commit()
+        return result
+    except HTTPException:
+        await db.rollback()
+        raise
+    except Exception as exc:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Lỗi hệ thống khi tải thống kê: {str(exc)}",
+        )
+
+
+@router.post(path="/dashboard-summary/recalculate", response_model=SellerDashboardSummaryResponse)
+async def recalculate_dashboard_summary_api(
+    user: CurrentUser,
+    db: DBSession,
+) -> SellerDashboardSummaryResponse:
+    try:
+        result = await get_seller_dashboard_summary(user, db, recalculate=True)
+        await db.commit()
+        return result
+    except HTTPException:
+        await db.rollback()
+        raise
+    except Exception as exc:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Lỗi hệ thống khi tính toán lại thống kê: {str(exc)}",
+        )
+
+
 

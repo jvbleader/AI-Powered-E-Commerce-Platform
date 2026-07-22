@@ -5,6 +5,8 @@ _MODEL_MODULES = (
     "cart_item",
     "category",
     "category_suggestion",
+    "chat_message",
+    "chat_session",
     "coupon",
     "coupon_usage",
     "email_verifycation_token",

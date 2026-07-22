@@ -37,6 +37,15 @@ class SellerMeResponse(BaseModel):
     can_access_seller_dashboard: bool
 
 
+class SellerDashboardSummaryResponse(BaseModel):
+    total_revenue: float
+    total_sold: int
+    pending_orders: int
+    total_products: int
+    updated_at: datetime | None = None
+
+
+
 class SellerApplicationRequest(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True)
 

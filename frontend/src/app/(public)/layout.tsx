@@ -7,6 +7,7 @@ import { ErrorBoundary } from "@/components/error-boundary";
 import { fetchCategories } from "@/services/product-api";
 import { useMarketplaceStore } from "@/store/use-marketplace-store";
 import { MarketplaceHeader, MarketplaceFooter } from "@/components/shared/navbar";
+import { ChatWidget } from "@/components/ai/ChatWidget";
 
 function RedirectTo({ href }: { href: string }) {
   const router = useRouter();
@@ -102,6 +103,7 @@ export default function MarketplaceLayout({
     <div className="min-h-screen bg-canvas text-slate-900 flex flex-col justify-between pt-[144px]">
       <MarketplaceHeader />
       <ErrorBoundary>{children}</ErrorBoundary>
+      <ChatWidget />
       <MarketplaceFooter />
     </div>
   );

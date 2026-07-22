@@ -37,3 +37,4 @@ class ReviewListResponse(BaseModel):
 
     class Config:
         from_attributes = True
+

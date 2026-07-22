@@ -51,19 +51,23 @@ export default function PasswordPage({ mode }: { mode: "forgot" | "reset" }) {
   const submitPasswordForm = async () => {
     if (!validatePasswordForm()) return;
 
-    setSubmitting(true);
-    const result =
-      mode === "forgot"
-        ? await store.requestPasswordReset(email)
-        : await store.resetPassword(token, newPassword, confirmPassword);
-    setSubmitting(false);
-    showToast(result.message, result.ok ? "success" : "danger");
+    try {
+      const result =
+        mode === "forgot"
+          ? await store.requestPasswordReset(email)
+          : await store.resetPassword(token, newPassword, confirmPassword);
+      showToast(result.message, result.ok ? "success" : "danger");
 
-    const redirectTo = result.ok && "redirectTo" in result && typeof result.redirectTo === "string"
-      ? result.redirectTo
-      : "";
-    if (redirectTo) {
-      window.location.href = redirectTo;
+      const redirectTo = result.ok && "redirectTo" in result && typeof result.redirectTo === "string"
+        ? result.redirectTo
+        : "";
+      if (redirectTo) {
+        window.location.href = redirectTo;
+      } else {
+        setSubmitting(false);
+      }
+    } catch {
+      setSubmitting(false);
     }
   };
 

@@ -64,8 +64,14 @@ export default function ProductListing({
       });
       if (isMounted) {
         if (res.ok && res.products) {
-          setProducts(prev => page === 1 ? res.products! : [...prev, ...res.products!]);
-          setVariants(prev => page === 1 ? res.variants! : [...prev, ...res.variants!]);
+          setProducts(prev => {
+            const combined = page === 1 ? res.products! : [...prev, ...res.products!];
+            return Array.from(new Map(combined.map(p => [p.id, p])).values());
+          });
+          setVariants(prev => {
+            const combined = page === 1 ? res.variants! : [...prev, ...res.variants!];
+            return Array.from(new Map(combined.map(v => [v.id, v])).values());
+          });
           setShops(prev => {
             const newShops = res.shops!.filter(s => !prev.some(ps => ps.id === s.id));
             return [...prev, ...newShops];
@@ -86,25 +92,20 @@ export default function ProductListing({
     };
   }, [keyword, sort, categorySlug, shopSlug, page, sellerId, rating, minPrice, maxPrice]);
 
-
-  useEffect(() => {
-    setPage(1);
-  }, [keyword, sort, categorySlug, sellerId, rating, minPrice, maxPrice]);
-
   const filterPanel = (
     <div className="grid gap-3">
       <Field label="Từ khóa">
-        <Input value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="Tên sản phẩm, shop, danh mục" />
+        <Input value={keyword} onChange={(event) => { setKeyword(event.target.value); setPage(1); }} placeholder="Tên sản phẩm, shop, danh mục" />
       </Field>
       <Field label="Khoảng giá">
         <div className="grid grid-cols-2 gap-2">
-          <Input type="number" value={minPrice} onChange={(event) => setMinPrice(event.target.value)} placeholder="Từ" />
-          <Input type="number" value={maxPrice} onChange={(event) => setMaxPrice(event.target.value)} placeholder="Đến" />
+          <Input type="number" value={minPrice} onChange={(event) => { setMinPrice(event.target.value); setPage(1); }} placeholder="Từ" />
+          <Input type="number" value={maxPrice} onChange={(event) => { setMaxPrice(event.target.value); setPage(1); }} placeholder="Đến" />
         </div>
       </Field>
       {!shopSlug && (
         <Field label="Seller">
-          <Select value={sellerId} onChange={(event) => setSellerId(event.target.value)}>
+          <Select value={sellerId} onChange={(event) => { setSellerId(event.target.value); setPage(1); }}>
             <option value="">Tất cả shop</option>
             {store.state.shops.filter((shop) => shop.status === "APPROVED").map((shop) => (
               <option key={shop.id} value={shop.id}>
@@ -116,7 +117,7 @@ export default function ProductListing({
       )}
 
       <Field label="Rating tối thiểu">
-        <Select value={rating} onChange={(event) => setRating(event.target.value)}>
+        <Select value={rating} onChange={(event) => { setRating(event.target.value); setPage(1); }}>
           <option value="">Tất cả</option>
           <option value="4">Từ 4 sao</option>
           <option value="4.5">Từ 4.5 sao</option>
@@ -130,6 +131,7 @@ export default function ProductListing({
           setRating("");
           setMinPrice("");
           setMaxPrice("");
+          setPage(1);
         }}
       >
         Reset filter
@@ -146,7 +148,7 @@ export default function ProductListing({
             <IconButton aria-label="Mở filter" className="lg:hidden" onClick={() => setFiltersOpen((value) => !value)}>
               <SlidersHorizontal className="h-5 w-5" aria-hidden="true" />
             </IconButton>
-            <Select value={sort} onChange={(event) => setSort(event.target.value as any)} className="w-44">
+            <Select value={sort} onChange={(event) => { setSort(event.target.value as any); setPage(1); }} className="w-44">
               <option value="newest">Mới nhất</option>
               <option value="price_asc">Giá tăng</option>
               <option value="price_desc">Giá giảm</option>

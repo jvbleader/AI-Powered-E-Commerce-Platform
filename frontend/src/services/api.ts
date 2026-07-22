@@ -44,11 +44,20 @@ export class ApiError extends Error {
   }
 }
 
-function detailMessage(detail: unknown) {
+function detailMessage(detail: unknown): string | undefined {
   if (typeof detail === "string") return detail;
-  if (!Array.isArray(detail)) return undefined;
-  const first = detail[0] as { msg?: string } | undefined;
-  return first?.msg;
+  if (Array.isArray(detail)) {
+    const msgs = detail
+      .map((item: any) => (typeof item === "string" ? item : item?.msg || item?.message))
+      .filter(Boolean);
+    if (msgs.length) return msgs.join("; ");
+  }
+  if (detail && typeof detail === "object") {
+    const obj = detail as any;
+    if (typeof obj.message === "string") return obj.message;
+    if (typeof obj.msg === "string") return obj.msg;
+  }
+  return undefined;
 }
 
 function normalizeErrorPayload(data: unknown, fallbackMessage: string): ApiErrorPayload {
@@ -80,15 +89,19 @@ function toApiError(error: unknown): unknown {
 
   if (axios.isAxiosError<ApiErrorPayload>(error)) {
     const status = error.response?.status ?? 0;
+    const fallbackMsg = error.response?.statusText ||
+      (error.message === "Network Error" ? "Lỗi kết nối máy chủ (Network Error). Vui lòng kiểm tra lại kết nối." : error.message) ||
+      "Request failed";
     const payload = normalizeErrorPayload(
       error.response?.data,
-      error.response?.statusText || error.message || "Request failed"
+      fallbackMsg
     );
     return new ApiError(status, payload);
   }
 
   return error;
 }
+
 
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,

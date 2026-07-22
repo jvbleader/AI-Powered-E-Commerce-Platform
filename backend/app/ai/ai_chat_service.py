@@ -1,60 +1,27 @@
-import json
-from typing import AsyncGenerator, Dict, Any, List
-from .ai_config import ai_settings
+import sys
+from pathlib import Path
 
-try:
-    from langchain_openai import ChatOpenAI
-    from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
-    LANGCHAIN_AVAILABLE = True
-except ImportError:
-    ChatOpenAI = None
-    SystemMessage = HumanMessage = AIMessage = None
-    LANGCHAIN_AVAILABLE = False
+# Ensure app root is in sys.path
+app_dir = Path(__file__).resolve().parent.parent
+if str(app_dir) not in sys.path:
+    sys.path.insert(0, str(app_dir))
 
-def get_llm(streaming: bool = False):
-    return ChatOpenAI(
-        openai_api_base=ai_settings.OPENROUTER_BASE_URL,
-        openai_api_key=ai_settings.OPENROUTER_API_KEY,
-        model_name=ai_settings.OPENROUTER_MODEL,
-        streaming=streaming,
-    )
+from ai.service import (
+    SYSTEM_PROMPT,
+    get_llm,
+    prepare_messages,
+    send_chat_message,
+    stream_chat_message,
+)
 
-def prepare_messages(message: str, history: List[Dict[str, str]] = None):
-    if history is None:
-        history = []
-        
-    messages = [
-        SystemMessage(content="Bạn là trợ lý AI của Shepoo — nền tảng thương mại điện tử. Hãy hỗ trợ khách hàng tìm sản phẩm, giải đáp thắc mắc về đơn hàng, và tư vấn mua sắm một cách ngắn gọn, súc tích và thân thiện. Chỉ trả lời dựa trên các kiến thức về shepoo mà bạn được tiếp cận, nếu bạn không có kiến thức về vấn đề nào, từ chối trả lời nó!")
-    ]
-    
-    for h in history:
-        role = h.get("role")
-        content = h.get("content", "")
-        if role == "user":
-            messages.append(HumanMessage(content=content))
-        elif role == "assistant":
-            messages.append(AIMessage(content=content))
-            
-    messages.append(HumanMessage(content=message))
-    return messages
+LANGCHAIN_AVAILABLE = True
 
-async def send_chat_message(message: str, history: List[Dict[str, str]] = None) -> Dict[str, Any]:
-    llm = get_llm(streaming=False)
-    messages = prepare_messages(message, history)
-    
-    response = await llm.ainvoke(messages)
-    
-    return {
-        "reply": response.content,
-        "model": ai_settings.OPENROUTER_MODEL
-    }
+__all__ = [
+    "SYSTEM_PROMPT",
+    "get_llm",
+    "prepare_messages",
+    "send_chat_message",
+    "stream_chat_message",
+    "LANGCHAIN_AVAILABLE",
+]
 
-async def stream_chat_message(message: str, history: List[Dict[str, str]] = None) -> AsyncGenerator[str, None]:
-    llm = get_llm(streaming=True)
-    messages = prepare_messages(message, history)
-    
-    async for chunk in llm.astream(messages):
-        if chunk.content:
-            yield f"data: {json.dumps({'content': chunk.content, 'done': False})}\n\n"
-            
-    yield f"data: {json.dumps({'content': '', 'done': True})}\n\n"

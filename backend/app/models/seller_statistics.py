@@ -1,12 +1,14 @@
 from __future__ import annotations
 
+from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import CheckConstraint, ForeignKey, Numeric, text
+from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Numeric, text
 from sqlalchemy.dialects import mysql
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from models.base import Base
+from models.base import Base, utc_now
+
 
 
 class SellerStatistics(Base):
@@ -42,5 +44,11 @@ class SellerStatistics(Base):
         default=Decimal("0.00"),
         server_default=text("0.00"),
     )
+    updated_at: Mapped[datetime | None] = mapped_column(
+        DateTime,
+        nullable=True,
+        onupdate=utc_now,
+    )
 
     seller: Mapped["SellerProfile"] = relationship(back_populates="statistics")
+

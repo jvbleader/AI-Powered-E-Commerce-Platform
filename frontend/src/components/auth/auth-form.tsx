@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowRight,
@@ -46,7 +46,7 @@ export default function AuthPage({ mode: initialMode }: { mode: "login" | "regis
   const [showPassword, setShowPassword] = useState(false);
   const [formErrors, setFormErrors] = useState<AuthFormErrors>({});
   const [submitting, setSubmitting] = useState(false);
-
+  const submittingRef = useRef(false);
 
   // Real-time password strength calculation
   const getPasswordStrength = () => {
@@ -88,22 +88,35 @@ export default function AuthPage({ mode: initialMode }: { mode: "login" | "regis
 
   const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (submittingRef.current || submitting) return;
     if (!validateAuthForm()) return;
+
+    submittingRef.current = true;
     setSubmitting(true);
-    const normalizedPhone = normalizeAuthPhoneInput(phone);
-    const result =
-      mode === "login"
-        ? await store.login(email, password)
-        : await store.register({
-            fullName: fullName.trim(),
-            email: email.trim().toLowerCase(),
-            phone: normalizedPhone,
-            password,
-            confirmPassword
-          });
-    setSubmitting(false);
-    showToast(result.message, result.ok ? "success" : "danger");
-    if (result.ok) router.push(result.redirectTo || "/");
+
+    try {
+      const normalizedPhone = normalizeAuthPhoneInput(phone);
+      const result =
+        mode === "login"
+          ? await store.login(email, password)
+          : await store.register({
+              fullName: fullName.trim(),
+              email: email.trim().toLowerCase(),
+              phone: normalizedPhone,
+              password,
+              confirmPassword
+            });
+      showToast(result.message, result.ok ? "success" : "danger");
+      if (result.ok) {
+        router.push(result.redirectTo || "/");
+      } else {
+        submittingRef.current = false;
+        setSubmitting(false);
+      }
+    } catch {
+      submittingRef.current = false;
+      setSubmitting(false);
+    }
   };
 
   return (

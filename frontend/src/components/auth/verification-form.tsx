@@ -50,13 +50,20 @@ export default function VerificationPage({ type }: { type: "email" | "phone" }) 
     }
 
     setSubmitting(true);
-    const result =
-      type === "email"
-        ? await store.verifyEmail(code)
-        : await store.verifyPhone(normalizedPhone, code);
-    setSubmitting(false);
-    showToast(result.message, result.ok ? "success" : "danger");
-    if (result.ok) window.location.href = result.redirectTo ?? "/";
+    try {
+      const result =
+        type === "email"
+          ? await store.verifyEmail(code)
+          : await store.verifyPhone(normalizedPhone, code);
+      showToast(result.message, result.ok ? "success" : "danger");
+      if (result.ok) {
+        window.location.href = result.redirectTo ?? "/";
+      } else {
+        setSubmitting(false);
+      }
+    } catch {
+      setSubmitting(false);
+    }
   };
 
   const resendVerification = async () => {
