@@ -92,3 +92,21 @@ async def cancel_order_api(
         raise
     return result
 
+
+from services import seller_order_service
+
+@router.post("/{order_id}/increment-print-count", response_model=OrderResponse)
+async def increment_print_count_api(
+    order_id: str,
+    user: CurrentUser,
+    db: DBSession,
+) -> OrderResponse:
+    result = None
+    try:
+        result = await seller_order_service.increment_print_count(user, order_id, db)
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        raise
+    return result
+

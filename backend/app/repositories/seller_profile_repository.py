@@ -52,6 +52,7 @@ async def create_seller_profile(
     bank_name: str,
     bank_account_number: str,
     bank_account_name: str,
+    shipping_fee: float,
     db: AsyncSession,
 ):
     seller_profile = SellerProfile(
@@ -66,6 +67,7 @@ async def create_seller_profile(
         bank_name=bank_name,
         bank_account_number=bank_account_number,
         bank_account_name=bank_account_name,
+        shipping_fee=shipping_fee,
     )
 
     db.add(seller_profile)

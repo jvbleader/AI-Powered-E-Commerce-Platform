@@ -61,6 +61,7 @@ app.add_middleware(
     allow_origins=csv_env(
         "CORS_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000"
     ),
+    allow_origin_regex=r"https?://(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[0-1])\.\d+\.\d+)(:\d+)?",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -73,6 +74,7 @@ from api.payment_api import router as payment_router
 from api.user_address_api import router as user_address_router
 from api.chat_ai_api import router as chat_ai_router
 from api.review_api import router as review_router
+from api.violation_report_api import router as violation_report_router
 
 app.include_router(auth_router)
 app.include_router(seller_router)
@@ -87,6 +89,7 @@ app.include_router(payment_router)
 app.include_router(user_address_router)
 app.include_router(chat_ai_router)
 app.include_router(review_router)
+app.include_router(violation_report_router)
 
 
 
@@ -96,3 +99,5 @@ async def health_check() -> dict[str, str]:
         "status": "ok",
         "env": os.getenv("APP_ENV", "development"),
     }
+
+

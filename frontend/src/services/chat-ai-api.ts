@@ -1,4 +1,4 @@
-import { apiFetch } from "./api";
+import { apiFetch, getApiBaseUrl } from "./api";
 
 export type ChatMessage = {
   role: "user" | "assistant" | "system";
@@ -25,10 +25,7 @@ export async function streamChatMessage(
   onError: (error: Error) => void
 ) {
   try {
-    const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
-    
-    // Using fetch directly for SSE to handle the stream response
-    const response = await fetch(`${API_BASE_URL}/ai/chat/stream`, {
+    const response = await fetch(`${getApiBaseUrl()}/ai/chat/stream`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

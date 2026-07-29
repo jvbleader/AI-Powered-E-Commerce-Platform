@@ -32,7 +32,7 @@ export function ChatMessageList({
   }, [messages, currentStatus]);
 
   return (
-    <div ref={containerRef} className="flex-1 overflow-y-auto p-4 space-y-4 max-h-[460px] no-scrollbar">
+    <div ref={containerRef} className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4 no-scrollbar">
       {messages.map((msg, idx) => (
         <ChatMessageItem
           key={msg.id || idx}
@@ -42,8 +42,8 @@ export function ChatMessageList({
       ))}
 
       {currentStatus && (
-        <div className="flex items-center gap-2.5 rounded-2xl bg-emerald-50/80 border border-emerald-200/60 p-3 text-xs text-emerald-800 animate-fade-in max-w-[80%]">
-          <Sparkles className="h-4 w-4 text-emerald-600 animate-spin" />
+        <div className="flex items-center gap-2.5 rounded-panel bg-emerald-50 border border-emerald-100 p-3 text-xs text-emerald-600 animate-fade-in max-w-[80%]">
+          <Sparkles className="h-4 w-4 text-emerald-500 animate-spin" />
           <span className="font-medium">{currentStatus}</span>
         </div>
       )}

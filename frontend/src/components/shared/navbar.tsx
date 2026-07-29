@@ -59,6 +59,7 @@ export function MarketplaceHeader() {
   const [notifOpen, setNotifOpen] = useState(false);
   const [cartOpen, setCartOpen] = useState(false);
   const [catMoreOpen, setCatMoreOpen] = useState(false);
+  const [categoryFilter, setCategoryFilter] = useState("");
   const notifications = store.state.notifications;
   const [readIds, setReadIds] = useState<Set<string>>(new Set());
   const unreadCount = notifications.filter((n) => !readIds.has(n.id)).length;
@@ -212,10 +213,10 @@ export function MarketplaceHeader() {
                   S
                 </span>
               </div>
-              <div className="hidden sm:flex flex-col items-start justify-center">
+              <div className="hidden sm:flex flex-col items-center justify-center">
                 <span
                   className={`font-heading font-black text-slate-900 tracking-tight leading-none group-hover:text-emerald-600 transition-all duration-500 ${
-                    isScrolled ? "text-xl" : "text-2xl"
+                    isScrolled ? "text-xl sm:text-2xl" : "text-2xl sm:text-[26px]"
                   }`}
                 >
                   {BRAND_NAME}
@@ -408,11 +409,15 @@ export function MarketplaceHeader() {
               {/* CART ICON & POPOVER */}
               <div
                 className="relative"
-                onMouseEnter={() => setCartOpen(true)}
+                onMouseEnter={() => {
+                  setCartOpen(true);
+                  store.refreshCart?.();
+                }}
                 onMouseLeave={() => setCartOpen(false)}
               >
                 <a
                   href="/cart"
+                  onClick={() => store.refreshCart?.()}
                   className={`relative inline-flex items-center gap-1.5 rounded-xl text-xs font-bold transition-all duration-300 ${
                     isScrolled ? "px-2.5 py-1.5" : "px-3 py-2"
                   } ${
@@ -552,7 +557,12 @@ export function MarketplaceHeader() {
                       <div className="mt-1 border-t border-slate-100 pt-1">
                         <button
                           type="button"
-                          onClick={store.logout}
+                          onClick={async () => {
+                            await store.logout();
+                            if (typeof window !== "undefined") {
+                              window.location.href = "/login";
+                            }
+                          }}
                           className="w-full flex items-center gap-2.5 rounded-xl px-3 py-2 text-xs font-semibold text-rose-600 hover:bg-rose-50 transition-colors"
                         >
                           <LogOut className="h-4 w-4" />
@@ -640,35 +650,124 @@ export function MarketplaceHeader() {
                   </button>
                   {catMoreOpen && (() => {
                     const rect = catMoreRef.current?.getBoundingClientRect();
-                    return rect ? (
+                    if (!rect) return null;
+
+                    const viewportWidth = typeof window !== "undefined" ? window.innerWidth : 1200;
+                    const viewportHeight = typeof window !== "undefined" ? window.innerHeight : 800;
+                    const allCategories = store.state.categories;
+                    const filtered = categoryFilter
+                      ? allCategories.filter((c) => c.name.toLowerCase().includes(categoryFilter.toLowerCase()))
+                      : allCategories;
+
+                    const popoverWidth = Math.min(800, Math.max(340, viewportWidth - 32));
+                    let rightPos = viewportWidth - rect.right;
+                    if (rightPos < 16) rightPos = 16;
+                    if (viewportWidth - rightPos - popoverWidth < 16) {
+                      rightPos = Math.max(16, viewportWidth - popoverWidth - 16);
+                    }
+
+                    return (
                       <div
                         style={{
                           position: "fixed",
-                          top: rect.bottom + 2,
-                          right: window.innerWidth - rect.right,
+                          top: Math.min(rect.bottom + 6, viewportHeight - 200),
+                          right: rightPos,
+                          width: popoverWidth,
                           zIndex: 9999
                         }}
-                        className="w-52 rounded-xl border border-slate-200 bg-white shadow-2xl flex flex-col p-1"
+                        className="rounded-2xl border border-slate-200 bg-white/95 backdrop-blur-xl shadow-2xl flex flex-col overflow-hidden text-slate-800 animate-in fade-in-50 duration-150"
                       >
-                        {store.state.categories.slice(6).map((category) => {
-                          const isActive = pathname === `/categories/${category.slug}`;
-                          return (
-                            <a
-                              key={category.id}
-                              href={`/categories/${category.slug}`}
-                              onClick={() => setCatMoreOpen(false)}
-                              className={`rounded-lg px-3 py-2 text-xs font-bold transition-all ${
-                                isActive
-                                  ? "bg-emerald-50 text-emerald-700"
-                                  : "text-slate-700 hover:bg-slate-50 hover:text-emerald-700"
-                              }`}
+                        {/* Header */}
+                        <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3 bg-gradient-to-r from-emerald-50/60 via-teal-50/30 to-slate-50">
+                          <div className="flex items-center gap-2">
+                            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-500 text-white shadow-xs shadow-emerald-500/30">
+                              <Grid className="h-4 w-4" />
+                            </div>
+                            <div>
+                              <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider">Danh mục sản phẩm</h4>
+                              <p className="text-[11px] text-slate-500 font-medium">Tổng cộng {allCategories.length} danh mục</p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <div className="relative w-36 sm:w-48">
+                              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+                              <input
+                                type="text"
+                                placeholder="Tìm danh mục..."
+                                value={categoryFilter}
+                                onChange={(e) => setCategoryFilter(e.target.value)}
+                                autoComplete="off"
+                                className="w-full rounded-xl border border-slate-200 bg-slate-50/80 pl-8 pr-3 py-1 text-xs text-slate-800 placeholder:text-slate-400 focus:border-emerald-500 focus:bg-white focus:outline-none transition-all"
+                              />
+                              {categoryFilter && (
+                                <button
+                                  type="button"
+                                  onClick={() => setCategoryFilter("")}
+                                  className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                                >
+                                  <X className="h-3 w-3" />
+                                </button>
+                              )}
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => { setCatMoreOpen(false); setCategoryFilter(""); }}
+                              className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors"
                             >
-                              {category.name}
-                            </a>
-                          );
-                        })}
+                              <X className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Content Grid */}
+                        <div className="max-h-[55vh] overflow-y-auto p-3.5 space-y-2">
+                          {filtered.length === 0 ? (
+                            <div className="py-8 text-center text-xs text-slate-400">
+                              Không tìm thấy danh mục phù hợp với "{categoryFilter}"
+                            </div>
+                          ) : (
+                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+                              {filtered.map((category) => {
+                                const isActive = pathname === `/categories/${category.slug}`;
+                                return (
+                                  <a
+                                    key={category.id}
+                                    href={`/categories/${category.slug}`}
+                                    onClick={() => { setCatMoreOpen(false); setCategoryFilter(""); }}
+                                    className={`group flex items-center gap-2.5 rounded-xl border p-2.5 text-xs font-semibold transition-all ${
+                                      isActive
+                                        ? "border-emerald-500 bg-emerald-50 text-emerald-700 shadow-2xs"
+                                        : "border-slate-100 bg-slate-50/60 text-slate-700 hover:border-emerald-300 hover:bg-emerald-50/70 hover:text-emerald-700 hover:shadow-xs"
+                                    }`}
+                                  >
+                                    <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg transition-colors ${
+                                      isActive ? "bg-emerald-500 text-white" : "bg-white text-emerald-600 group-hover:bg-emerald-500 group-hover:text-white border border-slate-200/80 shadow-2xs"
+                                    }`}>
+                                      <Package className="h-3.5 w-3.5" />
+                                    </div>
+                                    <span className="truncate leading-tight">{category.name}</span>
+                                  </a>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Footer */}
+                        <div className="border-t border-slate-100 bg-slate-50/80 px-4 py-2 flex items-center justify-between text-xs">
+                          <span className="text-slate-500 font-medium text-[11px]">
+                            Chọn danh mục để lọc sản phẩm
+                          </span>
+                          <a
+                            href="/products"
+                            onClick={() => { setCatMoreOpen(false); setCategoryFilter(""); }}
+                            className="font-bold text-emerald-600 hover:text-emerald-700 hover:underline flex items-center gap-1 text-[11px]"
+                          >
+                            Xem tất cả sản phẩm &rarr;
+                          </a>
+                        </div>
                       </div>
-                    ) : null;
+                    );
                   })()}
                 </div>
               )}

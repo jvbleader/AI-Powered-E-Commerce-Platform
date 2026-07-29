@@ -8,7 +8,15 @@ app_dir = Path(__file__).resolve().parent.parent
 if str(app_dir) not in sys.path:
     sys.path.insert(0, str(app_dir))
 
-from langchain_core.tools import tool
+try:
+    from langchain_core.tools import tool
+except ImportError:
+    def tool(*args, **kwargs):
+        def decorator(fn):
+            return fn
+        if len(args) == 1 and callable(args[0]):
+            return args[0]
+        return decorator
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, or_, desc
 from sqlalchemy.orm import selectinload

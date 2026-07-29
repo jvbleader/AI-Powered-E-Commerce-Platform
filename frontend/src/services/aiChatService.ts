@@ -1,7 +1,6 @@
-import { apiFetch, ApiError } from "@/services/api";
+import { apiFetch, ApiError, getApiBaseUrl } from "@/services/api";
 
 const SESSION_STORAGE_KEY = "shepoo_ai_session_id";
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
 
 export interface AIProductItem {
   id: number;
@@ -115,7 +114,7 @@ export async function sendStreamChatMessage(params: {
   const { message, sessionId, history, signal, onStatus, onTextChunk, onProducts, onError, onEnd } = params;
 
   try {
-    const response = await fetch(`${API_BASE_URL}/ai/chat/message`, {
+    const response = await fetch(`${getApiBaseUrl()}/ai/chat/message`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json"

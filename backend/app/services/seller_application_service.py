@@ -100,6 +100,7 @@ async def submit_seller_application(
         bank_name=data.bank_name,
         bank_account_number=data.bank_account_number,
         bank_account_name=data.bank_account_name,
+        shipping_fee=data.shipping_fee,
         db=db,
     )
 
@@ -161,6 +162,7 @@ async def update_my_seller_application(
     seller_profile.bank_name = data.bank_name
     seller_profile.bank_account_name = data.bank_account_name
     seller_profile.bank_account_number = data.bank_account_number
+    seller_profile.shipping_fee = data.shipping_fee
 
     return seller_profile
 

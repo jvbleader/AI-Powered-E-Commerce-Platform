@@ -72,7 +72,8 @@ async def add_to_cart(
             detail="Product or variant is not active",
         )
 
-    if not variant.inventory or variant.inventory.quantity < request.quantity:
+    available_qty = variant.inventory.quantity - variant.inventory.reserved_quantity if variant.inventory else 0
+    if not variant.inventory or available_qty < request.quantity:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Not enough stock"
         )
@@ -86,7 +87,8 @@ async def add_to_cart(
     existing_item = await cart_repository.get_cart_item(db, cart.id, variant.id)
     if existing_item:
         new_quantity = existing_item.quantity + request.quantity
-        if variant.inventory.quantity < new_quantity:
+        available_qty = variant.inventory.quantity - variant.inventory.reserved_quantity
+        if available_qty < new_quantity:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Not enough stock for the combined quantity",
@@ -126,9 +128,10 @@ async def update_cart_item(
         )
 
     if request.quantity is not None:
+        available_qty = target_item.variant.inventory.quantity - target_item.variant.inventory.reserved_quantity if target_item.variant.inventory else 0
         if (
             not target_item.variant.inventory
-            or target_item.variant.inventory.quantity < request.quantity
+            or available_qty < request.quantity
         ):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST, detail="Not enough stock"

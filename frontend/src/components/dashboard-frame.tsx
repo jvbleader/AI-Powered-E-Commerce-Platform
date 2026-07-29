@@ -87,8 +87,8 @@ export function DashboardFrame({
     kind !== "supporter";
 
   return (
-    <div className="min-h-screen bg-canvas">
-      <div className="border-b border-line bg-white">
+    <div className="h-screen bg-canvas flex flex-col overflow-hidden">
+      <div className="border-b border-line bg-white shrink-0">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3">
           <a href={homeHref} className="flex items-center gap-2 font-black text-ink">
             <span className="flex h-9 w-9 items-center justify-center rounded-panel bg-primary text-white">S</span>
@@ -96,7 +96,14 @@ export function DashboardFrame({
             <span className="text-muted text-sm font-normal">– {kindLabel[kind]}</span>
           </a>
           <div className="flex items-center gap-2">
-            <span className="text-sm text-muted">{store.getCurrentUser()?.fullName ?? "Khách"}</span>
+            {kind === "seller" && store.getCurrentShop() ? (
+              <div className="flex flex-col items-end mr-2">
+                <span className="text-sm font-medium text-ink leading-tight">{store.getCurrentShop()?.shopName}</span>
+                <span className="text-xs text-muted leading-tight">{store.getCurrentUser()?.fullName}</span>
+              </div>
+            ) : (
+              <span className="text-sm text-muted mr-2">{store.getCurrentUser()?.fullName ?? "Khách"}</span>
+            )}
             {canSwitchToBuyer ? (
               <Button
                 variant="secondary"
@@ -113,7 +120,9 @@ export function DashboardFrame({
               aria-label="Đăng xuất"
               onClick={async () => {
                 await store.logout();
-                router.push("/login");
+                if (typeof window !== "undefined") {
+                  window.location.href = "/login";
+                }
               }}
             >
               <LogOut className="h-4 w-4" aria-hidden="true" />
@@ -121,19 +130,37 @@ export function DashboardFrame({
           </div>
         </div>
       </div>
-      <div className="mx-auto grid max-w-7xl gap-4 px-4 py-5 lg:grid-cols-[250px_1fr]">
-        <aside className="h-fit rounded-panel border border-line bg-white p-3">
-          <nav className="grid gap-1">
-            {nav.map(([href, label, Icon]) => (
-              <a key={href} href={href} className={cn(NAV_LINK_CLASS, pathname === href && activeLinkClass)}>
-                <Icon className="h-4 w-4" aria-hidden="true" />
-                {label}
-              </a>
-            ))}
-          </nav>
-        </aside>
-        <main className="min-w-0">{children}</main>
-      </div>
+      {pathname.includes("/violation-reports") ? (
+        <div className="w-full flex-1 overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+          <div className="mx-auto w-full max-w-7xl px-4 py-5 grid lg:grid-cols-[250px_1fr] gap-4 items-start">
+            <aside className="sticky top-5 h-[calc(100vh-6.5rem)] overflow-y-auto rounded-panel border border-line bg-white p-3 hidden lg:block [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+              <nav className="grid gap-1 pb-4">
+                {nav.map(([href, label, Icon]) => (
+                  <a key={href} href={href} className={cn(NAV_LINK_CLASS, pathname === href && activeLinkClass)}>
+                    <Icon className="h-4 w-4" aria-hidden="true" />
+                    {label}
+                  </a>
+                ))}
+              </nav>
+            </aside>
+            <main className="min-w-0 flex flex-col">{children}</main>
+          </div>
+        </div>
+      ) : (
+        <div className="mx-auto w-full flex-1 overflow-hidden max-w-7xl px-4 py-5 grid lg:grid-cols-[250px_1fr] gap-4">
+          <aside className="h-full overflow-y-auto rounded-panel border border-line bg-white p-3 hidden lg:block">
+            <nav className="grid gap-1">
+              {nav.map(([href, label, Icon]) => (
+                <a key={href} href={href} className={cn(NAV_LINK_CLASS, pathname === href && activeLinkClass)}>
+                  <Icon className="h-4 w-4" aria-hidden="true" />
+                  {label}
+                </a>
+              ))}
+            </nav>
+          </aside>
+          <main className="min-w-0 h-full overflow-hidden flex flex-col">{children}</main>
+        </div>
+      )}
     </div>
   );
 }

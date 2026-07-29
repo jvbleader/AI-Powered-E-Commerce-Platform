@@ -129,7 +129,6 @@ export interface Product {
   averageRating: number;
   reviewCount: number;
   soldCount: number;
-  viewCount: number;
   categoryIds: string[];
   imageUrls: string[];
   thumbnailUrl: string;
@@ -187,6 +186,8 @@ export interface Order {
   orderCode: string;
   userId: string;
   sellerId: string;
+  shopName?: string;
+  shopSlug?: string;
   orderStatus: OrderStatus;
   paymentStatus: PaymentStatus;
   sellerConfirmed: boolean;
@@ -205,6 +206,7 @@ export interface Order {
   shipment: ShipmentSnapshot;
   timeline: TimelineEntry[];
   createdAt: string;
+  printCount: number;
 }
 
 export interface Payment {
@@ -250,6 +252,25 @@ export interface Conversation {
   }[];
 }
 
+export type ViolationReportStatus = "PENDING" | "REVIEWING" | "RESOLVED" | "REJECTED";
+
+export interface ViolationReport {
+  id: string;
+  reporterId: string;
+  reporterName?: string;
+  reporterEmail?: string;
+  productId: string;
+  productPublicId?: string;
+  productName?: string;
+  productImage?: string;
+  reasonType: string;
+  description: string;
+  imageUrls?: string[];
+  status: ViolationReportStatus;
+  createdAt: string;
+  resolvedAt?: string;
+}
+
 export interface AppState {
   users: User[];
   shops: Shop[];
@@ -262,6 +283,8 @@ export interface AppState {
   payments: Payment[];
   notifications: Notification[];
   conversations: Conversation[];
+  violationReports?: ViolationReport[];
+  hiddenProductIds: string[];
   sessionUserId?: string;
   activeRole: Role | "GUEST";
   lastCheckoutPaymentCode?: string;
@@ -274,3 +297,4 @@ export interface VerificationContext {
   emailVerified: boolean;
   phoneVerified: boolean;
 }
+

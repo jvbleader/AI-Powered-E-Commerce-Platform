@@ -302,21 +302,18 @@ async def soft_delete_product(db: AsyncSession, product: Product) -> Product:
     product.status = "DELETED"
     product.deleted_at = utc_now()
     await db.flush()
-    await db.refresh(product)
     return product
 
 
 async def hide_product(db: AsyncSession, product: Product) -> Product:
     product.status = "HIDDEN"
     await db.flush()
-    await db.refresh(product)
     return product
 
 
 async def unhide_product(db: AsyncSession, product: Product) -> Product:
     product.status = "ACTIVE"
     await db.flush()
-    await db.refresh(product)
     return product
 
 
@@ -445,10 +442,10 @@ async def get_public_product_detail(
             Product.public_id == product_slug,
             Product.id == (int(product_slug) if product_slug.isdigit() else -1),
         ),
-        Product.status == "ACTIVE",
+        Product.status.in_(["ACTIVE", "OUT_OF_STOCK"]),
         SellerProfile.status == "APPROVED",
     ]
-    if shop_slug and shop_slug != "shop":
+    if shop_slug and shop_slug not in ("shop", "undefined"):
         filters.append(SellerProfile.shop_slug == shop_slug)
 
     query = (

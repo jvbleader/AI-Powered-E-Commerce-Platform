@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Plus } from "lucide-react";
+import { Plus, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Radio, Select, Textarea } from "@/components/ui/input";
 import { Panel, Section } from "@/components/ui/containers";
@@ -16,25 +16,22 @@ export default function CheckoutPage() {
   const store = useMarketplaceStore();
   const router = useRouter();
   const { showToast } = store;
+  const user = store.getCurrentUser();
 
   const [showAddressForm, setShowAddressForm] = useState(false);
   const [isOrdering, setIsOrdering] = useState(false);
   const [addressId, setAddressId] = useState(
-    store.state.addresses.find((item) => item.userId === store.getCurrentUser()?.id && item.isDefault)?.id ?? ""
+    store.state.addresses.find((item) => item.userId === user?.id && item.isDefault)?.id ?? ""
   );
   const [method, setMethod] = useState<PaymentMethod>("MOCK");
   const [note, setNote] = useState("");
   const [coupon, setCoupon] = useState("");
   const [shipCoupon, setShipCoupon] = useState("");
 
-  if (!store.getCurrentUser()) {
-    return <Unauthorized title="Checkout cần đăng nhập" description="Vui lòng đăng nhập để đặt hàng." />;
-  }
-
   const rows = store.getCartRows();
   const groups = selectedCheckoutGroups(rows);
   const total = groups.reduce((sum, group) => sum + group.total, 0);
-  const addresses = store.state.addresses.filter((address) => address.userId === store.getCurrentUser()?.id);
+  const addresses = store.state.addresses.filter((address) => address.userId === user?.id);
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const editingAddress = addresses.find((a) => a.id === editingId);
@@ -44,6 +41,31 @@ export default function CheckoutPage() {
       setAddressId(addresses[0].id);
     }
   }, [addresses, addressId]);
+
+  if (!user) {
+    return <Unauthorized title="Checkout cần đăng nhập" description="Vui lòng đăng nhập để đặt hàng." />;
+  }
+
+  if (!store.ready) {
+    return (
+      <main className="mx-auto max-w-7xl px-4 py-16 text-center">
+        <Loader2 className="mx-auto h-8 w-8 animate-spin text-emerald-600 mb-3" />
+        <p className="text-sm font-medium text-muted">Đang tải thông tin thanh toán...</p>
+      </main>
+    );
+  }
+
+  if (isOrdering) {
+    return (
+      <main className="mx-auto max-w-7xl px-4 py-16 text-center">
+        <Panel className="mx-auto max-w-md p-8">
+          <Loader2 className="mx-auto h-10 w-10 animate-spin text-emerald-600 mb-4" />
+          <h2 className="text-lg font-bold text-ink mb-1">Đang xử lý đơn hàng</h2>
+          <p className="text-sm text-muted">Vui lòng chờ trong giây lát, hệ thống đang tạo đơn hàng và chuyển hướng...</p>
+        </Panel>
+      </main>
+    );
+  }
 
   return (
     <main className="mx-auto max-w-7xl px-4 py-5">
@@ -119,7 +141,7 @@ export default function CheckoutPage() {
               <h2 className="font-bold">Thanh toán</h2>
               <div className="mt-3 grid gap-3">
                 <Field label="Ghi chú khách hàng">
-                  <Textarea value={note} onChange={(event) => setNote(event.target.value)} placeholder="Ghi chú giao hàng" />
+                  <Textarea value={note} onChange={(event) => setNote(event.target.value)} placeholder="Ghi chú giao hàng" maxLength={500} />
                 </Field>
                 <Field label="Mã giảm tiền">
                   <Input value={coupon} onChange={(event) => setCoupon(event.target.value)} placeholder="Tối đa 1 mã" />
@@ -140,10 +162,17 @@ export default function CheckoutPage() {
                   disabled={!addressId || isOrdering}
                   onClick={async () => {
                     setIsOrdering(true);
-                    const result = await store.checkout(addressId, method, note);
-                    showToast(result.message, result.ok ? "success" : "danger");
-                    if (result.ok) router.push("/checkout/success");
-                    setIsOrdering(false);
+                    try {
+                      const result = await store.checkout(addressId, method, note);
+                      showToast(result.message, result.ok ? "success" : "danger");
+                      if (result.ok) {
+                        router.push("/checkout/success");
+                      } else {
+                        setIsOrdering(false);
+                      }
+                    } catch (e) {
+                      setIsOrdering(false);
+                    }
                   }}
                 >
                   {isOrdering ? "Đang đặt hàng..." : "Đặt hàng"}

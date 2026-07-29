@@ -235,8 +235,19 @@ export default function HomePageComponent() {
     };
   }, []);
 
+  const activeBestSellers = bestSellers.filter(p => {
+    const isHidden = store.state.hiddenProductIds.includes(p.id) || store.state.hiddenProductIds.includes(p.slug);
+    const globalP = store.state.products.find(sp => sp.id === p.id);
+    return !isHidden && (globalP ? globalP.status !== "HIDDEN" : p.status !== "HIDDEN");
+  });
+  const activeNewest = newest.filter(p => {
+    const isHidden = store.state.hiddenProductIds.includes(p.id) || store.state.hiddenProductIds.includes(p.slug);
+    const globalP = store.state.products.find(sp => sp.id === p.id);
+    return !isHidden && (globalP ? globalP.status !== "HIDDEN" : p.status !== "HIDDEN");
+  });
+
   const approvedShops = localShops.filter((shop) => shop.status === "APPROVED").sort((a, b) => (b.totalSold || 0) - (a.totalSold || 0));
-  const heroProduct = bestSellers[0];
+  const heroProduct = activeBestSellers[0];
   const heroShop = heroProduct ? localShops.find((shop) => shop.id === heroProduct.sellerId) : undefined;
   const heroVariant = heroProduct ? localVariants.find((v) => v.productId === heroProduct.id) : undefined;
 
@@ -605,9 +616,9 @@ export default function HomePageComponent() {
         <div className="mt-6">
           {loading ? (
             <ProductGridSkeleton count={4} />
-          ) : (activeTab === "recommended" ? bestSellers : newest).length > 0 ? (
+          ) : (activeTab === "recommended" ? activeBestSellers : activeNewest).length > 0 ? (
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
-              {(activeTab === "recommended" ? bestSellers : newest).map((product) => (
+              {(activeTab === "recommended" ? activeBestSellers : activeNewest).map((product) => (
                 <CyberProductCard
                   key={product.id}
                   product={product}

@@ -16,8 +16,8 @@ function RedirectTo({ href }: { href: string }) {
   }, [href, router]);
 
   return (
-    <main className="mx-auto flex min-h-[60vh] max-w-7xl items-center justify-center px-4 bg-canvas">
-      <div className="bento-card w-full max-w-md rounded-2xl p-8 text-center border border-slate-200 bg-white shadow-xl">
+    <main className="flex min-h-screen w-full items-start justify-center bg-[#faf6f0] px-4 pt-20 sm:pt-32 pb-12">
+      <div className="w-full max-w-md rounded-2xl border border-slate-200/80 bg-white p-8 text-center animate-in fade-in-50 duration-200">
         <Sparkles className="mx-auto h-8 w-8 text-emerald-600 animate-spin" aria-hidden="true" />
         <p className="mt-4 font-heading text-base font-bold text-slate-900">Đang chuyển hướng hệ thống...</p>
       </div>
@@ -75,8 +75,8 @@ export default function MarketplaceLayout({
 
   if (!ready) {
     return (
-      <main className="mx-auto flex min-h-screen max-w-7xl items-center justify-center px-4 bg-canvas">
-        <div className="bento-card w-full max-w-md rounded-2xl p-8 text-center border border-slate-200 bg-white shadow-xl">
+      <main className="flex min-h-screen w-full items-start justify-center bg-[#faf6f0] px-4 pt-20 sm:pt-32 pb-12">
+        <div className="w-full max-w-md rounded-2xl border border-slate-200/80 bg-white p-8 text-center animate-in fade-in-50 duration-200">
           <Sparkles className="mx-auto h-8 w-8 text-emerald-600 animate-pulse" aria-hidden="true" />
           <h1 className="mt-4 font-heading text-xl font-extrabold text-slate-900">Đang Khởi Động Shepoo</h1>
           <p className="mt-2 text-xs text-slate-500">Đang chuẩn bị giao diện</p>

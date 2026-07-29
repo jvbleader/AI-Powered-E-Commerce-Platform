@@ -37,6 +37,7 @@ type SellerInfo = {
   shop_slug: string;
   shop_logo_url: string | null;
   total_sold: number;
+  shipping_fee: number;
 };
 
 type ImagePublicResponse = {
@@ -47,6 +48,7 @@ type ImagePublicResponse = {
 
 type InventoryPublicResponse = {
   quantity: number;
+  reserved_quantity: number;
 };
 
 type VariantPublicResponse = {
@@ -74,7 +76,6 @@ type ProductPublicResponse = {
   average_rating: number;
   review_count: number;
   sold_count: number;
-  view_count: number;
   status: string;
   created_at?: string;
   seller: SellerInfo | null;
@@ -111,7 +112,6 @@ export const normalizeProduct = (
     averageRating: backendProduct.average_rating,
     reviewCount: backendProduct.review_count,
     soldCount: backendProduct.sold_count,
-    viewCount: backendProduct.view_count,
     categoryIds: backendProduct.categories ? backendProduct.categories.map((c: { id: number; name: string }) => c.id.toString()) : [],
     imageUrls: backendProduct.images.map((img) => img.image_url),
     thumbnailUrl:
@@ -133,12 +133,12 @@ export const normalizeProduct = (
     imageUrl: variant.image_url ?? product.thumbnailUrl,
     status: toVariantStatus(variant.status),
     inventory: {
-      quantity: variant.inventory?.quantity ?? 0,
-      reservedQuantity: 0
+      quantity: Math.max(0, (variant.inventory?.quantity ?? 0) - (variant.inventory?.reserved_quantity ?? 0)),
+      reservedQuantity: variant.inventory?.reserved_quantity ?? 0
     }
   }));
 
-  let shop: Shop | undefined;
+  let shop: Shop;
   if (backendProduct.seller) {
     shop = {
       id: sellerId,
@@ -150,10 +150,27 @@ export const normalizeProduct = (
       phone: "",
       email: "",
       pickupAddress: "",
-      shippingFee: 0,
+      shippingFee: Number(backendProduct.seller.shipping_fee ?? 0),
       shippingProviderName: "",
       status: "APPROVED",
       totalSold: backendProduct.seller.total_sold,
+      totalRevenue: 0
+    };
+  } else {
+    shop = {
+      id: "shop",
+      userId: "",
+      shopName: "Cửa hàng chính hãng",
+      shopSlug: "shop",
+      logoUrl: "https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?auto=format&fit=crop&w=240&q=80",
+      description: "",
+      phone: "",
+      email: "",
+      pickupAddress: "",
+      shippingFee: 0,
+      shippingProviderName: "Giao hàng nhanh",
+      status: "APPROVED",
+      totalSold: 0,
       totalRevenue: 0
     };
   }

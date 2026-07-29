@@ -9,6 +9,7 @@ class SellerInfo(BaseModel):
     shop_slug: str
     shop_logo_url: Optional[str] = None
     total_sold: int = 0
+    shipping_fee: Decimal = Decimal("0.00")
 
     class Config:
         from_attributes = True
@@ -25,6 +26,7 @@ class ImagePublicResponse(BaseModel):
 
 class InventoryPublicResponse(BaseModel):
     quantity: int
+    reserved_quantity: int = 0
 
     class Config:
         from_attributes = True
@@ -60,7 +62,6 @@ class ProductPublicResponse(BaseModel):
     average_rating: float
     review_count: int
     sold_count: int
-    view_count: int
     status: str
 
     seller: Optional[SellerInfo] = None

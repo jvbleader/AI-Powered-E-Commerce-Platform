@@ -220,7 +220,7 @@ export const createOrderSlice: StateCreator<MarketplaceStore, [], [], any> = (se
         if (status) query.set("status", status);
         const response = await apiFetch<BackendOrderListResponse>(`${SELLER_ORDER_ROUTES.list}?${query.toString()}`);
         
-        const orders = response.items.map((item) => normalizeBackendOrder(item, currentShop.id, currentUser.id));
+        const orders = response.items.map((item) => normalizeBackendOrder(item, currentShop.id, item.user?.public_id || "UNKNOWN_USER"));
         
         setState((prev: AppState) => {
           const incomingIds = new Set(orders.map((o) => o.id));
@@ -331,5 +331,23 @@ export const createOrderSlice: StateCreator<MarketplaceStore, [], [], any> = (se
       return { ok: false, message: error instanceof ApiError ? error.message : "Lỗi khi từ chối đơn hàng." };
     }
   },
+    incrementPrintCount: async (orderId: string) => {
+      if (!get().getCurrentShop() || !get().getCurrentUser()) return { ok: false, message: "Shop không tồn tại." };
+      try {
+        const response = await apiFetch<BackendOrderResponse>(`/seller/orders/${orderId}/increment-print-count`, {
+          method: "POST"
+        });
+        const order = normalizeBackendOrder(response, get().getCurrentShop()!.id, get().getCurrentUser()!.id);
+        setState((prev: AppState) => ({
+          ...prev,
+          orders: prev.orders.some((o) => o.id === order.id || o.orderCode === order.orderCode)
+            ? prev.orders.map((o) => (o.id === order.id || o.orderCode === order.orderCode ? order : o))
+            : [...prev.orders, order]
+        }));
+        return { ok: true, order };
+      } catch (error) {
+        return { ok: false, message: error instanceof ApiError ? error.message : "Lỗi khi tăng số lần in." };
+      }
+    },
   };
 };

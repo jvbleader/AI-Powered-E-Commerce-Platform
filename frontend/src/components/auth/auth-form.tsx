@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowRight,
@@ -37,6 +37,38 @@ export default function AuthPage({ mode: initialMode }: { mode: "login" | "regis
   const router = useRouter();
   const { showToast } = store;
 
+  const currentUser = store.getCurrentUser();
+
+  useEffect(() => {
+    if (store.ready && currentUser) {
+      const params = new URLSearchParams(window.location.search);
+      const redirectParam = params.get("redirect") || params.get("from") || params.get("returnUrl");
+
+      if (redirectParam && redirectParam.startsWith("/") && !redirectParam.startsWith("/login") && !redirectParam.startsWith("/register")) {
+        router.replace(redirectParam);
+        return;
+      }
+
+      const lastVisited = typeof window !== "undefined" ? sessionStorage.getItem("last_visited_page") : null;
+      if (lastVisited && lastVisited.startsWith("/") && !lastVisited.startsWith("/login") && !lastVisited.startsWith("/register")) {
+        router.replace(lastVisited);
+        return;
+      }
+
+      if (typeof document !== "undefined" && document.referrer && document.referrer.startsWith(window.location.origin)) {
+        try {
+          const refUrl = new URL(document.referrer);
+          if (refUrl.pathname !== "/login" && refUrl.pathname !== "/register") {
+            router.replace(refUrl.pathname + refUrl.search + refUrl.hash);
+            return;
+          }
+        } catch {}
+      }
+
+      router.replace("/");
+    }
+  }, [store.ready, currentUser, router]);
+
   const [mode, setMode] = useState<"login" | "register">(initialMode);
   const [email, setEmail] = useState("");
   const [fullName, setFullName] = useState("");
@@ -47,6 +79,10 @@ export default function AuthPage({ mode: initialMode }: { mode: "login" | "regis
   const [formErrors, setFormErrors] = useState<AuthFormErrors>({});
   const [submitting, setSubmitting] = useState(false);
   const submittingRef = useRef(false);
+
+  if (store.ready && currentUser) {
+    return null;
+  }
 
   // Real-time password strength calculation
   const getPasswordStrength = () => {
@@ -108,7 +144,21 @@ export default function AuthPage({ mode: initialMode }: { mode: "login" | "regis
             });
       showToast(result.message, result.ok ? "success" : "danger");
       if (result.ok) {
-        router.push(result.redirectTo || "/");
+        const params = new URLSearchParams(window.location.search);
+        const redirectParam = params.get("redirect") || params.get("from") || params.get("returnUrl");
+        const lastVisited = typeof window !== "undefined" ? sessionStorage.getItem("last_visited_page") : null;
+
+        let target = result.redirectTo && result.redirectTo !== "/" ? result.redirectTo : null;
+        if (!target) {
+          if (redirectParam && redirectParam.startsWith("/") && !redirectParam.startsWith("/login") && !redirectParam.startsWith("/register")) {
+            target = redirectParam;
+          } else if (lastVisited && lastVisited.startsWith("/") && !lastVisited.startsWith("/login") && !lastVisited.startsWith("/register")) {
+            target = lastVisited;
+          } else {
+            target = "/";
+          }
+        }
+        router.push(target);
       } else {
         submittingRef.current = false;
         setSubmitting(false);

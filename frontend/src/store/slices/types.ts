@@ -141,7 +141,6 @@ export type BackendProductResponse = {
   average_rating: number;
   review_count: number;
   sold_count: number;
-  view_count: number;
   created_at: string;
   updated_at?: string | null;
   images: BackendImageResponse[];
@@ -174,7 +173,8 @@ export type BackendOrderResponse = {
   cancelled_at?: string | null;
   created_at: string;
   updated_at?: string | null;
-  seller?: { public_id: string; shop_name: string; shop_logo_url?: string | null };
+  user?: { public_id: string; full_name: string; avatar_url?: string | null };
+  seller?: { public_id: string; shop_name: string; shop_logo_url?: string | null; shop_slug?: string };
   items?: any[];
   shipment?: any;
 };
@@ -234,9 +234,12 @@ export type MarketplaceStore = {
 
   // ── Cart slice ──
   addToCart: (variantId: string, quantity: number) => Promise<any>;
+  buyNow: (variantId: string, quantity: number) => Promise<{ ok: boolean; message: string }>;
   updateCartItem: (cartItemId: string, changes: { quantity?: number; isSelected?: boolean }) => Promise<any>;
   removeCartItem: (cartItemId: string) => Promise<any>;
   selectAllCart: (selected: boolean) => Promise<any>;
+  refreshCart: () => Promise<void>;
+
 
   // ── Order slice ──
   checkout: (addressId: string, paymentMethod: PaymentMethod, customerNote?: string) => Promise<any>;
@@ -251,6 +254,7 @@ export type MarketplaceStore = {
   confirmSellerOrder: (orderCode: string) => Promise<any>;
   shippingSellerOrder: (orderCode: string) => Promise<any>;
   cancelSellerOrder: (orderCode: string) => Promise<any>;
+  incrementPrintCount: (orderCode: string) => Promise<any>;
 
   // ── Product slice ──
   fetchSellerProducts: () => Promise<any>;
@@ -283,4 +287,8 @@ export type MarketplaceStore = {
   showToast: (message: string, tone?: ToastTone) => Promise<void>;
   setUsers: (users: User[]) => Promise<void>;
   setConversations: (conversations: Conversation[]) => Promise<void>;
+  submitViolationReport: (reportData: { productId: string; reasonType: string; description: string; imageUrls?: string[] }) => Promise<any>;
+  updateViolationReportStatus: (reportId: string, status: import("@/types/models").ViolationReportStatus) => Promise<any>;
+  hideProductByAdmin: (productId: string, productPublicId?: string) => Promise<{ok: boolean, message?: string}>;
+  deleteViolationReport: (reportId: string) => Promise<any>;
 };

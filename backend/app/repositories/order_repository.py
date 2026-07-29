@@ -29,6 +29,7 @@ async def get_orders_by_seller_and_status(
         query.options(
             selectinload(Order.items).selectinload(OrderItem.review),
             selectinload(Order.shipment),
+            selectinload(Order.user),
         )
         .order_by(Order.created_at.desc())
         .offset(skip)
@@ -48,6 +49,7 @@ async def get_order_by_public_id_and_seller(
         .options(
             selectinload(Order.items).selectinload(OrderItem.review),
             selectinload(Order.shipment),
+            selectinload(Order.user),
         )
         .filter(
             or_(Order.public_id == public_id, Order.order_code == public_id),
@@ -134,7 +136,7 @@ async def get_user_orders(db: AsyncSession, user_id: int) -> list[Order]:
 
 
 async def get_order_by_code_and_user(
-    db: AsyncSession, order_code: str, user_id: int
+    db: AsyncSession, order_code: str, user_id: int, is_seller: bool = False
 ) -> Order | None:
     stmt = (
         select(Order)
@@ -143,8 +145,11 @@ async def get_order_by_code_and_user(
             selectinload(Order.seller),
             selectinload(Order.shipment),
         )
-        .where(Order.order_code == order_code, Order.user_id == user_id)
     )
+    if is_seller:
+        stmt = stmt.where(Order.order_code == order_code, Order.seller_id == user_id)
+    else:
+        stmt = stmt.where(Order.order_code == order_code, Order.user_id == user_id)
     res = await db.execute(stmt)
     return res.scalar_one_or_none()
 

@@ -22,6 +22,8 @@ export default function SellerSuspendedPage() {
   useEffect(() => {
     let cancelled = false;
 
+    if (!store.ready) return;
+
     if (!store.getCurrentUser()) {
       setLoadingStatus(false);
       return;
@@ -48,13 +50,9 @@ export default function SellerSuspendedPage() {
     return () => {
       cancelled = true;
     };
-  }, [store.getCurrentUser(), store.getSellerApplication]);
+  }, [store.ready, store.getCurrentUser()?.id, store.getSellerApplication]);
 
-  if (!store.getCurrentUser()) {
-    return <Unauthorized title="Cần đăng nhập" description="Bạn cần đăng nhập trước khi gửi hoặc theo dõi hồ sơ mở shop." />;
-  }
-
-  if (loadingStatus) {
+  if (!store.ready || loadingStatus) {
     return (
       <main className="mx-auto max-w-3xl px-4 py-10">
         <Panel>
@@ -65,6 +63,10 @@ export default function SellerSuspendedPage() {
         </Panel>
       </main>
     );
+  }
+
+  if (!store.getCurrentUser()) {
+    return <Unauthorized title="Cần đăng nhập" description="Bạn cần đăng nhập trước khi gửi hoặc theo dõi hồ sơ mở shop." />;
   }
 
   if (statusError) {

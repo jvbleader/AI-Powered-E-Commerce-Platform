@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { Bell, CreditCard, LogOut, Plus, Store, Star } from "lucide-react";
+import { ArrowLeft, Bell, CreditCard, LogOut, Plus, Store, Star, Copy, Check, ExternalLink, RotateCcw, Truck, MapPin, MessageSquare, ShieldCheck, FileText, HelpCircle } from "lucide-react";
 import { createReviewApi } from "@/services/review-api";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Select, Textarea } from "@/components/ui/input";
@@ -13,7 +13,8 @@ import { DataTable } from "@/components/ui/data-table";
 import { cn } from "@/lib/utils";
 import {
   MetricCard,
-  OrderTimeline
+  OrderTimeline,
+  OrderProgressStepper
 } from "@/components/shared/cards";
 import { useMarketplaceStore } from "@/store/use-marketplace-store";
 import {
@@ -22,6 +23,7 @@ import {
   getCategoryNames,
   orderStatusLabel,
   paymentStatusLabel,
+  paymentMethodLabel,
   roleLabel,
   sellerStatusLabel,
   canCustomerCancel,
@@ -31,7 +33,7 @@ import {
   canSellerShip
 } from "@/lib/helpers";
 import Unauthorized from "@/components/shared/unauthorized-page";
-import type { Address, AddressType, Order, OrderStatus, Product, ProductVariant, Shop } from "@/types/models";
+import type { Address, AddressType, Order, OrderItem, OrderStatus, Product, ProductVariant, Shop } from "@/types/models";
 
 const linkClass =
   "inline-flex min-h-10 items-center gap-2 rounded-panel px-3 py-2 text-sm font-semibold text-muted transition hover:bg-white hover:text-primary";
@@ -46,18 +48,17 @@ export default function AccountPage() {
 
   const store = useMarketplaceStore();
   const { showToast } = store;
-
-  if (!store.getCurrentUser()) {
-    return <Unauthorized title="Tài khoản cần đăng nhập" description="Vui lòng đăng nhập để xem thông tin cá nhân." />;
-  }
-
-  const user = store.getCurrentUser()!;
+  const user = store.getCurrentUser();
 
   useEffect(() => {
     if (user?.id) {
       store.fetchCustomerOrders("", true);
     }
   }, [user?.id]);
+
+  if (!user) {
+    return <Unauthorized title="Tài khoản cần đăng nhập" description="Vui lòng đăng nhập để xem thông tin cá nhân." />;
+  }
 
   const nav = [
     ["overview", "/account", "Tổng quan"],
@@ -69,24 +70,33 @@ export default function AccountPage() {
     ["reviews", "/account/reviews", "Đánh giá"]
   ];
 
+  const isViewingOrderDetail = currentSection === "orders" && Boolean(detailId);
+
   return (
-    <main className="mx-auto grid max-w-7xl gap-4 px-4 py-5 lg:grid-cols-[240px_1fr]">
-      <Panel className="h-fit">
-        <div className="flex items-center gap-3">
-          <img src={user.avatarUrl} alt={user.fullName} className="h-12 w-12 rounded-panel object-cover" />
-          <div className="min-w-0">
-            <p className="truncate font-bold">{user.fullName}</p>
-            <p className="text-xs text-muted">{roleLabel[store.state.activeRole]}</p>
+    <main
+      className={cn(
+        "mx-auto grid max-w-7xl gap-4 px-4 py-5",
+        isViewingOrderDetail ? "grid-cols-1" : "lg:grid-cols-[240px_1fr]"
+      )}
+    >
+      {!isViewingOrderDetail && (
+        <Panel className="h-fit">
+          <div className="flex items-center gap-3">
+            <img src={user.avatarUrl} alt={user.fullName} className="h-12 w-12 rounded-panel object-cover" />
+            <div className="min-w-0">
+              <p className="truncate font-bold">{user.fullName}</p>
+              <p className="text-xs text-muted">{roleLabel[store.state.activeRole]}</p>
+            </div>
           </div>
-        </div>
-        <nav className="mt-4 grid gap-1">
-          {nav.map(([key, href, label]) => (
-            <a key={key} href={href} className={cn(linkClass, currentSection === key && activeLinkClass)}>
-              {label}
-            </a>
-          ))}
-        </nav>
-      </Panel>
+          <nav className="mt-4 grid gap-1">
+            {nav.map(([key, href, label]) => (
+              <a key={key} href={href} className={cn(linkClass, currentSection === key && activeLinkClass)}>
+                {label}
+              </a>
+            ))}
+          </nav>
+        </Panel>
+      )}
       <div>
         {currentSection === "overview" ? <AccountOverview /> : null}
         {currentSection === "profile" ? <AccountProfileWrapper /> : null}
@@ -357,6 +367,10 @@ export default function AccountPage() {
       return store.state.shops.find((shop) => shop.id === id);
     };
 
+    const getShopName = (order: Order) => {
+      return order.shopName || shopById(order.sellerId)?.shopName || order.items?.[0]?.sellerNameSnapshot || "-";
+    };
+
     const renderOrderAction = (order: Order) => {
       if (audience !== "customer") {
         const showConfirm = canSellerConfirm(order);
@@ -407,7 +421,7 @@ export default function AccountPage() {
           columns={["Mã đơn", "Shop", "Trạng thái", "Thanh toán", "Tổng", "Hành động"]}
           rows={orders.map((order) => [
             <a key="code" className="font-bold text-primary" href={audience === "customer" ? `/account/orders/${order.orderCode}` : `/seller/orders/${order.orderCode}`}>{order.orderCode}</a>,
-            shopById(order.sellerId)?.shopName ?? "-",
+            getShopName(order),
             <StatusBadge key="st" status={order.orderStatus} label={orderStatusLabel[order.orderStatus]} />,
             <StatusBadge key="pay" status={order.paymentStatus} label={paymentStatusLabel[order.paymentStatus]} />,
             formatVnd(order.totalAmount),
@@ -458,6 +472,27 @@ export default function AccountPage() {
       window.location.href = `/payment/${payment.paymentCode}`;
     };
 
+    const handleCopy = (text: string, label: string) => {
+      navigator.clipboard.writeText(text);
+      showToast(`Đã sao chép ${label}!`, "success");
+    };
+
+    const handleReorder = async () => {
+      let count = 0;
+      for (const item of order.items) {
+        if (item.variantId) {
+          await store.addToCart(item.variantId, item.quantity);
+          count++;
+        }
+      }
+      if (count > 0) {
+        showToast(`Đã thêm ${count} sản phẩm vào giỏ hàng!`, "success");
+        router.push("/cart");
+      } else {
+        showToast("Không thể tự động thêm sản phẩm vào giỏ.", "danger");
+      }
+    };
+
     const handleReviewSubmit = async () => {
       if (!reviewingItem) return;
       setSubmittingReview(true);
@@ -479,125 +514,344 @@ export default function AccountPage() {
     };
 
     const shop = shopById(order.sellerId);
-    
+    const shopName = order.shopName || shop?.shopName || order.items?.[0]?.sellerNameSnapshot || "Shop";
+    const shopSlug = order.shopSlug || shop?.shopSlug || "shop";
+    const trackingCode = `SPX-VN-${order.orderCode.slice(-8)}`;
+
     return (
-      <Section title={`Chi tiết đơn ${order.orderCode}`}>
-        <div className="grid gap-4 lg:grid-cols-[1fr_360px]">
-          <div className="space-y-4">
-            <Panel>
+      <Section title={`Chi tiết đơn hàng`}>
+        {audience === "customer" && (
+          <div className="mb-3">
+            <a
+              href="/account/orders"
+              className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-600 hover:text-emerald-700 transition"
+            >
+              <ArrowLeft className="h-4 w-4 text-slate-400" />
+              Quay lại danh sách đơn hàng
+            </a>
+          </div>
+        )}
+        <div className="space-y-4">
+          {/* HEADER SUMMARY PANEL */}
+          <Panel className="bg-slate-50 border border-slate-200">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <div className="flex items-center gap-2">
+                  <h2 className="text-lg font-black text-slate-900">Đơn hàng #{order.orderCode}</h2>
+                  <button
+                    type="button"
+                    onClick={() => handleCopy(order.orderCode, "mã đơn hàng")}
+                    className="p-1 text-slate-400 hover:text-emerald-700 transition"
+                    title="Sao chép mã đơn"
+                  >
+                    <Copy className="h-4 w-4" />
+                  </button>
+                </div>
+                <p className="text-xs text-slate-500 mt-1">
+                  Ngày đặt: <span className="font-semibold text-slate-700">{formatDate(order.createdAt)}</span>
+                </p>
+              </div>
+
               <div className="flex flex-wrap items-center gap-2">
                 <StatusBadge status={order.orderStatus} label={orderStatusLabel[order.orderStatus]} />
                 <StatusBadge status={order.paymentStatus} label={paymentStatusLabel[order.paymentStatus]} />
-                <span className="text-sm text-muted">{shop?.shopName}</span>
-              </div>
-              <div className="mt-4 space-y-3">
-                {order.items.map((item) => {
-                  const targetProd = store.state.products.find((p) => p.id === item.productId || p.name === item.productNameSnapshot);
-                  const prodSlug = targetProd?.slug || item.productId || "product";
-                  const shopSlug = shop?.shopSlug || "shop";
-                  const prodUrl = `/shops/${shopSlug}/products/${prodSlug}`;
-
-                  return (
-                    <div key={item.id} className="flex gap-3 border-t border-line pt-3 items-center">
-                      <a href={prodUrl} className="block overflow-hidden rounded-panel">
-                        <img src={item.productImageSnapshot} alt={item.productNameSnapshot} className="h-16 w-16 rounded-panel object-cover transition-transform hover:scale-105" />
-                      </a>
-                      <div className="min-w-0 flex-1">
-                        <a href={prodUrl} className="font-bold hover:text-primary hover:underline">
-                          {item.productNameSnapshot}
-                        </a>
-                        <p className="text-sm text-muted">{item.variantNameSnapshot} - SKU {item.skuSnapshot}</p>
-                      </div>
-                      <div className="flex flex-col items-end gap-1">
-                        <p className="font-bold">{formatVnd(item.subtotal)}</p>
-                        {order.orderStatus === "COMPLETED" && audience === "customer" && (
-                          reviewedItemIds[item.id] || item.isReviewed ? null : (
-                            <Button
-                              variant="secondary"
-                              className="text-xs py-1 px-2.5 h-auto mt-1"
-                              onClick={() => {
-                                setReviewingItem(item);
-                                setRating(5);
-                                setComment("");
-                              }}
-                            >
-                              Đánh giá
-                            </Button>
-                          )
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </Panel>
-            <Panel>
-              <h3 className="font-bold">Timeline</h3>
-              <div className="mt-3">
-                <OrderTimeline order={order} />
-              </div>
-            </Panel>
-          </div>
-          <Panel className="h-fit">
-            <h3 className="font-bold">Shipment snapshot</h3>
-            <p className="mt-2 text-sm leading-6 text-muted">
-              {order.shipment.receiverName} - {order.shipment.receiverPhone}
-              <br />
-              {order.shipment.detailAddress}, {order.shipment.ward}, {order.shipment.district}, {order.shipment.province}
-            </p>
-            <div className="mt-4 grid gap-2">
-              <InfoRow label="Subtotal" value={formatVnd(order.subtotalAmount)} />
-              <InfoRow label="Phí ship" value={formatVnd(order.shippingFee)} />
-              <InfoRow label="Tổng" value={formatVnd(order.totalAmount)} />
-            </div>
-            {audience === "customer" && (canContinuePayment(order) || canCustomerCancel(order) || canCustomerConfirmReceipt(order)) ? (
-              <div className="mt-4 grid gap-2">
-                {canContinuePayment(order) ? (
-                  <Button onClick={() => goToPaymentForOrder(order)}>
-                    <CreditCard className="h-4 w-4" aria-hidden="true" />
-                    Thanh toán
+                {audience === "customer" && (
+                  <Button
+                    variant="secondary"
+                    className="text-xs py-1.5 px-3 h-auto gap-1 text-emerald-700 border-emerald-200 bg-emerald-50 hover:bg-emerald-100"
+                    onClick={handleReorder}
+                  >
+                    <RotateCcw className="h-3.5 w-3.5" />
+                    Mua lại đơn này
                   </Button>
-                ) : null}
-                {canCustomerConfirmReceipt(order) ? (
-                  <Button variant="secondary" onClick={() => store.confirmCustomerReceipt(order.orderCode).then((res) => { if (res.ok) showToast("Đã xác nhận nhận hàng.", "success"); else showToast(res.message || "Lỗi xác nhận", "danger"); })}>Đã nhận hàng</Button>
-                ) : null}
-                {canCustomerCancel(order) ? <Button variant="danger" onClick={() => store.cancelCustomerOrder(order.orderCode).then((res) => { if (res.ok) showToast("Đã hủy đơn hàng.", "success"); else showToast(res.message || "Lỗi hủy đơn", "danger"); })}>Hủy đơn</Button> : null}
+                )}
               </div>
-            ) : null}
-            {audience === "seller" && (canSellerConfirm(order) || canSellerShip(order) || canSellerCancel(order)) ? (
-              <div className="mt-4 grid gap-2">
-                {canSellerConfirm(order) ? (
-                  <Button onClick={() => store.confirmSellerOrder(order.id).then((res) => { if (res.ok) showToast("Đã xác nhận đơn hàng.", "success"); else showToast(res.message || "Lỗi xác nhận", "danger"); })}>Xác nhận đơn</Button>
-                ) : null}
-                {canSellerShip(order) ? (
-                  <Button variant="secondary" onClick={() => store.shippingSellerOrder(order.id).then((res) => { if (res.ok) showToast("Đã chuyển shipping.", "success"); else showToast(res.message || "Lỗi chuyển shipping", "danger"); })}>Chuyển shipping</Button>
-                ) : null}
-                {canSellerCancel(order) ? (
-                  <Button variant="danger" onClick={() => store.cancelSellerOrder(order.id).then((res) => { if (res.ok) showToast("Đã từ chối đơn hàng.", "success"); else showToast(res.message || "Lỗi từ chối", "danger"); })}>Từ chối đơn</Button>
-                ) : null}
-              </div>
-            ) : null}
+            </div>
+
+            {/* VISUAL STEPPER TRACK */}
+            <div className="mt-6 border-t border-slate-200/80 pt-5">
+              <OrderProgressStepper order={order} />
+            </div>
           </Panel>
+
+          <div className="grid gap-4 lg:grid-cols-[1fr_360px]">
+            {/* LEFT MAIN COLUMN */}
+            <div className="space-y-4 min-w-0">
+              {/* SHOP BANNER CARD */}
+              <Panel className="p-4 overflow-hidden">
+                <div className="flex items-center justify-between gap-3 border-b border-slate-100 pb-3">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700 font-bold">
+                      <Store className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-slate-900 text-sm">{shopName}</h3>
+                      <p className="text-[11px] text-slate-500">Người bán chính thức</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <a
+                      href={`/shops/${shopSlug}`}
+                      className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition"
+                    >
+                      <Store className="h-3.5 w-3.5 text-slate-500" />
+                      Ghé Shop
+                    </a>
+                  </div>
+                </div>
+
+                {order.customerNote && (
+                  <div className="mt-3 flex items-start gap-2 rounded-lg bg-slate-50 p-3 text-sm text-slate-700 border border-slate-200">
+                    <MessageSquare className="h-4 w-4 mt-0.5 shrink-0 text-slate-500" />
+                    <div className="min-w-0 flex-1 break-all">
+                      <span className="font-semibold text-slate-900">Ghi chú của bạn: </span>
+                      {order.customerNote}
+                    </div>
+                  </div>
+                )}
+
+                {/* ITEMS LIST */}
+                <div className="mt-3 space-y-4">
+                  {(() => {
+                    const productReviewState = new Map<string, { hasReviewed: boolean; firstItemId: string }>();
+                    order.items.forEach(item => {
+                      const pid = item.productId || item.productNameSnapshot;
+                      if (!productReviewState.has(pid)) {
+                        productReviewState.set(pid, { hasReviewed: false, firstItemId: item.id });
+                      }
+                      if (item.isReviewed || reviewedItemIds[item.id]) {
+                        productReviewState.get(pid)!.hasReviewed = true;
+                      }
+                    });
+
+                    return order.items.map((item) => {
+                      const targetProd = store.state.products.find((p) => p.id === item.productId || p.name === item.productNameSnapshot);
+                      const prodSlug = targetProd?.slug || item.productId || "product";
+                      const prodUrl = `/shops/${shopSlug}/products/${prodSlug}`;
+
+                      return (
+                        <div key={item.id} className="flex flex-col sm:flex-row gap-3 border-b border-slate-100 pb-4 last:border-b-0 last:pb-0 sm:items-center">
+                          <a href={prodUrl} className="block shrink-0 overflow-hidden rounded-xl border border-slate-100 bg-slate-50">
+                            <img src={item.productImageSnapshot} alt={item.productNameSnapshot} className="h-20 w-20 rounded-xl object-cover transition-transform hover:scale-105" />
+                          </a>
+
+                          <div className="min-w-0 flex-1">
+                            <a href={prodUrl} className="font-bold text-slate-900 text-sm hover:text-emerald-700 hover:underline line-clamp-2">
+                              {item.productNameSnapshot}
+                            </a>
+                            <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                              <span className="rounded bg-slate-100 px-2 py-0.5 font-medium text-slate-600">Phân loại: {item.variantNameSnapshot}</span>
+                            </div>
+                            <p className="mt-1 text-xs text-slate-500">
+                              Số lượng: <span className="font-semibold text-slate-800">x{item.quantity}</span> × {formatVnd(item.unitPrice)}
+                            </p>
+                          </div>
+
+                          <div className="flex sm:flex-col items-end justify-between sm:justify-center gap-2 shrink-0">
+                            <p className="font-black text-slate-900 text-base">{formatVnd(item.subtotal)}</p>
+                            <div className="flex items-center gap-1.5">
+                              {audience === "customer" && item.variantId && (
+                                <button
+                                  type="button"
+                                  onClick={async () => {
+                                    await store.addToCart(item.variantId!, item.quantity);
+                                    showToast("Đã thêm vào giỏ hàng!", "success");
+                                  }}
+                                  className="text-[11px] font-bold text-emerald-600 hover:text-emerald-800 hover:underline"
+                                >
+                                  Mua lại
+                                </button>
+                              )}
+                              {order.orderStatus === "COMPLETED" && audience === "customer" && (() => {
+                                const pid = item.productId || item.productNameSnapshot;
+                                const pState = productReviewState.get(pid);
+                                if (pState?.firstItemId !== item.id) return null;
+
+                                if (pState.hasReviewed) {
+                                  return <span className="text-[11px] font-bold text-emerald-600">Đã đánh giá</span>;
+                                }
+                                return (
+                                  <Button
+                                    variant="secondary"
+                                    className="text-xs py-1 px-2.5 h-auto text-yellow-800 bg-yellow-50 border-yellow-200 hover:bg-yellow-100"
+                                    onClick={() => {
+                                      setReviewingItem(item);
+                                      setRating(5);
+                                      setComment("");
+                                    }}
+                                  >
+                                    <Star className="h-3.5 w-3.5 fill-[#facc15] text-[#facc15]" />
+                                    Đánh giá
+                                  </Button>
+                                );
+                              })()}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    });
+                  })()}
+                </div>
+              </Panel>
+            </div>
+
+            {/* RIGHT SIDEBAR COLUMN */}
+            <div className="space-y-4">
+              {/* PAYMENT & FINANCIAL BREAKDOWN */}
+              <Panel className="h-fit">
+                <div className="flex items-center gap-2 border-b border-slate-100 pb-3 mb-3">
+                  <CreditCard className="h-5 w-5 text-emerald-600" />
+                  <h3 className="font-bold text-slate-900">Chi tiết thanh toán</h3>
+                </div>
+
+                <div className="space-y-2.5 text-xs">
+                  <div className="flex items-center justify-between text-slate-600">
+                    <span>Phương thức</span>
+                    <span className="font-semibold text-slate-800">
+                      {(() => {
+                        const pm = findPaymentForOrder(order.orderCode)?.paymentMethod ?? "MOCK";
+                        return paymentMethodLabel[pm] || pm;
+                      })()}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-slate-600">
+                    <span>Trạng thái thanh toán</span>
+                    <StatusBadge status={order.paymentStatus} label={paymentStatusLabel[order.paymentStatus]} />
+                  </div>
+                  {(() => {
+                    const payment = findPaymentForOrder(order.orderCode);
+                    const paymentTime = payment?.paidAt
+                      ? formatDate(payment.paidAt)
+                      : payment?.createdAt
+                      ? formatDate(payment.createdAt)
+                      : order.paymentStatus === "PAID"
+                      ? formatDate(order.createdAt)
+                      : null;
+                    return paymentTime ? (
+                      <div className="flex items-center justify-between text-slate-600">
+                        <span>Thời gian thanh toán</span>
+                        <span className="font-semibold text-slate-800">{paymentTime}</span>
+                      </div>
+                    ) : null;
+                  })()}
+
+                  <div className="border-t border-slate-100 pt-2.5 space-y-2">
+                    <div className="flex items-center justify-between text-slate-600">
+                      <span>Tổng tiền hàng</span>
+                      <span className="font-semibold text-slate-800">{formatVnd(order.subtotalAmount)}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-slate-600">
+                      <span>Phí vận chuyển</span>
+                      <span className="font-semibold text-slate-800">{formatVnd(order.shippingFee)}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-slate-600">
+                      <span>Giảm giá Shop</span>
+                      <span className="font-semibold text-emerald-600">-0đ</span>
+                    </div>
+                    <div className="flex items-center justify-between border-t border-slate-100 pt-2.5">
+                      <span className="font-bold text-slate-900 text-sm">Tổng thanh toán</span>
+                      <span className="font-black text-emerald-700 text-base">{formatVnd(order.totalAmount)}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* CUSTOMER ACTION CENTER */}
+                {audience === "customer" && (canContinuePayment(order) || canCustomerCancel(order) || canCustomerConfirmReceipt(order)) ? (
+                  <div className="mt-5 grid gap-2 border-t border-slate-100 pt-4">
+                    {canContinuePayment(order) ? (
+                      <Button className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold" onClick={() => goToPaymentForOrder(order)}>
+                        <CreditCard className="h-4 w-4" aria-hidden="true" />
+                        Thanh toán ngay
+                      </Button>
+                    ) : null}
+                    {canCustomerConfirmReceipt(order) ? (
+                      <Button variant="secondary" className="w-full border-emerald-300 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 font-bold" onClick={() => store.confirmCustomerReceipt(order.orderCode).then((res) => { if (res.ok) showToast("Đã xác nhận nhận hàng.", "success"); else showToast(res.message || "Lỗi xác nhận", "danger"); })}>
+                        <Check className="h-4 w-4" />
+                        Đã nhận hàng
+                      </Button>
+                    ) : null}
+                    {canCustomerCancel(order) ? (
+                      <Button variant="danger" className="w-full" onClick={() => store.cancelCustomerOrder(order.orderCode).then((res) => { if (res.ok) showToast("Đã hủy đơn hàng.", "success"); else showToast(res.message || "Lỗi hủy đơn", "danger"); })}>
+                        Hủy đơn hàng
+                      </Button>
+                    ) : null}
+                  </div>
+                ) : null}
+
+                {/* SELLER ACTION CENTER */}
+                {audience === "seller" && (canSellerConfirm(order) || canSellerShip(order) || canSellerCancel(order)) ? (
+                  <div className="mt-5 grid gap-2 border-t border-slate-100 pt-4">
+                    {canSellerConfirm(order) ? (
+                      <Button className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold" onClick={() => store.confirmSellerOrder(order.id).then((res) => { if (res.ok) showToast("Đã xác nhận đơn hàng.", "success"); else showToast(res.message || "Lỗi xác nhận", "danger"); })}>Xác nhận đơn</Button>
+                    ) : null}
+                    {canSellerShip(order) ? (
+                      <Button variant="secondary" className="w-full" onClick={() => store.shippingSellerOrder(order.id).then((res) => { if (res.ok) showToast("Đã chuyển shipping.", "success"); else showToast(res.message || "Lỗi chuyển shipping", "danger"); })}>Chuyển shipping</Button>
+                    ) : null}
+                    {canSellerCancel(order) ? (
+                      <Button variant="danger" className="w-full" onClick={() => store.cancelSellerOrder(order.id).then((res) => { if (res.ok) showToast("Đã từ chối đơn hàng.", "success"); else showToast(res.message || "Lỗi từ chối", "danger"); })}>Từ chối đơn</Button>
+                    ) : null}
+                  </div>
+                ) : null}
+              </Panel>
+
+              {/* RECIPIENT & SHIPMENT INFO */}
+              <Panel>
+                <div className="flex items-center gap-2 border-b border-slate-100 pb-3 mb-3">
+                  <MapPin className="h-5 w-5 text-emerald-600" />
+                  <h3 className="font-bold text-slate-900">Địa chỉ nhận hàng</h3>
+                </div>
+                <div className="space-y-2 text-xs leading-relaxed text-slate-600">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-slate-900 text-sm">{order.shipment.receiverName}</span>
+                    <span className="rounded-full bg-emerald-50 px-2.5 py-0.5 text-[10px] font-bold text-emerald-700 border border-emerald-200">
+                      {order.shipment.addressType === "OFFICE" ? "Văn phòng" : "Nhà riêng"}
+                    </span>
+                  </div>
+                  <p className="font-semibold text-slate-700">{order.shipment.receiverPhone}</p>
+                  <p className="text-slate-500">
+                    {order.shipment.detailAddress}, {order.shipment.ward}, {order.shipment.district}, {order.shipment.province}
+                  </p>
+                </div>
+
+                <div className="mt-4 border-t border-slate-100 pt-3">
+                  <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Đơn vị vận chuyển</p>
+                  <p className="mt-0.5 text-xs font-semibold text-slate-800">Standard Express (Giao Hàng Nhanh)</p>
+                  <div className="mt-2 flex items-center justify-between rounded-lg bg-slate-50 p-2 text-xs">
+                    <span className="font-mono text-slate-600">{trackingCode}</span>
+                    <button
+                      type="button"
+                      onClick={() => handleCopy(trackingCode, "mã vận đơn")}
+                      className="text-emerald-600 hover:text-emerald-800 font-bold text-[11px]"
+                    >
+                      Sao chép
+                    </button>
+                  </div>
+                </div>
+              </Panel>
+            </div>
+          </div>
         </div>
 
         {/* Review Modal */}
         {reviewingItem && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-            <div className="w-full max-w-md rounded-panel bg-white p-6 shadow-lg">
-              <h3 className="text-lg font-bold">Đánh giá sản phẩm</h3>
-              <p className="mt-1 text-sm text-muted">{reviewingItem.productNameSnapshot}</p>
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 animate-fade-in">
+            <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+              <h3 className="text-lg font-bold text-slate-900">Đánh giá sản phẩm</h3>
+              <p className="mt-1 text-xs text-slate-500 line-clamp-1">{reviewingItem.productNameSnapshot}</p>
               
-              <div className="mt-4 flex items-center justify-center gap-2">
+              <div className="mt-4 flex items-center justify-center gap-2 py-2 bg-slate-50 rounded-xl">
                 {[1, 2, 3, 4, 5].map((star) => (
                   <button
                     key={star}
                     type="button"
                     onClick={() => setRating(star)}
-                    className="p-1 text-yellow-400 transition hover:scale-110"
+                    className="p-1 text-yellow-400 transition hover:scale-110 focus:outline-none"
                   >
                     <Star
                       className="h-8 w-8"
-                      fill={star <= rating ? "currentColor" : "none"}
+                      fill={star <= rating ? "#facc15" : "none"}
+                      stroke="#facc15"
                     />
                   </button>
                 ))}
@@ -605,10 +859,10 @@ export default function AccountPage() {
 
               <div className="mt-4">
                 <Textarea
-                  placeholder="Nhập nhận xét của bạn về sản phẩm..."
+                  placeholder="Chia sẻ nhận xét chi tiết về chất lượng sản phẩm, dịch vụ giao hàng..."
                   value={comment}
                   onChange={(e) => setComment(e.target.value)}
-                  className="min-h-[100px]"
+                  className="min-h-[110px] text-xs"
                 />
               </div>
 
@@ -621,6 +875,7 @@ export default function AccountPage() {
                   Hủy
                 </Button>
                 <Button
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold"
                   disabled={submittingReview}
                   onClick={handleReviewSubmit}
                 >

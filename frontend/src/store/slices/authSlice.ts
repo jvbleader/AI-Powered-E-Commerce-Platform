@@ -379,13 +379,14 @@ export const createAuthSlice: StateCreator<MarketplaceStore, [], [], any> = (set
     }
   },
     logout: async () => {
-      const { state, verificationContext } = get();
-
       try {
         await apiFetch<{ message: string }>(AUTH_ROUTES.logout, { method: "POST" });
       } catch {
         // Keep logout local even if the backend is offline.
       } finally {
+        if (typeof window !== "undefined") {
+          sessionStorage.removeItem("last_visited_page");
+        }
         setState((prev: AppState) => ({ ...prev, sessionUserId: undefined, activeRole: "GUEST", cartItems: [] }));
       }
     },

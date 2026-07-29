@@ -45,7 +45,7 @@ export default function SellerDashboardPage() {
     if (recalculate) {
       if (cooldownLeft > 0) {
         const minutesLeft = Math.ceil(cooldownLeft / 60);
-        store.showToast(`Bạn chỉ có thể cập nhật dữ liệu 5 phút một lần. Vui lòng thử lại sau ${minutesLeft} phút.`, "warning");
+        store.showToast(`Bạn chỉ có thể cập nhật dữ liệu 5 phút một lần. Vui lòng thử lại sau ${minutesLeft} phút.`, "danger");
         return;
       }
       setRecalculating(true);
@@ -58,10 +58,10 @@ export default function SellerDashboardPage() {
           store.showToast("Đã tính toán lại dữ liệu từ CSDL thành công!", "success");
         }
       } else if (res.message) {
-        store.showToast(res.message, "error");
+        store.showToast(res.message, "danger");
       }
     } catch (err: any) {
-      store.showToast(err.message || "Lỗi khi cập nhật dữ liệu", "error");
+      store.showToast(err.message || "Lỗi khi cập nhật dữ liệu", "danger");
     } finally {
       if (recalculate) {
         setRecalculating(false);
@@ -156,11 +156,10 @@ export default function SellerDashboardPage() {
             : "Chưa đồng bộ thống kê DB"}
         </span>
         <Button
-          size="sm"
-          variant="outline"
+          variant="secondary"
           onClick={() => handleFetchSummary(true)}
           disabled={recalculating || cooldownLeft > 0}
-          className="flex items-center gap-1.5 text-xs"
+          className="flex items-center gap-1.5 text-xs min-h-8 py-1 px-3"
         >
           <RefreshCcw className={`h-3.5 w-3.5 ${recalculating ? "animate-spin" : ""}`} />
           {recalculating

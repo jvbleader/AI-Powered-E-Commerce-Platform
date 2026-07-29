@@ -10,7 +10,7 @@ function formatMarkdown(text: string): string {
   return text
     .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
     .replace(/\*(.*?)\*/g, "<em>$1</em>")
-    .replace(/`([^`]+)`/g, "<code class='bg-slate-100 px-1.5 py-0.5 rounded text-emerald-700 font-mono text-xs border border-emerald-200'>$1</code>")
+    .replace(/`([^`]+)`/g, "<code class='bg-emerald-50 px-1.5 py-0.5 rounded text-emerald-600 font-mono text-xs border border-emerald-100'>$1</code>")
     .replace(/\n/g, "<br/>");
 }
 
@@ -31,7 +31,7 @@ export function ChatMessageItem({
   return (
     <div className={cn("flex gap-3", message.role === "user" ? "justify-end" : "justify-start")}>
       {isAssistant && (
-        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500 to-teal-500 text-white shadow-sm mt-1">
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-50 text-emerald-600 shadow-sm mt-1">
           <Bot className="h-4 w-4" />
         </div>
       )}
@@ -40,20 +40,20 @@ export function ChatMessageItem({
         {shouldRenderTextBubble && (
           <div
             className={cn(
-              "px-4 py-3 rounded-2xl text-sm leading-relaxed border shadow-xs backdrop-blur-xs",
+              "px-4 py-3 rounded-2xl text-sm leading-relaxed shadow-sm break-words",
               message.role === "user"
-                ? "bg-slate-800 text-white rounded-tr-xs border-transparent"
-                : "bg-white text-slate-800 border-emerald-100 rounded-tl-xs"
+                ? "bg-emerald-600 text-white rounded-tr-sm border-transparent"
+                : "bg-white text-ink border border-slate-200 rounded-tl-sm"
             )}
           >
             {isAssistant ? (
               hasContent ? (
                 <div
-                  className="prose prose-sm prose-p:leading-relaxed prose-strong:text-emerald-800"
+                  className="prose prose-sm prose-p:leading-relaxed prose-strong:text-ink max-w-none text-ink"
                   dangerouslySetInnerHTML={{ __html: formatMarkdown(message.content) }}
                 />
               ) : (
-                <span className="text-slate-400 italic text-xs flex items-center gap-1.5">
+                <span className="text-muted italic text-xs flex items-center gap-1.5">
                   Đang suy nghĩ...
                 </span>
               )
@@ -78,7 +78,7 @@ export function ChatMessageItem({
       </div>
 
       {!isAssistant && (
-        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-slate-200 text-slate-600 mt-1">
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-100/50 text-emerald-700 mt-1">
           <User className="h-4 w-4" />
         </div>
       )}

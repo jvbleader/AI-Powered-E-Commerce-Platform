@@ -1,5 +1,17 @@
 import axios, { AxiosError, AxiosRequestConfig, Method } from "axios";
 
+export function getApiBaseUrl(): string {
+  if (typeof window !== "undefined") {
+    const envUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
+    const hostname = window.location.hostname;
+    if (hostname && hostname !== "localhost" && hostname !== "127.0.0.1") {
+      return envUrl.replace(/localhost|127\.0\.0\.1/, hostname);
+    }
+    return envUrl;
+  }
+  return process.env.INTERNAL_API_BASE_URL ?? process.env.BACKEND_INTERNAL_URL ?? "http://backend:8000";
+}
+
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
 export const AUTH_BASE_PATH = process.env.NEXT_PUBLIC_AUTH_BASE_PATH ?? "/auth";
 const REFRESH_PATH = `${AUTH_BASE_PATH}/refresh`;
@@ -78,7 +90,7 @@ function requestPath(url?: string) {
   if (!url) return "";
 
   try {
-    return new URL(url, API_BASE_URL).pathname;
+    return new URL(url, getApiBaseUrl()).pathname;
   } catch {
     return url.split("?")[0];
   }
@@ -106,6 +118,11 @@ function toApiError(error: unknown): unknown {
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,
   withCredentials: true
+});
+
+apiClient.interceptors.request.use((config) => {
+  config.baseURL = getApiBaseUrl();
+  return config;
 });
 
 let refreshRequest: Promise<unknown> | undefined;

@@ -187,7 +187,7 @@ export const searchSuggestions = (
   const productHits = products
     .filter((product) => product.name.toLowerCase().includes(normalized))
     .slice(0, 4)
-    .map((product) => ({ label: product.name, href: `/shops/${getShop(shops, product.sellerId)?.shopSlug}/products/${product.slug}`, type: "Sản phẩm" }));
+    .map((product) => ({ label: product.name, href: `/shops/${getShop(shops, product.sellerId)?.shopSlug || "shop"}/products/${product.slug}`, type: "Sản phẩm" }));
   const shopHits = shops
     .filter((shop) => shop.shopName.toLowerCase().includes(normalized))
     .slice(0, 3)
@@ -331,7 +331,8 @@ export const createOrderFromGroup = (
         createdAt: new Date().toISOString()
       }
     ],
-    createdAt: new Date().toISOString()
+    createdAt: new Date().toISOString(),
+    printCount: 0
   };
 };
 

@@ -293,3 +293,30 @@ async def get_seller_dashboard_summary(
         total_products=total_products,
         updated_at=now_aware,
     )
+
+async def increment_print_count(
+    user: User, order_id: str, db: AsyncSession
+) -> OrderResponse:
+    seller_profile = await _get_active_seller_profile(user, db)
+
+    order = await get_order_by_public_id_and_seller(db, order_id, seller_profile.id)
+    if not order:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Đơn hàng không tồn tại"
+        )
+    
+    if order.order_status != "SHIPPING":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Chỉ có thể in lại khi đơn ở trạng thái đang giao hàng (SHIPPING)",
+        )
+
+    if order.print_count >= 2:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Đã vượt quá số lần in lại cho phép (Tối đa 2 lần).",
+        )
+        
+    order.print_count += 1
+    # db.commit() will be called in router
+    return OrderResponse.model_validate(order)

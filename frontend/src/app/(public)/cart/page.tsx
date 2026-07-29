@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import { Checkbox } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Panel, Section } from "@/components/ui/containers";
@@ -14,6 +15,11 @@ export default function CartPage() {
   const store = useMarketplaceStore();
   const router = useRouter();
   const { showToast } = store;
+
+  useEffect(() => {
+    store.refreshCart?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   if (!store.getCurrentUser()) {
     return <Unauthorized title="Giỏ hàng cần đăng nhập" description="Vui lòng đăng nhập để xem giỏ hàng." />;
@@ -45,9 +51,6 @@ export default function CartPage() {
                   checked={store.getCartRows().length > 0 && store.getCartRows().every((row) => row.item.isSelected)}
                   onChange={(event) => store.selectAllCart(event.target.checked)}
                 />
-                <Button variant="secondary" onClick={() => showToast("Đã cập nhật giá hiện tại.", "success")}>
-                  Cập nhật giá
-                </Button>
               </Panel>
               {groups.map((group) => (
                 <Panel key={group.shop.id}>

@@ -22,6 +22,8 @@ export default function SellerPendingPage() {
   useEffect(() => {
     let cancelled = false;
 
+    if (!store.ready) return;
+
     if (!store.getCurrentUser()) {
       setLoadingStatus(false);
       return;
@@ -48,23 +50,23 @@ export default function SellerPendingPage() {
     return () => {
       cancelled = true;
     };
-  }, [store.getCurrentUser(), store.getSellerApplication]);
+  }, [store.ready, store.getCurrentUser()?.id, store.getSellerApplication]);
 
-  if (!store.getCurrentUser()) {
-    return <Unauthorized title="Cần đăng nhập" description="Bạn cần đăng nhập trước khi gửi hoặc theo dõi hồ sơ mở shop." />;
-  }
-
-  if (loadingStatus) {
+  if (!store.ready || loadingStatus) {
     return (
       <main className="mx-auto max-w-3xl px-4 py-10">
         <Panel>
           <div className="flex items-center gap-3">
             <RefreshCcw className="h-5 w-5 animate-spin text-primary" aria-hidden="true" />
-            <p className="text-sm font-semibold text-muted">Đang kiểm tra trạng thái hồ sơ...</p>
+            <p className="text-sm font-semibold text-muted">Đang kiểm tra trạng thái hồ sơ shop...</p>
           </div>
         </Panel>
       </main>
     );
+  }
+
+  if (!store.getCurrentUser()) {
+    return <Unauthorized title="Cần đăng nhập" description="Bạn cần đăng nhập trước khi gửi hoặc theo dõi hồ sơ mở shop." />;
   }
 
   if (statusError) {

@@ -34,7 +34,6 @@ class Product(Base):
         CheckConstraint("average_rating <= 5", name="ck_products_average_rating_max"),
         CheckConstraint("review_count >= 0", name="ck_products_review_count"),
         CheckConstraint("sold_count >= 0", name="ck_products_sold_count"),
-        CheckConstraint("view_count >= 0", name="ck_products_view_count"),
         UniqueConstraint("seller_id", "slug", name="uq_products_seller_id_slug"),
         Index("ix_products_seller_id", "seller_id"),
         Index("ix_products_status", "status"),
@@ -92,12 +91,6 @@ class Product(Base):
         server_default=text("0"),
     )
     sold_count: Mapped[int] = mapped_column(
-        mysql.INTEGER(unsigned=True),
-        nullable=False,
-        default=0,
-        server_default=text("0"),
-    )
-    view_count: Mapped[int] = mapped_column(
         mysql.INTEGER(unsigned=True),
         nullable=False,
         default=0,

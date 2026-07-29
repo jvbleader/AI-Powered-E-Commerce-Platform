@@ -1,8 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { RefreshCcw } from "lucide-react";
-import { Panel } from "@/components/ui/containers";
+import { LoadingPage } from "@/components/ui/feedback";
 import { DashboardFrame } from "@/components/dashboard-frame";
 import { useMarketplaceStore } from "@/store/use-marketplace-store";
 import Unauthorized from "@/components/shared/unauthorized-page";
@@ -32,16 +31,7 @@ export default function SellerDashboardLayout({
   }, [store.ready, store.getCurrentUser()?.id, store.getSellerApplication]);
 
   if (!store.ready || loadingSeller) {
-    return (
-      <main className="mx-auto max-w-xl px-4 py-10">
-        <Panel>
-          <div className="flex items-center gap-3">
-            <RefreshCcw className="h-5 w-5 animate-spin text-primary" aria-hidden="true" />
-            <p className="text-sm font-semibold text-muted">Đang tải thông tin shop...</p>
-          </div>
-        </Panel>
-      </main>
-    );
+    return <LoadingPage message="Đang tải thông tin shop..." />;
   }
 
   if (!store.getCurrentUser()) {

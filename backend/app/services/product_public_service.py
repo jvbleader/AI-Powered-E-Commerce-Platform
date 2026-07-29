@@ -50,10 +50,6 @@ async def get_public_product_detail(
             status_code=404, detail="Product not found or not available"
         )
 
-    product.view_count += 1
-    await db.commit()
-    await db.refresh(product)
-
     return product
 
 

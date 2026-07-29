@@ -80,7 +80,8 @@ export default function AdminSellersPage() {
 
   return (
     <Section
-      title="Duyệt seller"
+      title="Quản lý seller"
+      className="h-full flex flex-col overflow-hidden pb-0"
       action={
         <Select value={status} onChange={(event) => setStatus(event.target.value as SellerStatus | "")} className="w-44">
           <option value="">Tất cả</option>
@@ -108,16 +109,21 @@ export default function AdminSellersPage() {
             const applicationStatus = application.status ?? "PENDING";
             const busy = busyApplicationId === application.publicId;
             return [
-              <a key="shop" className="font-bold text-primary" href={`/admin/sellers/${application.publicId}`}>
-                {application.shopName}
-              </a>,
-              application.shopSlug ?? "-",
+              <div key="shop" className="max-w-[180px] truncate" title={application.shopName}>
+                <a className="font-bold text-primary" href={`/admin/sellers/${application.publicId}`}>
+                  {application.shopName}
+                </a>
+              </div>,
+              <div key="slug" className="max-w-[160px] truncate" title={application.shopSlug}>
+                {application.shopSlug ?? "-"}
+              </div>,
               <StatusBadge key="st" status={applicationStatus} label={sellerStatusLabel[applicationStatus]} />,
               application.taxCode,
               application.bankName,
-              <div key="act" className="flex flex-wrap gap-2">
+              <div key="act" className="flex flex-nowrap items-center gap-1.5 whitespace-nowrap">
                 <Button
                   variant="secondary"
+                  className="h-7 px-2.5 text-xs"
                   disabled={busy || applicationStatus !== "PENDING"}
                   onClick={() => reviewApplication(application, "approve")}
                 >
@@ -125,6 +131,7 @@ export default function AdminSellersPage() {
                 </Button>
                 <Button
                   variant="danger"
+                  className="h-7 px-2.5 text-xs"
                   disabled={busy || applicationStatus !== "PENDING"}
                   onClick={() => reviewApplication(application, "reject")}
                 >

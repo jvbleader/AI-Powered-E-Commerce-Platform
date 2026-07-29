@@ -1,15 +1,17 @@
 import { initialState } from "@/store/initial-state";
 import type { AppState, Role, VerificationContext } from "@/types/models";
 
-export const STORAGE_KEY = "shepoo-marketplace-state-v4";
-export const VERIFICATION_CONTEXT_KEY = "shepoo-verification-context-v4";
+export const STORAGE_KEY = "shepoo-marketplace-state-v5";
+export const VERIFICATION_CONTEXT_KEY = "shepoo-verification-context-v5";
 export const LEGACY_STORAGE_KEYS = [
   "shepoo-marketplace-state-v1",
   "shepoo-marketplace-state-v2",
   "shepoo-marketplace-state-v3",
+  "shepoo-marketplace-state-v4",
   "shepoo-verification-context-v1",
   "shepoo-verification-context-v2",
-  "shepoo-verification-context-v3"
+  "shepoo-verification-context-v3",
+  "shepoo-verification-context-v4"
 ];
 export const DEFAULT_AVATAR = "https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=240&q=80";
 export const DEFAULT_SHOP_LOGO = "https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?auto=format&fit=crop&w=240&q=80";
