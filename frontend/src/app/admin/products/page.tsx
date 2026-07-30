@@ -11,6 +11,8 @@ import { Product, Category } from "@/types/models";
 import { useMarketplaceStore } from "@/store/use-marketplace-store";
 import { Input, Select } from "@/components/ui/input";
 
+import { TableSkeleton } from "@/components/ui/skeleton";
+
 export default function AdminProductsPage() {
   const { showToast } = useMarketplaceStore();
   const [products, setProducts] = useState<Product[]>([]);
@@ -175,7 +177,7 @@ export default function AdminProductsPage() {
       }
     >
       {loading ? (
-        <div className="p-4 text-center text-muted">Đang tải...</div>
+        <div className="p-4"><TableSkeleton headers={["Product", "Shop", "Category", "Status", "Sold", "Action"]} rows={10} /></div>
       ) : (
         <DataTable
           columns={["Product", "Shop", "Category", "Status", "Sold", "Action"]}

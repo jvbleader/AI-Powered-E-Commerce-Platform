@@ -13,3 +13,5 @@ pytest
 pytest-asyncio
 langchain
 langchain-openai
+redis
+websockets

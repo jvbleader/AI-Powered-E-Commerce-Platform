@@ -1,4 +1,4 @@
-name: AI-POWERED-E-COMMERCE-PLATFORM
+name: AI-POWERED-E-COMMERCE-PLATFORM-DEV
 
 services:
   mysql:
@@ -10,15 +10,19 @@ services:
       MYSQL_USER: ${MYSQL_USER:-ecommerce_user}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD:-ecommerce_password}
     ports:
-      - "${MYSQL_PORT:-3307}:3306"
+      - "${MYSQL_DEV_PORT:-3307}:3306"
     volumes:
-      - mysql_data:/var/lib/mysql
+      - mysql_data_dev:/var/lib/mysql
     healthcheck:
       test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u$${MYSQL_USER} -p$${MYSQL_PASSWORD} --silent"]
       interval: 5s
       timeout: 5s
       retries: 30
       start_period: 20s
+
+  redis:
+    image: redis:alpine
+    restart: unless-stopped
 
   backend:
     image: ai-ecommerce-backend:dev
@@ -35,6 +39,7 @@ services:
       PYTHONPATH: /app/app:/app
       PORT: "8000"
       INIT_DB_ON_START: ${INIT_DB_ON_START:-true}
+      REDIS_URL: redis://redis:6379/0
       DATABASE_URL: mysql+asyncmy://${MYSQL_USER:-ecommerce_user}:Phamhai271105%40@mysql:3306/${MYSQL_DATABASE:-ecommerce_db}
       ASYNC_DATABASE_URL: mysql+asyncmy://${MYSQL_USER:-ecommerce_user}:Phamhai271105%40@mysql:3306/${MYSQL_DATABASE:-ecommerce_db}
       ACCESS_TOKEN_SECRET: ${ACCESS_TOKEN_SECRET:-dev-access-token-secret-change-me}
@@ -102,4 +107,4 @@ services:
       start_period: 30s
 
 volumes:
-  mysql_data:
+  mysql_data_dev:

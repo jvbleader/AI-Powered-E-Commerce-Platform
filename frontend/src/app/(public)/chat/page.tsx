@@ -4,10 +4,10 @@ import { useState, useRef, useEffect } from "react";
 import { Bot, MessageSquare, Send, Sparkles, RefreshCcw, Loader2, UserCircle2, ArrowLeft, Menu, AlertCircle } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { useMarketplaceStore } from "@/store/use-marketplace-store";
 import { useAIChatStream } from "@/hooks/useAIChatStream";
+import { useSupporterChat } from "@/hooks/useSupporterChat";
 import { ChatMessageItem } from "@/components/ai/ChatMessageItem";
 import { formatDate } from "@/lib/helpers";
 import TextareaAutosize from 'react-textarea-autosize';
@@ -38,10 +38,6 @@ export default function ChatPage() {
     clearChat: clearAIChat
   } = useAIChatStream();
 
-  // Mock Supporter Conversations from Store
-  const supporterConversations = store.state.conversations.filter(c => c.mode === "SUPPORTER");
-  const [activeConvId, setActiveConvId] = useState<string | null>(supporterConversations[0]?.id || null);
-
   const scrollToBottom = () => {
     if (messagesEndRef.current) {
       messagesEndRef.current.scrollIntoView({ behavior: "auto" });
@@ -51,7 +47,7 @@ export default function ChatPage() {
   useEffect(() => {
     const timeout = setTimeout(scrollToBottom, 50);
     return () => clearTimeout(timeout);
-  }, [messages, currentStatus, isStreaming, activeTab, activeConvId]);
+  }, [messages, currentStatus, isStreaming, activeTab]);
 
   const handleSendAI = async (text: string) => {
     const trimmed = text.trim();
@@ -64,8 +60,6 @@ export default function ChatPage() {
     clearAIChat();
     showToast("Đã xóa cuộc trò chuyện AI", "success");
   };
-
-  const activeConversation = supporterConversations.find(c => c.id === activeConvId);
 
   return (
     <main className="flex-1 flex flex-col w-full max-w-5xl mx-auto px-3 md:px-4 py-3 md:py-4 font-body-tech h-[calc(100vh-2rem)] overflow-hidden">
@@ -81,7 +75,7 @@ export default function ChatPage() {
         <div className="w-[100px] hidden sm:block"></div> {/* Spacer for centering */}
       </header>
 
-      <div className="overflow-hidden rounded-3xl flex flex-row flex-1 min-h-0 border border-slate-200 bg-white relative">
+      <div className="overflow-hidden rounded-xl flex flex-row flex-1 min-h-0 border border-slate-200 bg-white relative shadow-sm">
         
         {/* Sidebar */}
         <div 
@@ -90,11 +84,17 @@ export default function ChatPage() {
             showMobileSidebar ? "flex" : "hidden md:flex"
           )}
         >
-          <div className="px-4 bg-emerald-600 border-r border-emerald-500/50 flex items-center justify-between h-16 md:h-[76px] shrink-0 shadow-sm relative z-20">
+          <div className={cn(
+            "px-4 border-r flex items-center justify-between h-16 md:h-[76px] shrink-0 shadow-sm relative z-20 transition-colors duration-300 ease-in-out",
+            activeTab === "SUPPORTER" ? "bg-blue-500 border-blue-400/50" : "bg-emerald-600 border-emerald-500/50"
+          )}>
             <h2 className="font-bold text-lg md:text-xl text-white">Tin nhắn</h2>
             <button 
               onClick={() => setShowMobileSidebar(false)}
-              className="md:hidden text-emerald-100 hover:text-white text-sm font-semibold"
+              className={cn(
+                "md:hidden text-sm font-semibold hover:text-white transition-colors",
+                activeTab === "SUPPORTER" ? "text-blue-100" : "text-emerald-100"
+              )}
             >
               Đóng
             </button>
@@ -116,7 +116,7 @@ export default function ChatPage() {
                   onClick={() => { setActiveTab("SUPPORTER"); setShowMobileSidebar(false); }}
                   className={cn(
                     "flex-1 py-2 px-3 rounded-lg text-xs md:text-sm font-bold flex items-center justify-center gap-1.5 transition-all",
-                    activeTab === "SUPPORTER" ? "bg-white shadow-sm text-indigo-600" : "text-slate-500 hover:text-slate-700 hover:bg-slate-200"
+                    activeTab === "SUPPORTER" ? "bg-white shadow-sm text-blue-500" : "text-slate-500 hover:text-slate-700 hover:bg-slate-200"
                   )}
                 >
                   <MessageSquare className="w-4 h-4" /> Supporter
@@ -133,34 +133,12 @@ export default function ChatPage() {
                   </div>
                 </button>
               ) : (
-                supporterConversations.length > 0 ? (
-                  supporterConversations.map(conv => (
-                    <button 
-                      key={conv.id}
-                      onClick={() => { setActiveConvId(conv.id); setShowMobileSidebar(false); }}
-                      className={cn(
-                        "w-full p-3 rounded-2xl text-left border transition-all",
-                        activeConvId === conv.id 
-                          ? "bg-white border-slate-300 shadow-sm" 
-                          : "bg-transparent border-transparent hover:bg-slate-200"
-                      )}
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className={cn("w-10 h-10 rounded-full flex items-center justify-center", activeConvId === conv.id ? "bg-indigo-100 text-indigo-600" : "bg-slate-200 text-slate-500")}>
-                          <UserCircle2 className="w-6 h-6" />
-                        </div>
-                        <div className="flex-1 overflow-hidden">
-                          <p className="font-bold text-sm text-slate-900 truncate">{conv.title}</p>
-                          <p className="text-xs text-slate-500 truncate">{conv.status === 'OPEN' ? 'Đang xử lý' : 'Đã đóng'}</p>
-                        </div>
-                      </div>
-                    </button>
-                  ))
-                ) : (
-                  <div className="text-center p-6 text-sm text-slate-500">
-                    Không có cuộc trò chuyện nào.
+                <button className="w-full p-4 rounded-2xl bg-blue-500 hover:bg-blue-600 text-white shadow-sm text-left transition-transform hover:-translate-y-0.5">
+                  <div>
+                    <p className="font-bold text-sm">Hỗ trợ khách hàng</p>
+                    <p className="text-xs text-blue-100 mt-0.5">Kết nối với nhân viên</p>
                   </div>
-                )
+                </button>
               )}
             </div>
           </div>
@@ -169,10 +147,16 @@ export default function ChatPage() {
         {/* Chat Area */}
         <div className="flex-1 flex flex-col bg-white relative min-w-0">
           
+          {/* PERSISTENT HEADER BACKGROUND FOR SMOOTH TRANSITION */}
+          <div className={cn(
+            "absolute top-0 left-0 right-0 h-16 md:h-[76px] z-0 transition-colors duration-300 ease-in-out shadow-sm",
+            activeTab === "SUPPORTER" ? "bg-blue-500" : "bg-emerald-600"
+          )} />
+
           {activeTab === "AI" ? (
             <>
               {/* Header AI */}
-              <div className="flex items-center justify-between px-3 md:px-4 bg-emerald-600 shadow-sm sticky top-0 z-10 h-16 md:h-[76px] shrink-0">
+              <div className="flex items-center justify-between px-3 md:px-4 bg-transparent relative z-10 h-16 md:h-[76px] shrink-0">
                 <div className="flex items-center gap-2.5">
                   <Button
                     variant="ghost"
@@ -298,108 +282,244 @@ export default function ChatPage() {
                     disabled={isStreaming}
                   />
                   <button
-                    type="submit"
-                    disabled={!input.trim() || isStreaming}
-                    className={cn(
-                      "flex h-12 w-12 md:h-14 md:w-14 shrink-0 items-center justify-center rounded-xl transition-all duration-300 shadow-sm",
-                      (!input.trim() || isStreaming)
-                        ? "bg-slate-200 text-slate-400 pointer-events-none"
-                        : "bg-emerald-600 text-white hover:bg-emerald-700 hover:scale-105 active:scale-95"
-                    )}
-                  >
-                    {isStreaming ? (
-                      <Loader2 className="h-5 w-5 md:h-6 md:w-6 animate-spin" />
-                    ) : (
-                      <Send className="h-5 w-5 md:h-6 md:w-6 -ml-0.5" />
-                    )}
-                  </button>
+                     type="submit"
+                     disabled={!input.trim() || isStreaming}
+                     className={cn(
+                       "flex h-12 w-12 md:h-14 md:w-14 shrink-0 items-center justify-center rounded-xl transition-all duration-300 shadow-sm",
+                       (!input.trim() || isStreaming)
+                         ? "bg-slate-200 text-slate-400 pointer-events-none"
+                         : "bg-emerald-600 text-white hover:bg-emerald-700 hover:scale-105 active:scale-95"
+                     )}
+                   >
+                     {isStreaming ? (
+                       <Loader2 className="h-5 w-5 md:h-6 md:w-6 animate-spin" />
+                     ) : (
+                       <Send className="h-5 w-5 md:h-6 md:w-6 -ml-0.5" />
+                     )}
+                   </button>
                 </form>
               </div>
             </>
           ) : (
             // SUPPORTER TAB
-            activeConversation ? (
-              <>
-                <div className="flex items-center justify-between px-3 md:px-4 border-b border-slate-200 bg-white sticky top-0 z-10 h-16 md:h-[76px] shrink-0">
-                  <div className="flex items-center gap-3">
-                    <Button
-                      variant="ghost"
-                      onClick={() => setShowMobileSidebar(!showMobileSidebar)}
-                      className="md:hidden text-slate-600 hover:text-indigo-600 min-h-0 h-9 w-9 p-0"
-                      title="Menu Hộp Thư"
-                    >
-                      <Menu className="h-5 w-5" />
-                    </Button>
-                    <div className="flex h-10 w-10 md:h-11 md:w-11 items-center justify-center rounded-2xl bg-indigo-100 text-indigo-600 shadow-xs">
-                      <UserCircle2 className="h-6 w-6 md:h-7 md:w-7" />
-                    </div>
-                    <div>
-                      <h1 className="font-tech font-bold text-base md:text-lg text-slate-900">
-                        {activeConversation.assignedSupporter || "Nhân viên hỗ trợ"}
-                      </h1>
-                      <p className="text-[10px] md:text-xs text-indigo-600 font-bold">{activeConversation.status === 'OPEN' ? 'Đang online' : 'Offline'}</p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex-1 overflow-y-auto overflow-x-hidden p-4 md:p-6 space-y-5 no-scrollbar">
-                  {activeConversation.messages.map((msg) => (
-                    <div key={msg.id} className={cn("flex", msg.sender === "CUSTOMER" ? "justify-end" : "justify-start")}>
-                      {msg.sender === "SUPPORTER" && (
-                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-indigo-100 text-indigo-600 mr-2.5 mt-1 shadow-xs">
-                          <UserCircle2 className="h-5 w-5" />
-                        </div>
-                      )}
-                      <div
-                        className={cn(
-                          "px-4 py-3 rounded-2xl max-w-[85%] md:max-w-[75%] text-sm leading-relaxed shadow-sm break-words",
-                          msg.sender === "CUSTOMER"
-                            ? "bg-emerald-600 text-white rounded-tr-sm border-transparent"
-                            : "bg-white border border-slate-200 text-slate-800 rounded-tl-sm"
-                        )}
-                      >
-                        <p>{msg.text}</p>
-                        <p className={cn("mt-1 text-[10px] font-semibold text-slate-400")}>
-                          {formatDate(msg.createdAt)}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
-                  <div ref={messagesEndRef} />
-                </div>
-
-                <div className="p-3 md:p-4 bg-white/60 backdrop-blur-lg border-t border-white/60">
-                  <form className="flex items-end relative max-w-4xl mx-auto">
-                    <TextareaAutosize
-                      minRows={1}
-                      maxRows={5}
-                      placeholder={activeConversation.status === 'CLOSED' ? "Cuộc trò chuyện đã đóng" : "Nhập tin nhắn..."}
-                      className="w-full rounded-[24px] pl-5 pr-14 py-3.5 md:py-4 border border-indigo-200 bg-white shadow-xs focus-visible:ring-2 focus-visible:ring-indigo-500 text-sm md:text-base placeholder:text-slate-400 resize-none no-scrollbar focus:outline-none"
-                      disabled={activeConversation.status === 'CLOSED'}
-                    />
-                    <Button
-                      type="button"
-                      disabled={activeConversation.status === 'CLOSED'}
-                      className="absolute bottom-[5px] right-[5px] md:bottom-[7px] md:right-[7px] rounded-full w-9 h-9 md:w-10 md:h-10 min-h-0 p-0 flex items-center justify-center bg-indigo-600 hover:bg-indigo-700 text-white shadow-xs transition-all hover:scale-105"
-                      onClick={() => showToast("Chức năng đang phát triển", "info")}
-                    >
-                      <Send className="h-4 w-4 ml-0.5" />
-                    </Button>
-                  </form>
-                </div>
-              </>
-            ) : (
-              <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
-                 <div className="w-16 h-16 rounded-full bg-indigo-50 flex items-center justify-center mb-3 text-indigo-400">
-                    <MessageSquare className="w-8 h-8" />
-                 </div>
-                 <p className="text-slate-600 font-bold text-base">Hỗ trợ từ Nhân viên</p>
-                 <p className="text-slate-400 text-xs mt-1 max-w-xs">Chọn một cuộc trò chuyện từ danh sách hoặc chuyển sang AI Assistant</p>
-              </div>
-            )
+            <CustomerSupportChat onMenuClick={() => setShowMobileSidebar(!showMobileSidebar)} />
           )}
         </div>
       </div>
     </main>
+  );
+}
+
+function CustomerSupportChat({ onMenuClick }: { onMenuClick: () => void }) {
+  const store = useMarketplaceStore();
+  const { showToast } = store;
+  const [conversationId, setConversationId] = useState<string | null>(null);
+  const [input, setInput] = useState("");
+  const [isInitializing, setIsInitializing] = useState(true);
+  const [isCreating, setIsCreating] = useState(false);
+  const [pendingMessage, setPendingMessage] = useState<string | null>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const hasInitialized = useRef(false);
+  
+  useEffect(() => {
+    if (hasInitialized.current) return;
+    hasInitialized.current = true;
+
+    const initChat = async () => {
+      try {
+        const { apiFetch } = await import("@/services/api");
+        let guestId = localStorage.getItem("guest_id");
+        if (!guestId) {
+          guestId = "guest_" + Math.random().toString(36).substring(2, 11);
+          localStorage.setItem("guest_id", guestId);
+        }
+        
+        try {
+          // Check for existing conversation without creating a new one
+          const conv = await apiFetch<any>(`/api/support-chat/conversations?guest_id=${guestId}&create=false`, {
+            method: "POST"
+          });
+          if (conv && conv.id) {
+            setConversationId(conv.id);
+          }
+        } catch (e) {
+          // 404 No active conversation, safely ignore
+        }
+      } catch (error) {
+        // network error
+      } finally {
+        setIsInitializing(false);
+      }
+    };
+    initChat();
+  }, []);
+
+  const { messages, conversation, isConnected, sendMessage } = useSupporterChat(conversationId, 'CUSTOMER');
+
+  useEffect(() => {
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView();
+    }
+  }, [messages]);
+
+  // Send pending message when WS connects
+  useEffect(() => {
+    if (isConnected && pendingMessage) {
+      sendMessage(pendingMessage);
+      setPendingMessage(null);
+    }
+  }, [isConnected, pendingMessage, sendMessage]);
+
+  const handleCreateAndSend = async (msg: string) => {
+    setIsCreating(true);
+    try {
+      const { apiFetch } = await import("@/services/api");
+      const guestId = localStorage.getItem("guest_id");
+      const conv = await apiFetch<any>(`/api/support-chat/conversations?guest_id=${guestId}&create=true`, {
+        method: "POST"
+      });
+      if (conv && conv.id) {
+        setPendingMessage(msg);
+        setConversationId(conv.id);
+      }
+    } catch (error) {
+      showToast("Lỗi kết nối máy chủ", "error");
+    } finally {
+      setIsCreating(false);
+    }
+  };
+
+  const handleFormSubmit = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!input.trim() || isClosed || isCreating) return;
+    
+    if (!conversationId) {
+       handleCreateAndSend(input.trim());
+       setInput("");
+    } else if (isConnected) {
+       sendMessage(input.trim());
+       setInput("");
+    }
+  };
+
+  const assignedSupporter = conversation?.supporter ? conversation.supporter.full_name : "Nhân viên hỗ trợ";
+  const isClosed = conversation?.status === "CLOSED";
+
+  return (
+    <>
+      <div className="flex items-center justify-between px-3 md:px-4 bg-transparent relative z-10 h-16 md:h-[76px] shrink-0">
+        <div className="flex items-center gap-3">
+          <Button
+            variant="ghost"
+            onClick={onMenuClick}
+            className="md:hidden text-blue-100 hover:text-white min-h-0 h-9 w-9 p-0"
+            title="Menu Hộp Thư"
+          >
+            <Menu className="h-5 w-5" />
+          </Button>
+          <div className="flex h-10 w-10 md:h-11 md:w-11 items-center justify-center rounded-2xl bg-white/20 text-white shadow-xs">
+            <UserCircle2 className="h-6 w-6 md:h-7 md:w-7" />
+          </div>
+          <div>
+            <h1 className="font-tech font-bold text-base md:text-lg text-white">
+              {assignedSupporter}
+            </h1>
+            <p className="text-[10px] md:text-xs text-blue-100 mt-1 font-bold uppercase tracking-wider">
+              {isInitializing ? "Đang tải..." : (!conversationId || !conversation ? "Sẵn sàng hỗ trợ" : (isConnected ? (isClosed ? 'Đã đóng' : 'Đang online') : 'Đang kết nối...'))}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {isInitializing ? (
+        <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
+           <Loader2 className="w-8 h-8 animate-spin text-blue-500 mb-3 mx-auto" />
+        </div>
+      ) : (!conversationId || !conversation) ? (
+        <div className="flex-1 flex flex-col items-center justify-center p-6 text-center animate-fade-in-up">
+           <div className="w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center mb-4 shadow-sm">
+             <UserCircle2 className="w-8 h-8 text-blue-500" />
+           </div>
+           <h3 className="text-lg md:text-xl font-bold text-slate-800 mb-2">Bạn cần hỗ trợ gì?</h3>
+           <p className="text-slate-500 text-sm max-w-[250px]">Hãy gửi tin nhắn đầu tiên để kết nối ngay với tư vấn viên của chúng tôi.</p>
+        </div>
+      ) : (
+        <div className="flex-1 overflow-y-auto overflow-x-hidden p-4 md:p-6 space-y-5 no-scrollbar">
+        {messages.map((msg) => {
+          if (msg.sender_type === "SYSTEM") {
+            return (
+              <div key={msg.id} className="flex justify-center my-4">
+                <div className="bg-slate-100 text-slate-500 text-xs py-1 px-3 rounded-full font-medium">
+                  {msg.content}
+                </div>
+              </div>
+            );
+          }
+          return (
+            <div key={msg.id} className={cn("flex", msg.sender_type === "CUSTOMER" ? "justify-end" : "justify-start")}>
+              {msg.sender_type === "SUPPORTER" && (
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-blue-100 text-blue-500 mr-2.5 mt-1 shadow-xs">
+                  <UserCircle2 className="h-5 w-5" />
+                </div>
+              )}
+              <div
+                className={cn(
+                  "px-4 py-3 rounded-2xl max-w-[85%] md:max-w-[75%] text-sm leading-relaxed shadow-sm break-words",
+                  msg.sender_type === "CUSTOMER"
+                    ? "bg-blue-500 text-white rounded-tr-sm border-transparent"
+                    : "bg-white border border-slate-200 text-slate-800 rounded-tl-sm"
+                )}
+              >
+                <p>{msg.content}</p>
+                <p className={cn("mt-1 text-[10px] font-semibold", msg.sender_type === "CUSTOMER" ? "text-blue-100 text-right" : "text-slate-400")}>
+                  {formatDate(msg.created_at)}
+                </p>
+              </div>
+            </div>
+          );
+        })}
+        <div ref={messagesEndRef} />
+      </div>
+      )}
+
+      <div className="p-3 md:p-4 bg-slate-100 border-t border-slate-200">
+        <form 
+          className="flex gap-3 items-end max-w-4xl mx-auto"
+          onSubmit={handleFormSubmit}
+        >
+          <TextareaAutosize
+            minRows={1}
+            maxRows={5}
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                handleFormSubmit();
+              }
+            }}
+            placeholder={isClosed ? "Cuộc trò chuyện đã đóng" : "Nhập tin nhắn..."}
+            className="flex-1 min-h-[48px] md:min-h-[56px] rounded-xl border-2 border-slate-200 bg-white px-4 py-3 md:py-4 text-sm md:text-base text-ink placeholder:text-muted/60 transition-all focus:border-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-500/10 shadow-sm resize-none no-scrollbar"
+            disabled={isClosed || (!isConnected && !!conversationId) || isCreating || isInitializing}
+          />
+          <button
+            type="submit"
+            disabled={!input.trim() || isClosed || (!isConnected && !!conversationId) || isCreating || isInitializing}
+            className={cn(
+              "flex h-12 w-12 md:h-14 md:w-14 shrink-0 items-center justify-center rounded-xl transition-all duration-300 shadow-sm",
+              (!input.trim() || isClosed || (!isConnected && !!conversationId) || isCreating || isInitializing)
+                ? "bg-slate-200 text-slate-400 pointer-events-none"
+                : "bg-blue-500 text-white hover:bg-blue-600 hover:scale-105 active:scale-95"
+            )}
+          >
+            {isCreating || (!!conversationId && !isConnected) ? (
+              <Loader2 className="h-5 w-5 md:h-6 md:w-6 animate-spin text-slate-400" />
+            ) : (
+              <Send className="h-5 w-5 md:h-6 md:w-6 -ml-0.5" />
+            )}
+          </button>
+        </form>
+      </div>
+    </>
   );
 }

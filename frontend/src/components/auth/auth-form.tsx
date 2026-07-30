@@ -30,7 +30,7 @@ const normalizeAuthPhoneInput = (value: string) => {
   return compact;
 };
 
-type AuthFormErrors = Partial<Record<"fullName" | "email" | "phone" | "password" | "confirmPassword", string>>;
+type AuthFormErrors = Partial<Record<"fullName" | "userName" | "email" | "phone" | "password" | "confirmPassword", string>>;
 
 export default function AuthPage({ mode: initialMode }: { mode: "login" | "register" }) {
   const store = useMarketplaceStore();
@@ -40,38 +40,27 @@ export default function AuthPage({ mode: initialMode }: { mode: "login" | "regis
   const currentUser = store.getCurrentUser();
 
   useEffect(() => {
-    if (store.ready && currentUser) {
+    if (typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search);
-      const redirectParam = params.get("redirect") || params.get("from") || params.get("returnUrl");
-
-      if (redirectParam && redirectParam.startsWith("/") && !redirectParam.startsWith("/login") && !redirectParam.startsWith("/register")) {
-        router.replace(redirectParam);
-        return;
+      if (params.get("logout") === "1") {
+        sessionStorage.removeItem("last_visited_page");
       }
-
-      const lastVisited = typeof window !== "undefined" ? sessionStorage.getItem("last_visited_page") : null;
-      if (lastVisited && lastVisited.startsWith("/") && !lastVisited.startsWith("/login") && !lastVisited.startsWith("/register")) {
-        router.replace(lastVisited);
-        return;
-      }
-
-      if (typeof document !== "undefined" && document.referrer && document.referrer.startsWith(window.location.origin)) {
-        try {
-          const refUrl = new URL(document.referrer);
-          if (refUrl.pathname !== "/login" && refUrl.pathname !== "/register") {
-            router.replace(refUrl.pathname + refUrl.search + refUrl.hash);
-            return;
-          }
-        } catch {}
-      }
-
-      router.replace("/");
     }
-  }, [store.ready, currentUser, router]);
+
+    if (store.ready && currentUser) {
+      const role = store.state.activeRole;
+      let target = "/";
+      if (role === "ADMIN") target = "/admin/dashboard";
+      else if (role === "SELLER") target = "/seller/dashboard";
+      
+      router.replace(target);
+    }
+  }, [store.ready, currentUser, router, store.state.activeRole]);
 
   const [mode, setMode] = useState<"login" | "register">(initialMode);
   const [email, setEmail] = useState("");
   const [fullName, setFullName] = useState("");
+  const [userName, setUserName] = useState("");
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -99,14 +88,18 @@ export default function AuthPage({ mode: initialMode }: { mode: "login" | "regis
     const normalizedEmail = email.trim().toLowerCase();
     const normalizedPhone = normalizeAuthPhoneInput(phone);
     const normalizedLoginPhone = normalizeAuthPhoneInput(email);
+    const authUsernamePattern = /^[a-zA-Z0-9_]{3,30}$/;
     const isLoginIdentifierValid =
-      authEmailPattern.test(normalizedEmail) || authPhonePattern.test(normalizedLoginPhone);
+      authEmailPattern.test(normalizedEmail) || authPhonePattern.test(normalizedLoginPhone) || authUsernamePattern.test(email.trim());
 
     if (mode === "register" && fullName.trim().length < 2) {
       nextErrors.fullName = "Họ tên phải có ít nhất 2 ký tự.";
     }
+    if (mode === "register" && !authUsernamePattern.test(userName.trim())) {
+      nextErrors.userName = "Tên đăng nhập từ 3-30 ký tự, chỉ gồm chữ, số, dấu gạch dưới.";
+    }
     if (mode === "login" ? !isLoginIdentifierValid : !authEmailPattern.test(normalizedEmail)) {
-      nextErrors.email = mode === "login" ? "Nhập email hoặc số điện thoại hợp lệ." : "Email không hợp lệ.";
+      nextErrors.email = mode === "login" ? "Nhập Email, Số điện thoại hoặc Tên đăng nhập hợp lệ." : "Email không hợp lệ.";
     }
     if (mode === "register" && !authPhonePattern.test(normalizedPhone)) {
       nextErrors.phone = "Số điện thoại không hợp lệ.";
@@ -137,6 +130,7 @@ export default function AuthPage({ mode: initialMode }: { mode: "login" | "regis
           ? await store.login(email, password)
           : await store.register({
               fullName: fullName.trim(),
+              userName: userName.trim(),
               email: email.trim().toLowerCase(),
               phone: normalizedPhone,
               password,
@@ -144,20 +138,7 @@ export default function AuthPage({ mode: initialMode }: { mode: "login" | "regis
             });
       showToast(result.message, result.ok ? "success" : "danger");
       if (result.ok) {
-        const params = new URLSearchParams(window.location.search);
-        const redirectParam = params.get("redirect") || params.get("from") || params.get("returnUrl");
-        const lastVisited = typeof window !== "undefined" ? sessionStorage.getItem("last_visited_page") : null;
-
-        let target = result.redirectTo && result.redirectTo !== "/" ? result.redirectTo : null;
-        if (!target) {
-          if (redirectParam && redirectParam.startsWith("/") && !redirectParam.startsWith("/login") && !redirectParam.startsWith("/register")) {
-            target = redirectParam;
-          } else if (lastVisited && lastVisited.startsWith("/") && !lastVisited.startsWith("/login") && !lastVisited.startsWith("/register")) {
-            target = lastVisited;
-          } else {
-            target = "/";
-          }
-        }
+        const target = result.redirectTo || "/";
         router.push(target);
       } else {
         submittingRef.current = false;
@@ -293,6 +274,26 @@ export default function AuthPage({ mode: initialMode }: { mode: "login" | "regis
                 </div>
 
                 <div>
+                  <label className="mb-1.5 block text-xs font-bold text-slate-700">Tên đăng nhập</label>
+                  <div className="relative">
+                    <User className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                    <input
+                      type="text"
+                      value={userName}
+                      onChange={(e) => setUserName(e.target.value)}
+                      placeholder="nguyenvana_123"
+                      autoComplete="username"
+                      className={`w-full rounded-xl border bg-slate-50 py-2.5 pl-10 pr-4 text-sm font-medium text-slate-900 transition-colors focus:bg-white focus:outline-none ${
+                        formErrors.userName
+                          ? "border-rose-500 focus:border-rose-500"
+                          : "border-slate-200 focus:border-emerald-600"
+                      }`}
+                    />
+                  </div>
+                  {formErrors.userName && <p className="mt-1 text-xs font-semibold text-rose-500">{formErrors.userName}</p>}
+                </div>
+
+                <div>
                   <label className="mb-1.5 block text-xs font-bold text-slate-700">Số điện thoại</label>
                   <div className="relative">
                     <Phone className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
@@ -317,7 +318,7 @@ export default function AuthPage({ mode: initialMode }: { mode: "login" | "regis
             {/* EMAIL FIELD */}
             <div>
               <label className="mb-1.5 block text-xs font-bold text-slate-700">
-                {mode === "login" ? "Email hoặc số điện thoại" : "Địa chỉ Email"}
+                {mode === "login" ? "Email, Số điện thoại hoặc Tên đăng nhập" : "Địa chỉ Email"}
               </label>
               <div className="relative">
                 <Mail className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />

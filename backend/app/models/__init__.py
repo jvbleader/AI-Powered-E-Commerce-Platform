@@ -35,6 +35,7 @@ _MODEL_MODULES = (
     "seller_profile",
     "seller_statistics",
     "shipment",
+    "support_chat",
     "user",
     "user_address",
     "user_role",

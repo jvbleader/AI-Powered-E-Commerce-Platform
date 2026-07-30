@@ -1,7 +1,9 @@
 "use client";
 
+import { useState } from "react";
 import { Check, CheckCircle2, Clock, Minus, PackageCheck, Plus, ShoppingBag, Star, Store, Truck, XCircle } from "lucide-react";
 import { Button, IconButton } from "@/components/ui/button";
+import Link from "next/link";
 import { Panel } from "@/components/ui/containers";
 import { StatusBadge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
@@ -84,6 +86,8 @@ export function ProductCard({
   onAdd?: (variantId: string) => void;
   className?: string;
 }) {
+  const [imageLoaded, setImageLoaded] = useState(false);
+
   const primaryVariant = getPrimaryVariant(product, variants);
   const priceRange = getProductPriceRange(product, variants);
   const category = categories.find((item) => product.categoryIds.includes(item.id));
@@ -97,14 +101,17 @@ export function ProductCard({
 
   return (
     <article className={cn("group hover-lift overflow-hidden rounded-2xl border border-slate-200/90 bg-white transition-all duration-300 hover:border-slate-300 hover:shadow-xl relative", isOutOfStock && "bg-slate-50/60", className)}>
-      <a href={href} className="block">
-        <div className="relative aspect-square overflow-hidden bg-slate-100">
+      <Link href={href} className="block">
+        <div className={cn("relative aspect-square overflow-hidden bg-slate-100", !imageLoaded && "animate-pulse")}>
           <img
             src={product.thumbnailUrl}
             alt={product.name}
+            loading="lazy"
+            onLoad={() => setImageLoaded(true)}
             className={cn(
-              "h-full w-full object-cover transition-transform duration-500 ease-out group-hover:scale-110",
-              isOutOfStock && "opacity-60"
+              "h-full w-full object-cover transition-all duration-500 ease-out group-hover:scale-110",
+              isOutOfStock && "opacity-60",
+              !imageLoaded ? "opacity-0" : "opacity-100"
             )}
           />
           {isOutOfStock && (
@@ -129,7 +136,7 @@ export function ProductCard({
             <span className="text-xs font-semibold text-slate-600">Đã bán <span className="text-emerald-600 font-bold">{product.soldCount.toLocaleString("vi-VN")}</span></span>
           </div>
         </div>
-      </a>
+      </Link>
       {primaryVariant && onAdd ? (
         <div className={cn("border-t border-slate-100 p-3 bg-slate-50/50 transition-opacity", isOutOfStock && "opacity-60")}>
           <Button
@@ -148,7 +155,7 @@ export function ProductCard({
 
 export function ShopCard({ shop }: { shop: Shop }) {
   return (
-    <a
+    <Link
       href={`/shops/${shop.shopSlug}`}
       className="group hover-lift block rounded-2xl border border-slate-200/90 bg-white p-4 transition-all duration-300 hover:border-slate-300 hover:shadow-xl"
     >
@@ -174,7 +181,7 @@ export function ShopCard({ shop }: { shop: Shop }) {
           <p className="font-bold text-slate-900">{formatVnd(shop.shippingFee)}</p>
         </div>
       </div>
-    </a>
+    </Link>
   );
 }
 

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import {
   ArrowUpRight,
   Award,
@@ -31,7 +32,8 @@ import {
 import { hotKeywords } from "@/store/initial-state";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/feedback";
-import { ProductGridSkeleton } from "@/components/ui/skeletons";
+import { CyberProductGridSkeleton, HeroSpotlightSkeleton, ShopCardSkeleton } from "@/components/ui/skeletons";
+import { Skeleton } from "@/components/ui/skeleton";
 import { RatingStars } from "@/components/shared/cards";
 import { fetchRecommendedProducts, fetchPublicProducts } from "@/services/product-api";
 import { useMarketplaceStore } from "@/store/use-marketplace-store";
@@ -57,9 +59,9 @@ function FlashCountdown() {
   const s = String(secs % 60).padStart(2, "0");
   return (
     <>
-      <span className="rounded-lg bg-amber-100 px-2 py-1 border border-amber-200 shadow-2xs">{h}</span> :
-      <span className="rounded-lg bg-amber-100 px-2 py-1 border border-amber-200 shadow-2xs">{m}</span> :
-      <span className="rounded-lg bg-amber-100 px-2 py-1 border border-amber-200 shadow-2xs animate-pulse">{s}</span>
+      <span suppressHydrationWarning className="rounded-lg bg-amber-100 px-2 py-1 border border-amber-200 shadow-2xs">{h}</span> :
+      <span suppressHydrationWarning className="rounded-lg bg-amber-100 px-2 py-1 border border-amber-200 shadow-2xs">{m}</span> :
+      <span suppressHydrationWarning className="rounded-lg bg-amber-100 px-2 py-1 border border-amber-200 shadow-2xs animate-pulse">{s}</span>
     </>
   );
 }
@@ -316,13 +318,13 @@ export default function HomePageComponent() {
                     HOT TRENDS:
                   </span>
                   {hotKeywords.slice(0, 4).map((keyword) => (
-                    <a
+                    <Link
                       key={keyword}
                       href={`/search?q=${encodeURIComponent(keyword)}`}
-                      className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-bold text-slate-800 transition-all duration-200 hover:border-amber-400 hover:bg-amber-50 hover:text-amber-900 hover:scale-105 active:scale-95 shadow-2xs"
+                      className="inline-flex cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-full border border-slate-200/60 bg-white/80 px-3.5 py-1.5 text-xs font-semibold text-slate-700 shadow-xs transition-all hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700 hover:shadow-sm"
                     >
                       {keyword}
-                    </a>
+                    </Link>
                   ))}
                 </div>
 
@@ -447,6 +449,8 @@ export default function HomePageComponent() {
                 <span className="text-xs font-bold text-rose-600 bg-rose-50 px-2 py-0.5 rounded-md border border-rose-200 animate-pulse">
                   Giảm {Math.round((1 - heroVariant.salePrice / heroVariant.price) * 100)}%
                 </span>
+              ) : loading ? (
+                <Skeleton className="h-[22px] w-[60px] rounded-md bg-slate-200/60" />
               ) : null}
             </div>
 
@@ -476,17 +480,19 @@ export default function HomePageComponent() {
                 </div>
 
 
-                <a
+                <Link
                   href={`/shops/${heroShop?.shopSlug || "shop"}/products/${heroProduct.slug}`}
                   className="flex w-full items-center justify-center gap-2 rounded-xl bg-slate-900 py-2.5 text-xs font-bold text-white transition-all duration-200 hover:bg-emerald-600 active:scale-95 shadow-md"
                 >
                   <span>Xem Chi Tiết</span>
                   <ChevronRight className="h-4 w-4" />
-                </a>
+                </Link>
               </div>
+            ) : loading ? (
+              <HeroSpotlightSkeleton />
             ) : (
               <div className="flex aspect-square items-center justify-center text-xs text-slate-400">
-                {loading ? "Đang nạp dữ liệu..." : "Chưa có sản phẩm"}
+                Chưa có sản phẩm
               </div>
             )}
           </div>
@@ -615,7 +621,7 @@ export default function HomePageComponent() {
 
         <div className="mt-6">
           {loading ? (
-            <ProductGridSkeleton count={4} />
+            <CyberProductGridSkeleton count={20} />
           ) : (activeTab === "recommended" ? activeBestSellers : activeNewest).length > 0 ? (
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
               {(activeTab === "recommended" ? activeBestSellers : activeNewest).map((product) => (
@@ -638,7 +644,11 @@ export default function HomePageComponent() {
         <h2 className="mb-4 font-heading text-xl font-extrabold text-slate-900 sm:text-2xl">Shop nổi bật</h2>
 
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {approvedShops.slice(0, 6).map((shop) => (
+          {loading ? (
+            Array.from({ length: 6 }).map((_, i) => (
+              <ShopCardSkeleton key={`shop-skel-${i}`} />
+            ))
+          ) : approvedShops.slice(0, 6).map((shop) => (
             <div key={shop.id} className="bento-card rounded-2xl p-5 flex items-center justify-between bg-white/90 border-slate-200/80">
               <div className="flex items-center gap-3">
                 <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 font-heading font-extrabold text-lg">
@@ -650,12 +660,12 @@ export default function HomePageComponent() {
                 </div>
               </div>
 
-              <a
+              <Link
                 href={`/shops/${shop.shopSlug}`}
                 className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-bold text-emerald-700 hover:border-emerald-400 hover:bg-emerald-50"
               >
                 Ghé Shop
-              </a>
+              </Link>
             </div>
           ))}
         </div>
@@ -674,7 +684,7 @@ function CyberProductCard({
   shop?: Shop;
 }) {
   return (
-    <a href={`/shops/${shop?.shopSlug || "shop"}/products/${product.slug}`} className="bento-card group flex flex-col justify-between overflow-hidden rounded-2xl border border-slate-200/80 bg-white/90 p-4 transition-all hover:-translate-y-1 hover:border-slate-300">
+    <Link href={`/shops/${shop?.shopSlug || "shop"}/products/${product.slug}`} className="bento-card group flex flex-col justify-between overflow-hidden rounded-2xl border border-slate-200/80 bg-white/90 p-4 transition-all hover:-translate-y-1 hover:border-slate-300">
       <div>
         <div className="relative aspect-square w-full overflow-hidden rounded-xl bg-slate-50">
           <img
@@ -702,7 +712,7 @@ function CyberProductCard({
           {variant ? `${variant.price.toLocaleString("vi-VN")} ₫` : "---"}
         </p>
       </div>
-    </a>
+    </Link>
   );
 }
 

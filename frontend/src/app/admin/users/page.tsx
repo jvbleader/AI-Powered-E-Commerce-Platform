@@ -8,6 +8,7 @@ import { StatusBadge } from "@/components/ui/badge";
 import { fetchAdminUsers, toggleAdminUserLock } from "@/services/admin-api";
 import { User } from "@/types/models";
 import { useMarketplaceStore } from "@/store/use-marketplace-store";
+import { TableSkeleton } from "@/components/ui/skeleton";
 
 export default function AdminUsersPage() {
   const { showToast } = useMarketplaceStore();
@@ -45,7 +46,7 @@ export default function AdminUsersPage() {
   return (
     <Section title="Quản lý users" className="h-full flex flex-col overflow-hidden pb-0">
       {loading ? (
-        <div className="p-4 text-center text-muted">Đang tải...</div>
+        <div className="p-4"><TableSkeleton headers={["User", "Email", "Roles", "Status", "Action"]} rows={10} /></div>
       ) : (
         <DataTable
           columns={["User", "Email", "Roles", "Status", "Action"]}

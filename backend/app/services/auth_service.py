@@ -63,6 +63,7 @@ async def register_user(data: RegisterRequest, db: AsyncSession):
             "email": data.email,
             "phone": data.phone,
             "password_hash": hash_password(data.password),
+            "phone_verified_at": datetime.now(UTC).replace(tzinfo=None),
         },
         db=db,
         roles=["CUSTOMER"],

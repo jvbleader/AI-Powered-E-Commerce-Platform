@@ -7,6 +7,7 @@ import { EmptyState } from "@/components/ui/feedback";
 import { Field, Input, Select } from "@/components/ui/input";
 import { Panel, Section } from "@/components/ui/containers";
 import { ProductCard } from "@/components/shared/cards";
+import { ProductGridSkeleton } from "@/components/shared/skeletons";
 import { fetchPublicProducts } from "@/services/product-api";
 import { useMarketplaceStore } from "@/store/use-marketplace-store";
 import type { Product, ProductVariant, Shop } from "@/types/models";
@@ -184,9 +185,7 @@ export default function ProductListing({
           {filtersOpen ? <Panel className="lg:hidden">{filterPanel}</Panel> : null}
           <div>
             {loading ? (
-              <div className="py-16 text-center text-slate-500 font-medium animate-pulse">
-                Đang tải danh sách sản phẩm...
-              </div>
+              <ProductGridSkeleton count={pageSize} />
             ) : products.length > 0 ? (
               <>
                 <div className="mb-3 flex items-center justify-between">

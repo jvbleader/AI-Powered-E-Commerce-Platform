@@ -32,6 +32,7 @@ import { fetchProductReviewsApi, ProductReview } from "@/services/review-api";
 import { useMarketplaceStore } from "@/store/use-marketplace-store";
 import NotFoundPage from "@/components/shared/not-found-page";
 import type { Product, ProductVariant, Shop } from "@/types/models";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export default function ProductDetailPage() {
   const params = useParams();
@@ -80,11 +81,173 @@ export default function ProductDetailPage() {
 
   if (loading) {
     return (
-      <main className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8 py-16 text-center">
-        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600">
-          <div className="h-6 w-6 animate-spin rounded-full border-2 border-emerald-600 border-t-transparent" />
+      <main className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8 py-6 space-y-6 bg-canvas min-h-screen">
+        {/* BREADCRUMB */}
+        <nav className="flex items-center gap-2 text-xs">
+          <Skeleton className="h-4 w-16" />
+          <Skeleton className="h-3 w-3" />
+          <Skeleton className="h-4 w-24" />
+          <Skeleton className="h-3 w-3" />
+          <Skeleton className="h-4 w-40" />
+        </nav>
+
+        {/* MAIN HERO CARD */}
+        <div className="rounded-3xl border border-slate-200/80 bg-white p-5 sm:p-7 shadow-sm lg:grid lg:grid-cols-12 lg:gap-8">
+          
+          {/* LEFT GALLERY (Col 5) */}
+          <div className="lg:col-span-5 space-y-3">
+            <div className="relative aspect-square w-full overflow-hidden rounded-2xl border border-slate-100 bg-slate-50">
+              <Skeleton className="h-full w-full rounded-none" />
+            </div>
+            
+            {/* THUMBNAILS */}
+            <div className="flex gap-2 overflow-hidden pb-1">
+              <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-xl border-2 border-slate-200">
+                <Skeleton className="h-full w-full rounded-none" />
+              </div>
+              <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-xl border-2 border-slate-200">
+                <Skeleton className="h-full w-full rounded-none" />
+              </div>
+            </div>
+
+            {/* SHOP CARD STRIP */}
+            <div className="rounded-2xl border border-slate-100 bg-slate-50/80 p-3.5 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Skeleton className="h-10 w-10 rounded-xl" />
+                <div className="space-y-1.5">
+                  <Skeleton className="h-4 w-28" />
+                  <Skeleton className="h-3 w-32" />
+                </div>
+              </div>
+              <Skeleton className="h-8 w-20 rounded-xl" />
+            </div>
+          </div>
+
+          {/* RIGHT INFO (Col 7) */}
+          <div className="lg:col-span-7 mt-6 lg:mt-0 flex flex-col justify-between space-y-5">
+            <div>
+              {/* TAGS */}
+              <div className="flex items-center gap-2">
+                <div className="inline-flex items-center gap-1 rounded-lg bg-emerald-50 px-2.5 py-1">
+                  <Skeleton className="h-3 w-3 rounded-full" />
+                  <Skeleton className="h-3 w-16" />
+                </div>
+              </div>
+
+              {/* TITLE */}
+              <div className="mt-2.5 space-y-2.5">
+                <Skeleton className="h-8 w-full" />
+                <Skeleton className="h-8 w-1/2" />
+              </div>
+
+              {/* STATS BAR */}
+              <div className="mt-4 flex items-center gap-4 border-b border-slate-100 pb-4">
+                <Skeleton className="h-4 w-24" />
+                <span className="h-3 w-px bg-slate-200" />
+                <Skeleton className="h-4 w-24" />
+              </div>
+
+              {/* PRICE CONTAINER */}
+              <div className="mt-4 rounded-2xl bg-slate-50/90 border border-slate-200/80 p-4">
+                <div className="flex items-baseline gap-3">
+                  <Skeleton className="h-8 w-32" />
+                  <Skeleton className="h-4 w-24" />
+                </div>
+                <Skeleton className="mt-2 h-3 w-48" />
+              </div>
+
+              {/* VARIANT SELECTOR */}
+              <div className="mt-5 space-y-3">
+                <Skeleton className="h-4 w-24" />
+                <div className="flex flex-col gap-2">
+                  <div className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2 w-3/4 sm:w-2/3 h-[38px]">
+                    <Skeleton className="h-4 w-full" />
+                  </div>
+                  <div className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2 w-5/6 sm:w-3/4 h-[38px]">
+                    <Skeleton className="h-4 w-full" />
+                  </div>
+                </div>
+              </div>
+
+              {/* QUANTITY STEPPER */}
+              <div className="mt-5 space-y-2">
+                <Skeleton className="h-4 w-24" />
+                <div className="flex items-center gap-4">
+                  <Skeleton className="h-10 w-[112px] rounded-xl" />
+                  <Skeleton className="h-4 w-32" />
+                </div>
+              </div>
+            </div>
+
+            {/* ACTION BUTTONS */}
+            <div className="pt-4 border-t border-slate-100 space-y-3">
+              <div className="flex flex-col sm:flex-row flex-wrap gap-3">
+                <Skeleton className="h-12 flex-1 rounded-xl" />
+                <Skeleton className="h-12 flex-1 rounded-xl" />
+                <Skeleton className="h-12 w-full sm:w-[50px] rounded-xl" />
+              </div>
+              {/* SPECIFICATIONS GRID */}
+              <div className="grid grid-cols-2 gap-2 pt-2">
+                <div className="rounded-xl border border-slate-100 bg-slate-50/60 p-2.5 space-y-1.5 h-[58px]">
+                  <Skeleton className="h-3 w-16" />
+                  <Skeleton className="h-4 w-24" />
+                </div>
+                <div className="rounded-xl border border-slate-100 bg-slate-50/60 p-2.5 space-y-1.5 h-[58px]">
+                  <Skeleton className="h-3 w-16" />
+                  <Skeleton className="h-4 w-24" />
+                </div>
+                <div className="rounded-xl border border-slate-100 bg-slate-50/60 p-2.5 space-y-1.5 h-[58px]">
+                  <Skeleton className="h-3 w-16" />
+                  <Skeleton className="h-4 w-24" />
+                </div>
+                <div className="rounded-xl border border-slate-100 bg-slate-50/60 p-2.5 space-y-1.5 h-[58px]">
+                  <Skeleton className="h-3 w-16" />
+                  <Skeleton className="h-4 w-24" />
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
-        <p className="mt-4 text-sm font-semibold text-slate-500">Đang tải chi tiết sản phẩm...</p>
+        
+        {/* DESCRIPTION PANEL */}
+        <div className="rounded-3xl border border-slate-200/80 bg-white p-6 sm:p-8 shadow-sm space-y-4">
+          <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
+             <Skeleton className="h-5 w-5 rounded-full" />
+             <Skeleton className="h-6 w-32" />
+          </div>
+          <div className="space-y-3 pt-2">
+            <Skeleton className="h-4 w-full" />
+            <Skeleton className="h-4 w-full" />
+            <Skeleton className="h-4 w-3/4" />
+            <Skeleton className="h-4 w-5/6" />
+          </div>
+        </div>
+
+        {/* REVIEWS PANEL */}
+        <div className="rounded-3xl border border-slate-200/80 bg-white p-6 sm:p-8 shadow-sm space-y-5">
+          <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
+             <Skeleton className="h-5 w-5 rounded-full" />
+             <Skeleton className="h-6 w-40" />
+          </div>
+          <div className="space-y-4 pt-2">
+             <div className="rounded-2xl border border-slate-100 bg-slate-50/60 p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                   <div className="flex items-center gap-3">
+                      <Skeleton className="h-9 w-9 rounded-full" />
+                      <div className="space-y-1.5">
+                         <Skeleton className="h-3 w-24" />
+                         <Skeleton className="h-2 w-16" />
+                      </div>
+                   </div>
+                   <Skeleton className="h-4 w-20" />
+                </div>
+                <div className="pl-12 space-y-2">
+                   <Skeleton className="h-3 w-full" />
+                   <Skeleton className="h-3 w-3/4" />
+                </div>
+             </div>
+          </div>
+        </div>
       </main>
     );
   }

@@ -2,6 +2,7 @@
 
 import { ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import Link from "next/link";
 import {
   Box,
   ChartNoAxesCombined,
@@ -90,11 +91,24 @@ export function DashboardFrame({
     <div className="h-screen bg-canvas flex flex-col overflow-hidden">
       <div className="border-b border-line bg-white shrink-0">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3">
-          <a href={homeHref} className="flex items-center gap-2 font-black text-ink">
-            <span className="flex h-9 w-9 items-center justify-center rounded-panel bg-primary text-white">S</span>
-            <span>{BRAND_NAME}</span>
-            <span className="text-muted text-sm font-normal">– {kindLabel[kind]}</span>
-          </a>
+          <div className="flex items-center gap-6">
+            <Link href={homeHref} className="flex items-center gap-2 font-black text-ink">
+              <span className="flex h-9 w-9 items-center justify-center rounded-panel bg-primary text-white">S</span>
+              <span>{BRAND_NAME}</span>
+              <span className="text-muted text-sm font-normal">– {kindLabel[kind]}</span>
+            </Link>
+            
+            {kind === "supporter" && (
+              <nav className="hidden md:flex items-center gap-1">
+                {nav.map(([href, label, Icon]) => (
+                  <Link key={href} href={href} className={cn("px-3 py-2 text-sm font-medium rounded-md flex items-center gap-2 transition-colors", pathname === href ? "bg-slate-100 text-slate-900" : "text-slate-500 hover:text-slate-900 hover:bg-slate-50")}>
+                    <Icon className="w-4 h-4" />
+                    {label}
+                  </Link>
+                ))}
+              </nav>
+            )}
+          </div>
           <div className="flex items-center gap-2">
             {kind === "seller" && store.getCurrentShop() ? (
               <div className="flex flex-col items-end mr-2">
@@ -121,7 +135,7 @@ export function DashboardFrame({
               onClick={async () => {
                 await store.logout();
                 if (typeof window !== "undefined") {
-                  window.location.href = "/login";
+                  window.location.href = "/login?logout=1";
                 }
               }}
             >
@@ -132,32 +146,36 @@ export function DashboardFrame({
       </div>
       {pathname.includes("/violation-reports") ? (
         <div className="w-full flex-1 overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-          <div className="mx-auto w-full max-w-7xl px-4 py-5 grid lg:grid-cols-[250px_1fr] gap-4 items-start">
-            <aside className="sticky top-5 h-[calc(100vh-6.5rem)] overflow-y-auto rounded-panel border border-line bg-white p-3 hidden lg:block [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-              <nav className="grid gap-1 pb-4">
-                {nav.map(([href, label, Icon]) => (
-                  <a key={href} href={href} className={cn(NAV_LINK_CLASS, pathname === href && activeLinkClass)}>
-                    <Icon className="h-4 w-4" aria-hidden="true" />
-                    {label}
-                  </a>
-                ))}
-              </nav>
-            </aside>
+          <div className={cn("mx-auto w-full max-w-7xl px-4 py-5 grid gap-4 items-start", kind !== "supporter" ? "lg:grid-cols-[250px_1fr]" : "")}>
+            {kind !== "supporter" && (
+              <aside className="sticky top-5 h-[calc(100vh-6.5rem)] overflow-y-auto rounded-panel border border-line bg-white p-3 hidden lg:block [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+                <nav className="grid gap-1 pb-4">
+                  {nav.map(([href, label, Icon]) => (
+                    <Link key={href} href={href} className={cn(NAV_LINK_CLASS, pathname === href && activeLinkClass)}>
+                      <Icon className="h-4 w-4" aria-hidden="true" />
+                      {label}
+                    </Link>
+                  ))}
+                </nav>
+              </aside>
+            )}
             <main className="min-w-0 flex flex-col">{children}</main>
           </div>
         </div>
       ) : (
-        <div className="mx-auto w-full flex-1 overflow-hidden max-w-7xl px-4 py-5 grid lg:grid-cols-[250px_1fr] gap-4">
-          <aside className="h-full overflow-y-auto rounded-panel border border-line bg-white p-3 hidden lg:block">
-            <nav className="grid gap-1">
-              {nav.map(([href, label, Icon]) => (
-                <a key={href} href={href} className={cn(NAV_LINK_CLASS, pathname === href && activeLinkClass)}>
-                  <Icon className="h-4 w-4" aria-hidden="true" />
-                  {label}
-                </a>
-              ))}
-            </nav>
-          </aside>
+        <div className={cn("mx-auto w-full flex-1 overflow-hidden max-w-7xl px-4 py-5 grid gap-4", kind !== "supporter" ? "lg:grid-cols-[250px_1fr]" : "")}>
+          {kind !== "supporter" && (
+            <aside className="h-full overflow-y-auto rounded-panel border border-line bg-white p-3 hidden lg:block">
+              <nav className="grid gap-1">
+                {nav.map(([href, label, Icon]) => (
+                  <Link key={href} href={href} className={cn(NAV_LINK_CLASS, pathname === href && activeLinkClass)}>
+                    <Icon className="h-4 w-4" aria-hidden="true" />
+                    {label}
+                  </Link>
+                ))}
+              </nav>
+            </aside>
+          )}
           <main className="min-w-0 h-full overflow-hidden flex flex-col">{children}</main>
         </div>
       )}

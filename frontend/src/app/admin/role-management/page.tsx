@@ -8,6 +8,7 @@ import { Input, Checkbox, Field } from "@/components/ui/input";
 import { Panel, Section } from "@/components/ui/containers";
 import { StatusBadge } from "@/components/ui/badge";
 import { useMarketplaceStore } from "@/store/use-marketplace-store";
+import { TableSkeleton } from "@/components/ui/skeleton";
 import { apiFetch } from "@/services/api";
 import type { User, Role } from "@/types/models";
 
@@ -234,7 +235,7 @@ export default function RoleManagementPage() {
             </div>
 
             {loading ? (
-              <div className="py-10 text-center text-muted">Đang tải danh sách người dùng từ Database...</div>
+              <div className="py-10"><TableSkeleton headers={["Người dùng", "Liên hệ", "Trạng thái", "Vai trò Admin", "Vai trò Supporter", "Hành động"]} rows={8} /></div>
             ) : filteredUsers.length === 0 ? (
               <div className="py-10 text-center text-muted">Không tìm thấy người dùng phù hợp.</div>
             ) : (

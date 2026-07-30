@@ -42,10 +42,6 @@ export default function CheckoutPage() {
     }
   }, [addresses, addressId]);
 
-  if (!user) {
-    return <Unauthorized title="Checkout cần đăng nhập" description="Vui lòng đăng nhập để đặt hàng." />;
-  }
-
   if (!store.ready) {
     return (
       <main className="mx-auto max-w-7xl px-4 py-16 text-center">
@@ -53,6 +49,10 @@ export default function CheckoutPage() {
         <p className="text-sm font-medium text-muted">Đang tải thông tin thanh toán...</p>
       </main>
     );
+  }
+
+  if (!user) {
+    return <Unauthorized title="Checkout cần đăng nhập" description="Vui lòng đăng nhập để đặt hàng." />;
   }
 
   if (isOrdering) {

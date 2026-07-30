@@ -20,6 +20,10 @@ services:
       retries: 30
       start_period: 20s
 
+  redis:
+    image: redis:alpine
+    restart: unless-stopped
+
   backend:
     image: ai-ecommerce-backend:prod
     build:
@@ -35,6 +39,7 @@ services:
       PYTHONPATH: /app/app:/app
       PORT: "8000"
       INIT_DB_ON_START: ${INIT_DB_ON_START:-true}
+      REDIS_URL: redis://redis:6379/0
       DATABASE_URL: mysql+asyncmy://${MYSQL_USER:-ecommerce_user}:Phamhai271105%40@mysql:3306/${MYSQL_DATABASE:-ecommerce_db}
       ASYNC_DATABASE_URL: mysql+asyncmy://${MYSQL_USER:-ecommerce_user}:Phamhai271105%40@mysql:3306/${MYSQL_DATABASE:-ecommerce_db}
       ACCESS_TOKEN_SECRET: ${ACCESS_TOKEN_SECRET:-dev-access-token-secret-change-me}

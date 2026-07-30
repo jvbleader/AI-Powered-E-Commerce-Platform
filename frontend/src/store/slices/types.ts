@@ -217,7 +217,7 @@ export type MarketplaceStore = {
 
   // ── Auth slice ──
   login: (identifier: string, password: string) => Promise<{ ok: boolean; message: string; redirectTo?: string }>;
-  register: (payload: Pick<User, "fullName" | "email" | "phone"> & { password: string; confirmPassword: string }) => Promise<{ ok: boolean; message: string; redirectTo?: string }>;
+  register: (payload: Pick<User, "fullName" | "email" | "phone"> & { userName: string; password: string; confirmPassword: string }) => Promise<{ ok: boolean; message: string; redirectTo?: string }>;
   verifyEmail: (token: string) => Promise<{ ok: boolean; message: string; redirectTo?: string }>;
   verifyPhone: (phone: string, otp: string) => Promise<{ ok: boolean; message: string; redirectTo?: string }>;
   resendEmailVerification: () => Promise<{ ok: boolean; message: string }>;

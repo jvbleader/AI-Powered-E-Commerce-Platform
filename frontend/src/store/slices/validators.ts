@@ -29,20 +29,22 @@ export const authIdentifier = (identifier: string) => {
 };
 
 export const validateRegistrationPayload = (
-  payload: Pick<User, "fullName" | "email" | "phone"> & { password: string; confirmPassword: string }
+  payload: Pick<User, "fullName" | "email" | "phone"> & { userName: string; password: string; confirmPassword: string }
 ) => {
   const fullName = payload.fullName.trim();
+  const userName = payload.userName.trim();
   const email = normalizeAuthEmail(payload.email);
   const phone = normalizeAuthPhone(payload.phone);
   const password = payload.password.trim();
   const confirmPassword = payload.confirmPassword.trim();
 
   if (fullName.length < 2) return { ok: false as const, message: "Họ tên phải có ít nhất 2 ký tự." };
+  if (!/^[a-zA-Z0-9_]{3,30}$/.test(userName)) return { ok: false as const, message: "Tên đăng nhập phải có 3-30 ký tự, chỉ gồm chữ, số, dấu gạch dưới." };
   if (!EMAIL_RE.test(email)) return { ok: false as const, message: "Email không hợp lệ." };
   if (!PHONE_RE.test(phone)) return { ok: false as const, message: "Số điện thoại không hợp lệ." };
   if (password.length < 8) return { ok: false as const, message: "Mật khẩu phải có ít nhất 8 ký tự." };
   if (password !== confirmPassword) return { ok: false as const, message: "Mật khẩu xác nhận không khớp." };
-  return { ok: true as const, fullName, email, phone, password, confirmPassword };
+  return { ok: true as const, fullName, userName, email, phone, password, confirmPassword };
 };
 
 export const validateNewPasswordPayload = (newPasswordValue: string, confirmPasswordValue: string) => {
@@ -94,12 +96,12 @@ export const usernameFromRegistration = (email: string, phone: string) => {
 };
 
 export const backendRegisterToStatus = (result: BackendRegisterResponse): RegistrationStatusResponse => ({
-  message: "Đăng ký thành công. Vui lòng xác thực email nếu backend đã gửi mã.",
+  message: "Đăng ký thành công. Vui lòng xác thực email.",
   registrationId: result.user_name,
   email: result.email,
   phone: result.phone,
   emailVerified: false,
-  phoneVerified: false,
+  phoneVerified: true,
   completed: false
 });
 

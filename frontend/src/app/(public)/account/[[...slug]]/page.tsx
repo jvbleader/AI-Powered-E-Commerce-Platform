@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, Bell, CreditCard, LogOut, Plus, Store, Star, Copy, Check, ExternalLink, RotateCcw, Truck, MapPin, MessageSquare, ShieldCheck, FileText, HelpCircle } from "lucide-react";
+import { ArrowLeft, Bell, CreditCard, LogOut, Plus, Store, Star, Copy, Check, ExternalLink, RotateCcw, Truck, MapPin, MessageSquare, ShieldCheck, FileText, HelpCircle, Loader2 } from "lucide-react";
 import { createReviewApi } from "@/services/review-api";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Select, Textarea } from "@/components/ui/input";
@@ -55,6 +55,15 @@ export default function AccountPage() {
       store.fetchCustomerOrders("", true);
     }
   }, [user?.id]);
+
+  if (!store.ready) {
+    return (
+      <main className="mx-auto max-w-7xl px-4 py-16 text-center">
+        <Loader2 className="mx-auto h-8 w-8 animate-spin text-emerald-600 mb-3" />
+        <p className="text-sm font-medium text-muted">Đang tải thông tin tài khoản...</p>
+      </main>
+    );
+  }
 
   if (!user) {
     return <Unauthorized title="Tài khoản cần đăng nhập" description="Vui lòng đăng nhập để xem thông tin cá nhân." />;
@@ -179,6 +188,10 @@ export default function AccountPage() {
           <Panel>
             <h3 className="font-bold">Đổi mật khẩu</h3>
             <div className="mt-3 grid gap-3">
+              {/* Fake hidden inputs to stop Chrome autofill */}
+              <input type="text" name="fakeusernameremembered" style={{ display: 'none' }} autoComplete="username" />
+              <input type="password" name="fakepasswordremembered" style={{ display: 'none' }} autoComplete="current-password" />
+
               <Field label="Mật khẩu hiện tại" hint={formErrors.currentPassword ? <span className="text-coral">{formErrors.currentPassword}</span> : null}>
                 <Input
                   type="password"
@@ -300,7 +313,7 @@ export default function AccountPage() {
 
     return (
       <Section title="Địa chỉ giao hàng">
-        <div className="grid gap-4 lg:grid-cols-[1fr_360px]">
+        <div className="grid items-start gap-4 lg:grid-cols-[1fr_360px]">
           <div className="grid gap-3">
             {addresses.map((address) => (
               <Panel key={address.id}>

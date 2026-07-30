@@ -8,6 +8,7 @@ import { Panel, Section } from "@/components/ui/containers";
 import { useMarketplaceStore } from "@/store/use-marketplace-store";
 import { fetchAdminCategories, createAdminCategory, deleteAdminCategory } from "@/services/admin-api";
 import { Category } from "@/types/models";
+import { TableSkeleton } from "@/components/ui/skeleton";
 
 export default function AdminCategoriesPage() {
   const { showToast } = useMarketplaceStore();
@@ -94,7 +95,7 @@ export default function AdminCategoriesPage() {
       <div className="grid gap-4 lg:grid-cols-[1fr_300px] flex-1 overflow-hidden">
         <div className="flex flex-col h-full overflow-hidden">
           {loading ? (
-            <div className="p-4 text-center text-muted">Đang tải...</div>
+            <div className="p-4"><TableSkeleton headers={["Name", "Slug", "Sort", "Default other", "Action"]} rows={10} /></div>
           ) : (
             <DataTable
               columns={["Name", "Slug", "Sort", "Default other", "Action"]}

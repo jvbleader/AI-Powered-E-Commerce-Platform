@@ -10,6 +10,7 @@ import { useMarketplaceStore } from "@/store/use-marketplace-store";
 import { groupCartByShop, selectedCheckoutGroups, formatVnd } from "@/lib/helpers";
 import Unauthorized from "@/components/shared/unauthorized-page";
 import { useRouter } from "next/navigation";
+import { Loader2 } from "lucide-react";
 
 export default function CartPage() {
   const store = useMarketplaceStore();
@@ -20,6 +21,15 @@ export default function CartPage() {
     store.refreshCart?.();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  if (!store.ready) {
+    return (
+      <main className="mx-auto max-w-7xl px-4 py-16 text-center">
+        <Loader2 className="mx-auto h-8 w-8 animate-spin text-emerald-600 mb-3" />
+        <p className="text-sm font-medium text-muted">Đang tải giỏ hàng...</p>
+      </main>
+    );
+  }
 
   if (!store.getCurrentUser()) {
     return <Unauthorized title="Giỏ hàng cần đăng nhập" description="Vui lòng đăng nhập để xem giỏ hàng." />;

@@ -149,7 +149,8 @@ export function SearchField({
         onChange={(event) => onChange(event.target.value)}
         onFocus={onFocus}
         onBlur={onBlur}
-        autoComplete="off"
+        autoComplete="new-password"
+        name="search_query_fake_name_to_stop_autofill"
         placeholder={isScrolled ? "" : placeholder}
         className={cn(
           "w-full rounded-2xl border border-slate-200/90 text-slate-900 placeholder:text-slate-400/80 transition-all duration-500 ease-out focus:border-emerald-500 focus:bg-white focus:outline-none focus:ring-4 focus:ring-emerald-500/15 shadow-2xs",

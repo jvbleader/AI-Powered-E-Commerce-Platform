@@ -559,9 +559,6 @@ export function MarketplaceHeader() {
                           type="button"
                           onClick={async () => {
                             await store.logout();
-                            if (typeof window !== "undefined") {
-                              window.location.href = "/login";
-                            }
                           }}
                           className="w-full flex items-center gap-2.5 rounded-xl px-3 py-2 text-xs font-semibold text-rose-600 hover:bg-rose-50 transition-colors"
                         >
@@ -696,7 +693,8 @@ export function MarketplaceHeader() {
                                 placeholder="Tìm danh mục..."
                                 value={categoryFilter}
                                 onChange={(e) => setCategoryFilter(e.target.value)}
-                                autoComplete="off"
+                                autoComplete="new-password"
+                                name="category_search_fake_name"
                                 className="w-full rounded-xl border border-slate-200 bg-slate-50/80 pl-8 pr-3 py-1 text-xs text-slate-800 placeholder:text-slate-400 focus:border-emerald-500 focus:bg-white focus:outline-none transition-all"
                               />
                               {categoryFilter && (

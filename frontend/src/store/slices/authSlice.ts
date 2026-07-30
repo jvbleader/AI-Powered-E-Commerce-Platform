@@ -96,7 +96,7 @@ export const createAuthSlice: StateCreator<MarketplaceStore, [], [], any> = (set
         };
       }
     },
-    register: async (payload: Pick<User, "fullName" | "email" | "phone"> & { password: string; confirmPassword: string }) => {
+    register: async (payload: Pick<User, "fullName" | "email" | "phone"> & { userName: string; password: string; confirmPassword: string }) => {
       const { state, verificationContext } = get();
 
       const validation = validateRegistrationPayload(payload);
@@ -109,7 +109,7 @@ export const createAuthSlice: StateCreator<MarketplaceStore, [], [], any> = (set
           method: "POST",
           body: JSON.stringify({
             full_name: validation.fullName,
-            user_name: usernameFromRegistration(validation.email, validation.phone),
+            user_name: validation.userName,
             email: validation.email,
             phone: validation.phone,
             password: validation.password,
@@ -122,25 +122,25 @@ export const createAuthSlice: StateCreator<MarketplaceStore, [], [], any> = (set
         setVerificationContext(context);
         setState((prev) => ({ ...prev, sessionUserId: undefined, activeRole: "GUEST" }));
 
-        let message = registrationStatus.message;
-      try {
-        const query = new URLSearchParams({ phone: validation.phone });
-        const otpResult = await apiFetch<MessageResponse>(`${AUTH_ROUTES.resendPhone}?${query.toString()}`, {
-          method: "POST"
-        });
-        message = otpResult.message;
-      } catch (error) {
-        message =
-          error instanceof ApiError
-            ? `Đăng ký thành công, nhưng chưa gửi được OTP: ${error.message}`
-            : "Đăng ký thành công, nhưng chưa gửi được OTP. Hãy bấm Gửi lại mã.";
-      }
+        // Phone verification is bypassed, skip OTP
+        // Automatically send email verification
+        try {
+          const query = new URLSearchParams({
+            email: context.email,
+            full_name: validation.fullName
+          });
+          await apiFetch<MessageResponse>(`${AUTH_ROUTES.resendEmail}?${query.toString()}`, {
+            method: "POST"
+          });
+        } catch (error) {
+          console.error("Failed to auto-send verification email", error);
+        }
 
-      return {
-        ok: true,
-        message,
-        redirectTo: "/verify-phone"
-      };
+        return {
+          ok: true,
+          message: registrationStatus.message,
+          redirectTo: "/verify-email"
+        };
     } catch (error) {
       if (error instanceof ApiError) {
         return { ok: false, message: error.message };
@@ -384,10 +384,14 @@ export const createAuthSlice: StateCreator<MarketplaceStore, [], [], any> = (set
       } catch {
         // Keep logout local even if the backend is offline.
       } finally {
+        const nextState = { ...get().state, sessionUserId: undefined, activeRole: "GUEST" as const, cartItems: [] };
         if (typeof window !== "undefined") {
           sessionStorage.removeItem("last_visited_page");
+          persistState(nextState);
+          window.location.href = "/login?logout=1";
+        } else {
+          setState((prev: AppState) => nextState);
         }
-        setState((prev: AppState) => ({ ...prev, sessionUserId: undefined, activeRole: "GUEST", cartItems: [] }));
       }
     },
     logoutAll: async () => {
@@ -395,7 +399,14 @@ export const createAuthSlice: StateCreator<MarketplaceStore, [], [], any> = (set
 
       try {
         const result = await apiFetch<MessageResponse>(AUTH_ROUTES.logoutAll, { method: "POST" });
-        setState((prev: AppState) => ({ ...prev, sessionUserId: undefined, activeRole: "GUEST", cartItems: [] }));
+        const nextState = { ...get().state, sessionUserId: undefined, activeRole: "GUEST" as const, cartItems: [] };
+        if (typeof window !== "undefined") {
+          sessionStorage.removeItem("last_visited_page");
+          persistState(nextState);
+          window.location.href = "/login?logout=1";
+        } else {
+          setState((prev: AppState) => nextState);
+        }
         return { ok: true, message: result.message };
       } catch (error) {
         if (error instanceof ApiError) {

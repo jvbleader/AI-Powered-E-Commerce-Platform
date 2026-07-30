@@ -75,6 +75,7 @@ from api.user_address_api import router as user_address_router
 from api.chat_ai_api import router as chat_ai_router
 from api.review_api import router as review_router
 from api.violation_report_api import router as violation_report_router
+from api.support_chat_api import router as support_chat_router
 
 app.include_router(auth_router)
 app.include_router(seller_router)
@@ -90,6 +91,7 @@ app.include_router(user_address_router)
 app.include_router(chat_ai_router)
 app.include_router(review_router)
 app.include_router(violation_report_router)
+app.include_router(support_chat_router, prefix="/api/support-chat")
 
 
 

@@ -73,18 +73,6 @@ export default function MarketplaceLayout({
     };
   }, [currentUserId, fetchAddresses, setCategories]);
 
-  if (!ready) {
-    return (
-      <main className="flex min-h-screen w-full items-start justify-center bg-[#faf6f0] px-4 pt-20 sm:pt-32 pb-12">
-        <div className="w-full max-w-md rounded-2xl border border-slate-200/80 bg-white p-8 text-center animate-in fade-in-50 duration-200">
-          <Sparkles className="mx-auto h-8 w-8 text-emerald-600 animate-pulse" aria-hidden="true" />
-          <h1 className="mt-4 font-heading text-xl font-extrabold text-slate-900">Đang Khởi Động Shepoo</h1>
-          <p className="mt-2 text-xs text-slate-500">Đang chuẩn bị giao diện</p>
-        </div>
-      </main>
-    );
-  }
-
   if (forcedDashboardPath) {
     return <RedirectTo href={forcedDashboardPath} />;
   }
@@ -101,10 +89,20 @@ export default function MarketplaceLayout({
 
   return (
     <div className="min-h-screen bg-canvas text-slate-900 flex flex-col justify-between pt-[144px]">
-      <MarketplaceHeader />
+      {!ready ? (
+        <div className="fixed top-0 left-0 right-0 z-50 h-[144px] bg-white border-b border-line shadow-sm" />
+      ) : (
+        <MarketplaceHeader />
+      )}
+
       <ErrorBoundary>{children}</ErrorBoundary>
-      <ChatWidget />
-      <MarketplaceFooter />
+
+      {ready && (
+        <>
+          <ChatWidget />
+          <MarketplaceFooter />
+        </>
+      )}
     </div>
   );
 }
