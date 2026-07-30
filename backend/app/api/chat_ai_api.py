@@ -19,6 +19,8 @@ from schemas.chat_schema import (
     SendMessageRequest,
     ChatMessageResponse,
     ChatHistoryResponse,
+    ChatSessionListResponse,
+    ChatSessionSummaryResponse,
 )
 
 router = APIRouter(prefix="/ai", tags=["AI Chat"])
@@ -155,7 +157,7 @@ async def get_chat_history_endpoint(
     if session_id:
         session = await chat_repository.get_session_by_id(session_id, db=db)
 
-    if not session and current_user:
+    if not session and current_user and not session_id:
         sessions = await chat_repository.list_user_sessions(user_id=current_user.id, limit=1, db=db)
         if sessions:
             session = sessions[0]
@@ -168,6 +170,34 @@ async def get_chat_history_endpoint(
         ChatMessageResponse.model_validate(msg) for msg in messages
     ]
     return ChatHistoryResponse(session_id=session.id, messages=formatted_messages)
+
+@router.get("/chat/sessions", response_model=ChatSessionListResponse, summary="Get list of AI chat sessions")
+async def get_chat_sessions(
+    limit: int = Query(20, ge=1, le=50),
+    current_user: CurrentUserOptional = None,
+    db: AsyncSession = Depends(get_db),
+):
+    if not current_user:
+        return ChatSessionListResponse(sessions=[])
+    
+    sessions = await chat_repository.list_user_sessions_with_first_message(user_id=current_user.id, limit=limit, db=db)
+    
+    summary_list = []
+    for s in sessions:
+        title = "Đoạn chat mới"
+        if s.messages:
+            title = s.messages[0].content[:50]
+            if len(s.messages[0].content) > 50:
+                title += "..."
+                
+        summary_list.append(ChatSessionSummaryResponse(
+            session_id=s.id,
+            title=title,
+            created_at=s.created_at,
+            updated_at=s.updated_at or s.created_at
+        ))
+        
+    return ChatSessionListResponse(sessions=summary_list)
 
 
 

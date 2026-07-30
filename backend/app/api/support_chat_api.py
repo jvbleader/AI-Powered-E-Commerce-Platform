@@ -22,6 +22,7 @@ logger = logging.getLogger(__name__)
 async def get_or_create_conversation(
     guest_id: Optional[str] = None,
     create: Optional[bool] = True,
+    force_new: Optional[bool] = False,
     current_user: Optional[User] = Depends(get_current_user_optional),
     db: AsyncSession = Depends(get_db),
 ):
@@ -47,8 +48,11 @@ async def get_or_create_conversation(
     else:
         raise HTTPException(status_code=400, detail="Cần cung cấp user hoặc guest_id")
 
-    result = await db.execute(stmt)
-    conversation = result.scalars().first()
+    if force_new:
+        conversation = None
+    else:
+        result = await db.execute(stmt)
+        conversation = result.scalars().first()
 
     if not conversation:
         if not create:
@@ -103,6 +107,64 @@ async def list_conversations(
     return result.scalars().all()
 
 
+@router.get("/conversations/my", response_model=List[SupportConversationListResponse])
+async def list_my_conversations(
+    guest_id: Optional[str] = None,
+    current_user: Optional[User] = Depends(get_current_user_optional),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Lấy danh sách các cuộc hội thoại của khách hàng hiện tại (Customer hoặc Guest).
+    """
+    if current_user:
+        stmt = select(SupportConversation).options(
+            selectinload(SupportConversation.supporter),
+            selectinload(SupportConversation.messages)
+        ).where(
+            SupportConversation.customer_id == current_user.id
+        ).order_by(SupportConversation.updated_at.desc())
+    elif guest_id:
+        stmt = select(SupportConversation).options(
+            selectinload(SupportConversation.supporter),
+            selectinload(SupportConversation.messages)
+        ).where(
+            SupportConversation.guest_id == guest_id
+        ).order_by(SupportConversation.updated_at.desc())
+    else:
+        return []
+
+    result = await db.execute(stmt)
+    conversations = result.scalars().all()
+    
+    response_list = []
+    for conv in conversations:
+        # Sort messages by created_at ascending
+        sorted_messages = sorted(conv.messages, key=lambda m: m.created_at) if conv.messages else []
+        
+        # Find the first message sent by the CUSTOMER to use as the title/summary
+        customer_msgs = [m for m in sorted_messages if m.sender_type == "CUSTOMER"]
+        if customer_msgs:
+            first_msg_content = customer_msgs[0].content
+            # Truncate to ~45 chars and add ellipsis if longer
+            title = first_msg_content[:45] + "..." if len(first_msg_content) > 45 else first_msg_content
+        else:
+            title = "Yêu cầu hỗ trợ mới"
+        
+        response_list.append({
+            "id": conv.id,
+            "status": conv.status,
+            "customer_id": conv.customer_id,
+            "guest_id": conv.guest_id,
+            "supporter_id": conv.supporter_id,
+            "created_at": conv.created_at,
+            "updated_at": conv.updated_at,
+            "supporter": conv.supporter,
+            "last_message": title
+        })
+        
+    return response_list
+
+
 @router.get("/conversations/{conversation_id}", response_model=SupportConversationResponse)
 async def get_conversation(
     conversation_id: str,
@@ -151,7 +213,8 @@ async def join_conversation(
             content=f"Nhân viên {current_user.full_name} đã tham gia hỗ trợ."
         )
         db.add(message)
-        conversation.updated_at = message.created_at
+        from models.base import utc_now
+        conversation.updated_at = utc_now()
         await db.commit()
         await db.refresh(message)
         
@@ -180,6 +243,9 @@ async def close_conversation(
     if not conversation:
         raise HTTPException(status_code=404, detail="Không tìm thấy hội thoại")
         
+    if conversation.supporter_id and conversation.supporter_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Chỉ nhân viên đang hỗ trợ mới có quyền kết thúc")
+        
     conversation.status = "CLOSED"
     
     message = SupportMessage(
@@ -188,7 +254,8 @@ async def close_conversation(
         content="Hội thoại đã được kết thúc."
     )
     db.add(message)
-    conversation.updated_at = message.created_at
+    from models.base import utc_now
+    conversation.updated_at = utc_now()
     await db.commit()
     await db.refresh(message)
     
@@ -241,6 +308,32 @@ async def websocket_endpoint(
                 if not content or sender_type not in ["CUSTOMER", "SUPPORTER"]:
                     continue
                 
+                # Kiểm tra nếu cuộc gọi từ CUSTOMER mà hội thoại đang CLOSED -> Reopen
+                if sender_type == "CUSTOMER" and conversation.status == "CLOSED":
+                    conversation.status = "OPEN"
+                    conversation.supporter_id = None
+                    sys_msg = SupportMessage(
+                        conversation_id=conversation_id,
+                        sender_type="SYSTEM",
+                        content="Khách hàng đã mở lại yêu cầu hỗ trợ."
+                    )
+                    db.add(sys_msg)
+                    
+                    # Cập nhật updated_at cho conversation
+                    from models.base import utc_now
+                    conversation.updated_at = utc_now()
+                    await db.commit()
+                    await db.refresh(sys_msg)
+                    
+                    sys_ws_message = {
+                        "id": sys_msg.id,
+                        "conversation_id": sys_msg.conversation_id,
+                        "sender_type": sys_msg.sender_type,
+                        "content": sys_msg.content,
+                        "created_at": sys_msg.created_at.isoformat()
+                    }
+                    await manager.broadcast_to_conversation(conversation_id, sys_ws_message)
+                
                 # Lưu message vào DB
                 message = SupportMessage(
                     conversation_id=conversation_id,
@@ -249,7 +342,8 @@ async def websocket_endpoint(
                 )
                 db.add(message)
                 # Cập nhật updated_at cho conversation
-                conversation.updated_at = message.created_at
+                from models.base import utc_now
+                conversation.updated_at = utc_now()
                 await db.commit()
                 await db.refresh(message)
                 
