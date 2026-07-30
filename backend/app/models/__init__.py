@@ -46,3 +46,5 @@ _MODEL_MODULES = (
 
 for module_name in _MODEL_MODULES:
     import_module(f"{__name__}.{module_name}")
+
+from models.notification import Notification

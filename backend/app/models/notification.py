@@ -1,53 +1,17 @@
-from __future__ import annotations
-
-from datetime import datetime
-
-from sqlalchemy import Boolean, DateTime, ForeignKey, Index, String, Text, text
-from sqlalchemy.dialects import mysql
-from sqlalchemy.orm import Mapped, mapped_column, relationship
-
-from models.base import Base, utc_now
-
+import uuid
+from sqlalchemy import Column, String, Text, Boolean, DateTime, ForeignKey
+from sqlalchemy.dialects.mysql import CHAR
+from sqlalchemy.sql import func
+from models.base import Base
 
 class Notification(Base):
     __tablename__ = "notifications"
 
-    __table_args__ = (
-        Index("ix_notifications_recipient_id", "recipient_id"),
-        Index("ix_notifications_notification_type", "notification_type"),
-        Index("ix_notifications_is_read", "is_read"),
-        Index("ix_notifications_created_at", "created_at"),
-    )
-
-    id: Mapped[int] = mapped_column(
-        mysql.BIGINT(unsigned=True),
-        primary_key=True,
-        autoincrement=True,
-    )
-    recipient_id: Mapped[int] = mapped_column(
-        mysql.BIGINT(unsigned=True),
-        ForeignKey("users.id"),
-        nullable=False,
-    )
-    notification_type: Mapped[str] = mapped_column(String(50), nullable=False)
-    title: Mapped[str] = mapped_column(String(255), nullable=False)
-    content: Mapped[str | None] = mapped_column(Text, nullable=True)
-    reference_type: Mapped[str | None] = mapped_column(String(50), nullable=True)
-    reference_id: Mapped[int | None] = mapped_column(
-        mysql.BIGINT(unsigned=True),
-        nullable=True,
-    )
-    is_read: Mapped[bool] = mapped_column(
-        Boolean,
-        nullable=False,
-        default=False,
-        server_default=text("0"),
-    )
-    read_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime,
-        nullable=False,
-        default=utc_now,
-    )
-
-    recipient: Mapped["User"] = relationship(back_populates="notifications")
+    id = Column(CHAR(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id = Column(CHAR(36), ForeignKey("users.id"), index=True, nullable=False)
+    type = Column(String(50), nullable=False)
+    title = Column(String(255), nullable=False)
+    content = Column(Text, nullable=False)
+    is_read = Column(Boolean, default=False)
+    action_url = Column(String(500), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
