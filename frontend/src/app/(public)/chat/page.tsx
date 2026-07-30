@@ -1,13 +1,14 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { Bot, MessageSquare, Send, Sparkles, RefreshCcw, Loader2, UserCircle2, ArrowLeft, Menu, AlertCircle } from "lucide-react";
+import { Bot, MessageSquare, Send, Sparkles, Plus, Loader2, UserCircle2, ArrowLeft, Menu, AlertCircle } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useMarketplaceStore } from "@/store/use-marketplace-store";
 import { useAIChatStream } from "@/hooks/useAIChatStream";
 import { useSupporterChat } from "@/hooks/useSupporterChat";
+import { useSupportSessions } from "@/hooks/useSupportSessions";
 import { ChatMessageItem } from "@/components/ai/ChatMessageItem";
 import { formatDate } from "@/lib/helpers";
 import TextareaAutosize from 'react-textarea-autosize';
@@ -29,14 +30,27 @@ export default function ChatPage() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const {
+    sessionId,
     messages,
     isStreaming,
     currentStatus,
     isLoadingHistory,
     error,
+    chatSessions,
+    isLoadingSessions,
     sendMessage,
-    clearChat: clearAIChat
+    clearChat: clearAIChat,
+    switchChat
   } = useAIChatStream();
+
+  const { supportSessions, isLoadingSupportSessions, loadSupportSessions } = useSupportSessions();
+  const [activeSupportSessionId, setActiveSupportSessionId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (activeTab === "SUPPORTER") {
+      loadSupportSessions();
+    }
+  }, [activeTab, loadSupportSessions]);
 
   const scrollToBottom = () => {
     if (messagesEndRef.current) {
@@ -57,8 +71,17 @@ export default function ChatPage() {
   };
 
   const handleClearChat = () => {
+    if (messages.length === 0) {
+      // Optional: don't show toast, or show a subtle info
+      // showToast("Đoạn chat hiện tại đang trống", "info");
+      return;
+    }
     clearAIChat();
-    showToast("Đã xóa cuộc trò chuyện AI", "success");
+    showToast("Đã tạo đoạn chat mới", "success");
+  };
+
+  const handleClearSupportChat = () => {
+    setActiveSupportSessionId(null);
   };
 
   return (
@@ -126,19 +149,102 @@ export default function ChatPage() {
 
             <div className="flex-1 overflow-y-auto p-3 space-y-2 no-scrollbar">
               {activeTab === "AI" ? (
-                <button className="w-full p-4 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm text-left transition-transform hover:-translate-y-0.5">
-                  <div>
-                    <p className="font-bold text-sm">Phiên chat hiện tại</p>
-                    <p className="text-xs text-emerald-100 mt-0.5">Đang trực tuyến</p>
-                  </div>
-                </button>
+                  store.state.sessionUserId ? (
+                    isLoadingSessions ? (
+                      <div className="flex justify-center p-4">
+                        <Loader2 className="w-5 h-5 animate-spin text-emerald-500" />
+                      </div>
+                    ) : (
+                      <div className="flex flex-col gap-2">
+                        {sessionId && !chatSessions.find(s => s.sessionId === sessionId) && (
+                          <button className="w-full p-4 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm text-left border border-emerald-500 transition-transform hover:-translate-y-0.5">
+                            <div className="flex flex-col gap-1">
+                              <p className="font-bold text-sm line-clamp-1">Đoạn chat mới</p>
+                              <p className="text-xs text-emerald-100">Đang trực tuyến</p>
+                            </div>
+                          </button>
+                        )}
+                        {chatSessions.map((session) => {
+                          const isActive = session.sessionId === sessionId;
+                          return (
+                            <button
+                              key={session.sessionId}
+                              onClick={() => { switchChat(session.sessionId); setShowMobileSidebar(false); }}
+                              className={cn(
+                                "w-full p-4 rounded-2xl shadow-sm text-left transition-transform hover:-translate-y-0.5 border",
+                                isActive
+                                  ? "bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-500"
+                                  : "bg-white hover:bg-emerald-50 text-slate-700 border-slate-200"
+                              )}
+                            >
+                              <div className="flex flex-col gap-1">
+                                <p className={cn("font-bold text-sm line-clamp-1", isActive ? "text-white" : "text-slate-800")}>
+                                  {session.title}
+                                </p>
+                                <p className={cn("text-xs", isActive ? "text-emerald-100" : "text-slate-500")}>
+                                  {formatDate(session.updatedAt)}
+                                </p>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )
+                  ) : (
+                    <button className="w-full p-4 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm text-left transition-transform hover:-translate-y-0.5">
+                      <div>
+                        <p className="font-bold text-sm">Phiên chat hiện tại</p>
+                        <p className="text-xs text-emerald-100 mt-0.5">Chưa đăng nhập</p>
+                      </div>
+                    </button>
+                  )
               ) : (
-                <button className="w-full p-4 rounded-2xl bg-blue-500 hover:bg-blue-600 text-white shadow-sm text-left transition-transform hover:-translate-y-0.5">
-                  <div>
-                    <p className="font-bold text-sm">Hỗ trợ khách hàng</p>
-                    <p className="text-xs text-blue-100 mt-0.5">Kết nối với nhân viên</p>
+                isLoadingSupportSessions ? (
+                  <div className="flex justify-center p-4">
+                    <Loader2 className="w-5 h-5 animate-spin text-blue-500" />
                   </div>
-                </button>
+                ) : (
+                  <div className="flex flex-col gap-2">
+                    {!activeSupportSessionId && (
+                      <button className="w-full p-4 rounded-2xl bg-blue-500 hover:bg-blue-600 text-white shadow-sm text-left border border-blue-400 transition-transform hover:-translate-y-0.5">
+                        <div className="flex flex-col gap-1">
+                          <p className="font-bold text-sm line-clamp-1">Yêu cầu hỗ trợ mới</p>
+                          <p className="text-xs text-blue-100">Sẵn sàng kết nối</p>
+                        </div>
+                      </button>
+                    )}
+                    {supportSessions.map((session) => {
+                      const isActive = session.id === activeSupportSessionId;
+                      const isClosed = session.status === "CLOSED";
+                      return (
+                        <button
+                          key={session.id}
+                          onClick={() => { setActiveSupportSessionId(session.id); setShowMobileSidebar(false); }}
+                          className={cn(
+                            "w-full p-4 rounded-2xl shadow-sm text-left transition-transform hover:-translate-y-0.5 border",
+                            isActive
+                              ? "bg-blue-500 hover:bg-blue-600 text-white border-blue-400"
+                              : "bg-white hover:bg-blue-50 text-slate-700 border-slate-200"
+                          )}
+                        >
+                          <div className="flex flex-col gap-1">
+                            <p className={cn("font-bold text-sm line-clamp-1", isActive ? "text-white" : "text-slate-800")}>
+                              {session.last_message || "Yêu cầu hỗ trợ"}
+                            </p>
+                            <p className={cn("text-xs flex justify-between items-center mt-0.5", isActive ? "text-blue-100" : "text-slate-500")}>
+                              <span>{formatDate(session.updated_at)}</span>
+                              {isClosed ? (
+                                <span className={cn("px-1.5 py-0.5 rounded text-[10px] font-bold uppercase", isActive ? "bg-white/20 text-white" : "bg-slate-200 text-slate-600")}>Đã đóng</span>
+                              ) : (
+                                <span className={cn("px-1.5 py-0.5 rounded text-[10px] font-bold uppercase", isActive ? "bg-white/20 text-white" : "bg-blue-100 text-blue-700")}>Mở</span>
+                              )}
+                            </p>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )
               )}
             </div>
           </div>
@@ -190,10 +296,11 @@ export default function ChatPage() {
                   <Button 
                     variant="ghost" 
                     onClick={handleClearChat} 
-                    className="text-emerald-100 hover:text-white hover:bg-emerald-500/50 min-h-0 h-9 w-9 p-0" 
-                    title="Xóa cuộc trò chuyện"
+                    className="text-xs text-white border border-white/20 bg-emerald-700/30 hover:bg-emerald-700/50 hover:text-white shadow-xs min-h-8 py-1 px-2 md:px-3 flex items-center gap-1.5 transition-colors" 
+                    title="Đoạn chat mới"
                   >
-                    <RefreshCcw className="h-4 w-4 md:h-5 md:w-5" />
+                    <Plus className="h-4 w-4" />
+                    <span className="hidden sm:inline font-medium">Chat mới</span>
                   </Button>
                 </div>
               </div>
@@ -302,7 +409,13 @@ export default function ChatPage() {
             </>
           ) : (
             // SUPPORTER TAB
-            <CustomerSupportChat onMenuClick={() => setShowMobileSidebar(!showMobileSidebar)} />
+            <CustomerSupportChat 
+              conversationId={activeSupportSessionId}
+              setConversationId={setActiveSupportSessionId}
+              onConversationUpdated={loadSupportSessions}
+              onMenuClick={() => setShowMobileSidebar(!showMobileSidebar)} 
+              onClearChat={handleClearSupportChat}
+            />
           )}
         </div>
       </div>
@@ -310,10 +423,21 @@ export default function ChatPage() {
   );
 }
 
-function CustomerSupportChat({ onMenuClick }: { onMenuClick: () => void }) {
+function CustomerSupportChat({ 
+  conversationId, 
+  setConversationId,
+  onConversationUpdated,
+  onMenuClick,
+  onClearChat
+}: { 
+  conversationId: string | null;
+  setConversationId: (id: string | null) => void;
+  onConversationUpdated: () => void;
+  onMenuClick: () => void;
+  onClearChat: () => void;
+}) {
   const store = useMarketplaceStore();
   const { showToast } = store;
-  const [conversationId, setConversationId] = useState<string | null>(null);
   const [input, setInput] = useState("");
   const [isInitializing, setIsInitializing] = useState(true);
   const [isCreating, setIsCreating] = useState(false);
@@ -362,6 +486,13 @@ function CustomerSupportChat({ onMenuClick }: { onMenuClick: () => void }) {
     }
   }, [messages]);
 
+  // Trigger sidebar update when conversation state or messages change (for real-time re-ordering and status tag)
+  useEffect(() => {
+    if (conversationId && (messages.length > 0 || conversation)) {
+      onConversationUpdated();
+    }
+  }, [messages, conversation?.status, conversation?.supporter_id, onConversationUpdated, conversationId]);
+
   // Send pending message when WS connects
   useEffect(() => {
     if (isConnected && pendingMessage) {
@@ -375,12 +506,13 @@ function CustomerSupportChat({ onMenuClick }: { onMenuClick: () => void }) {
     try {
       const { apiFetch } = await import("@/services/api");
       const guestId = localStorage.getItem("guest_id");
-      const conv = await apiFetch<any>(`/api/support-chat/conversations?guest_id=${guestId}&create=true`, {
+      const conv = await apiFetch<any>(`/api/support-chat/conversations?guest_id=${guestId}&create=true&force_new=true`, {
         method: "POST"
       });
       if (conv && conv.id) {
         setPendingMessage(msg);
         setConversationId(conv.id);
+        onConversationUpdated();
       }
     } catch (error) {
       showToast("Lỗi kết nối máy chủ", "error");
@@ -391,7 +523,7 @@ function CustomerSupportChat({ onMenuClick }: { onMenuClick: () => void }) {
 
   const handleFormSubmit = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    if (!input.trim() || isClosed || isCreating) return;
+    if (!input.trim() || isCreating) return;
     
     if (!conversationId) {
        handleCreateAndSend(input.trim());
@@ -428,6 +560,18 @@ function CustomerSupportChat({ onMenuClick }: { onMenuClick: () => void }) {
               {isInitializing ? "Đang tải..." : (!conversationId || !conversation ? "Sẵn sàng hỗ trợ" : (isConnected ? (isClosed ? 'Đã đóng' : 'Đang online') : 'Đang kết nối...'))}
             </p>
           </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <Button 
+            variant="ghost" 
+            onClick={onClearChat} 
+            className="text-xs text-white border border-blue-400/30 bg-blue-600/20 hover:bg-blue-600/40 hover:text-white shadow-xs min-h-8 py-1 px-2 md:px-3 flex items-center gap-1.5 transition-colors" 
+            title="Tạo yêu cầu mới"
+          >
+            <Plus className="h-4 w-4" />
+            <span className="hidden sm:inline font-medium">Yêu cầu mới</span>
+          </Button>
         </div>
       </div>
 
@@ -498,16 +642,16 @@ function CustomerSupportChat({ onMenuClick }: { onMenuClick: () => void }) {
                 handleFormSubmit();
               }
             }}
-            placeholder={isClosed ? "Cuộc trò chuyện đã đóng" : "Nhập tin nhắn..."}
+            placeholder={isClosed ? "Nhập tin nhắn để mở lại yêu cầu hỗ trợ..." : "Nhập tin nhắn..."}
             className="flex-1 min-h-[48px] md:min-h-[56px] rounded-xl border-2 border-slate-200 bg-white px-4 py-3 md:py-4 text-sm md:text-base text-ink placeholder:text-muted/60 transition-all focus:border-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-500/10 shadow-sm resize-none no-scrollbar"
-            disabled={isClosed || (!isConnected && !!conversationId) || isCreating || isInitializing}
+            disabled={(!isConnected && !!conversationId) || isCreating || isInitializing}
           />
           <button
             type="submit"
-            disabled={!input.trim() || isClosed || (!isConnected && !!conversationId) || isCreating || isInitializing}
+            disabled={!input.trim() || (!isConnected && !!conversationId) || isCreating || isInitializing}
             className={cn(
               "flex h-12 w-12 md:h-14 md:w-14 shrink-0 items-center justify-center rounded-xl transition-all duration-300 shadow-sm",
-              (!input.trim() || isClosed || (!isConnected && !!conversationId) || isCreating || isInitializing)
+              (!input.trim() || (!isConnected && !!conversationId) || isCreating || isInitializing)
                 ? "bg-slate-200 text-slate-400 pointer-events-none"
                 : "bg-blue-500 text-white hover:bg-blue-600 hover:scale-105 active:scale-95"
             )}

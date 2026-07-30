@@ -5,10 +5,13 @@ import { useMarketplaceStore } from "@/store/use-marketplace-store";
 import {
   AIChatMessage,
   AIProductItem,
+  AIChatSessionSummary,
   getOrCreateSessionId,
   fetchChatHistory,
   sendStreamChatMessage,
-  clearSessionId
+  clearSessionId,
+  fetchChatSessions,
+  setSessionIdLocal
 } from "@/services/aiChatService";
 
 export function useAIChatStream() {
@@ -19,10 +22,29 @@ export function useAIChatStream() {
   const [currentStatus, setCurrentStatus] = useState<string | null>(null);
   const [isLoadingHistory, setIsLoadingHistory] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  
+  const [chatSessions, setChatSessions] = useState<AIChatSessionSummary[]>([]);
+  const [isLoadingSessions, setIsLoadingSessions] = useState<boolean>(true);
 
   const abortControllerRef = useRef<AbortController | null>(null);
   const messagesRef = useRef<AIChatMessage[]>(messages);
   messagesRef.current = messages;
+
+  const loadSessions = useCallback(async () => {
+    if (!sessionUserId) {
+      setChatSessions([]);
+      setIsLoadingSessions(false);
+      return;
+    }
+    setIsLoadingSessions(true);
+    const sessions = await fetchChatSessions();
+    setChatSessions(sessions);
+    setIsLoadingSessions(false);
+  }, [sessionUserId]);
+
+  useEffect(() => {
+    loadSessions();
+  }, [loadSessions]);
 
   // Initialize session & load history based on logged-in state
   useEffect(() => {
@@ -113,6 +135,8 @@ export function useAIChatStream() {
         onEnd: () => {
           setIsStreaming(false);
           setCurrentStatus(null);
+          // Reload sessions to update sidebar ordering and timestamps
+          loadSessions();
         },
         onError: (err) => {
           setIsStreaming(false);
@@ -123,6 +147,29 @@ export function useAIChatStream() {
     },
     [isStreaming, sessionId]
   );
+
+  const switchChat = useCallback((newSessionId: string) => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    setSessionIdLocal(sessionUserId, newSessionId);
+    setSessionId(newSessionId);
+    setIsLoadingHistory(true);
+    fetchChatHistory(newSessionId)
+      .then((history) => {
+        setMessages(history);
+      })
+      .catch((err) => {
+        console.error("Failed to fetch chat history:", err);
+        setMessages([]);
+      })
+      .finally(() => {
+        setIsLoadingHistory(false);
+      });
+    setIsStreaming(false);
+    setCurrentStatus(null);
+    setError(null);
+  }, [sessionUserId]);
 
   const clearChat = useCallback(() => {
     if (abortControllerRef.current) {
@@ -135,7 +182,8 @@ export function useAIChatStream() {
     setIsStreaming(false);
     setCurrentStatus(null);
     setError(null);
-  }, [sessionUserId]);
+    loadSessions();
+  }, [sessionUserId, loadSessions]);
 
   return {
     sessionId,
@@ -144,8 +192,11 @@ export function useAIChatStream() {
     currentStatus,
     isLoadingHistory,
     error,
+    chatSessions,
+    isLoadingSessions,
     sendMessage,
-    clearChat
+    clearChat,
+    switchChat
   };
 }
 

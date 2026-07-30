@@ -107,10 +107,11 @@ function ChatBox({ conversationId, onStateChange }: { conversationId: string, on
     try {
       const { apiFetch } = await import("@/services/api");
       await apiFetch(`/api/support-chat/conversations/${conversationId}/join`, { method: "POST" });
-      onStateChange();
-      await refetchConversation();
     } catch (e: any) {
       store.showToast(e.message || "Lỗi", "error");
+    } finally {
+      onStateChange();
+      await refetchConversation();
     }
   };
 
@@ -209,6 +210,12 @@ function ContextPanel({ conversationId, onStateChange, setSelectedConvId }: { co
     }
   };
 
+  const isAssignedToMe = Boolean(
+    conversation?.supporter?.public_id && 
+    store.getCurrentUser()?.id && 
+    conversation.supporter.public_id === store.getCurrentUser()?.id
+  );
+
   if (!conversation) return <div className="p-8 flex justify-center"><Loader2 className="w-8 h-8 animate-spin text-slate-300" /></div>;
 
   return (
@@ -238,7 +245,7 @@ function ContextPanel({ conversationId, onStateChange, setSelectedConvId }: { co
       </div>
       
       <div className="p-4 bg-white border-t">
-        <Button variant="destructive" className="w-full font-bold shadow-sm" onClick={handleClose} disabled={conversation.status === "CLOSED"}>
+        <Button variant="destructive" className="w-full font-bold shadow-sm" onClick={handleClose} disabled={conversation.status === "CLOSED" || !isAssignedToMe}>
           Kết thúc cuộc gọi
         </Button>
       </div>

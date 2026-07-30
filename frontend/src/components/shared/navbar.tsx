@@ -33,6 +33,7 @@ import { useMarketplaceStore } from "@/store/use-marketplace-store";
 import { BRAND_NAME } from "@/lib/constants";
 import { SearchField } from "@/components/ui/input";
 import { Button, IconButton } from "@/components/ui/button";
+import { NotificationBell } from "@/components/NotificationBell";
 
 const CATEGORY_ICONS: Record<string, string> = {
   "thoi-trang": "👕",
@@ -56,17 +57,12 @@ export function MarketplaceHeader() {
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
-  const [notifOpen, setNotifOpen] = useState(false);
   const [cartOpen, setCartOpen] = useState(false);
   const [catMoreOpen, setCatMoreOpen] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState("");
-  const notifications = store.state.notifications;
-  const [readIds, setReadIds] = useState<Set<string>>(new Set());
-  const unreadCount = notifications.filter((n) => !readIds.has(n.id)).length;
 
   const searchInputRef = useRef<HTMLInputElement>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
-  const notifRef = useRef<HTMLDivElement>(null);
   const catMoreRef = useRef<HTMLDivElement>(null);
 
   const suggestions = searchSuggestions(
@@ -99,9 +95,6 @@ export function MarketplaceHeader() {
       if (userMenuRef.current && !userMenuRef.current.contains(event.target as Node)) {
         setUserMenuOpen(false);
       }
-      if (notifRef.current && !notifRef.current.contains(event.target as Node)) {
-        setNotifOpen(false);
-      }
       if (catMoreRef.current && !catMoreRef.current.contains(event.target as Node)) {
         setCatMoreOpen(false);
       }
@@ -116,7 +109,6 @@ export function MarketplaceHeader() {
   useEffect(() => {
     setMobileNavOpen(false);
     setUserMenuOpen(false);
-    setNotifOpen(false);
     setCartOpen(false);
   }, [pathname]);
 
@@ -329,82 +321,7 @@ export function MarketplaceHeader() {
               </a>
 
               {/* NOTIFICATION BELL */}
-              <div
-                className="relative"
-                ref={notifRef}
-                onMouseEnter={() => setNotifOpen(true)}
-                onMouseLeave={() => setNotifOpen(false)}
-              >
-                <button
-                  type="button"
-                  onClick={() => setNotifOpen((v) => !v)}
-                  className={`relative inline-flex items-center gap-1.5 rounded-xl text-xs font-bold transition-all duration-300 ${
-                    isScrolled ? "px-2.5 py-1.5" : "px-3 py-2"
-                  } ${
-                    notifOpen
-                      ? "bg-emerald-50 text-emerald-700"
-                      : "text-slate-700 hover:bg-slate-200/50 hover:text-emerald-700"
-                  } active:scale-95`}
-                  aria-label="Thông báo"
-                >
-                  <div className="relative">
-                    <Bell className="h-4 w-4" />
-                    {unreadCount > 0 && (
-                      <span className="absolute -top-1 -right-1 flex h-2 w-2">
-                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-455 opacity-75"></span>
-                        <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-500"></span>
-                      </span>
-                    )}
-                  </div>
-                  <span>Thông báo</span>
-                </button>
-
-                {/* NOTIFICATION POPOVER */}
-                {notifOpen && (
-                  <div className="absolute right-0 top-11 z-50 w-80 animate-scale-in rounded-2xl border border-slate-200 bg-white p-3 shadow-2xl before:absolute before:-top-3 before:left-0 before:right-0 before:h-3 before:content-['']">
-                    <div className="flex items-center justify-between border-b border-slate-100 pb-2 px-1">
-                      <span className="font-heading text-xs font-bold text-slate-900">Thông báo mới</span>
-                      {unreadCount > 0 && (
-                        <button
-                          type="button"
-                          onClick={() => setReadIds(new Set(notifications.map((n) => n.id)))}
-                          className="text-[10px] font-bold text-emerald-600 hover:underline"
-                        >
-                          Đánh dấu đã đọc
-                        </button>
-                      )}
-                    </div>
-                    <div className="mt-2 space-y-1 max-h-64 overflow-y-auto">
-                      {notifications.length === 0 ? (
-                        <div className="py-6 text-center text-[11px] text-slate-400">
-                          <Bell className="mx-auto h-6 w-6 text-slate-200 mb-1.5" />
-                          Không có thông báo nào
-                        </div>
-                      ) : (
-                        notifications.map((n) => {
-                          const isUnread = !readIds.has(n.id);
-                          return (
-                            <div
-                              key={n.id}
-                              className={`rounded-xl p-2.5 text-xs transition-colors ${
-                                isUnread ? "bg-emerald-50/60" : "hover:bg-slate-50"
-                              }`}
-                            >
-                              <div className="font-bold text-slate-900 flex items-center justify-between">
-                                <span>{n.title}</span>
-                                <span className="text-[9px] font-medium text-slate-400">
-                                  {formatDate(n.createdAt)}
-                                </span>
-                              </div>
-                              <p className="mt-0.5 text-[11px] text-slate-600 leading-snug">{n.content}</p>
-                            </div>
-                          );
-                        })
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
+              <NotificationBell />
 
               {/* CART ICON & POPOVER */}
               <div

@@ -27,6 +27,13 @@ export interface AIChatMessage {
   createdAt?: string;
 }
 
+export interface AIChatSessionSummary {
+  sessionId: string;
+  title: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export type SSEEventPayload =
   | { type: "status"; content: string }
   | { type: "text"; content: string }
@@ -67,6 +74,23 @@ export function clearSessionId(userId?: string): void {
       localStorage.removeItem(`${SESSION_STORAGE_KEY}_${userId}`);
     }
     localStorage.removeItem(SESSION_STORAGE_KEY);
+  }
+}
+
+export function setSessionIdLocal(userId: string | undefined, sessionId: string): void {
+  if (typeof window !== "undefined" && userId) {
+    const key = `${SESSION_STORAGE_KEY}_${userId}`;
+    localStorage.setItem(key, sessionId);
+  }
+}
+
+export async function fetchChatSessions(): Promise<AIChatSessionSummary[]> {
+  try {
+    const data = await apiFetch<{ sessions: AIChatSessionSummary[] }>("/ai/chat/sessions");
+    return data?.sessions || [];
+  } catch (err) {
+    console.error("Failed to fetch chat sessions:", err);
+    return [];
   }
 }
 

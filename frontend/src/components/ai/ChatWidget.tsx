@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Bot, Sparkles, X, RotateCcw, Send, Loader2, MessageSquareText } from "lucide-react";
+import { Bot, Sparkles, X, Plus, Send, Loader2, MessageSquareText } from "lucide-react";
 import { useAIChatStream } from "@/hooks/useAIChatStream";
 import { ChatMessageList } from "./ChatMessageList";
 import { cn } from "@/lib/utils";
@@ -70,9 +70,9 @@ export function ChatWidget() {
               <button
                 onClick={clearChat}
                 className="rounded-panel p-1.5 hover:bg-emerald-500/50 text-emerald-100 hover:text-white transition-colors"
-                title="Làm mới cuộc trò chuyện"
+                title="Đoạn chat mới"
               >
-                <RotateCcw className="h-4 w-4" />
+                <Plus className="h-5 w-5" />
               </button>
               <button
                 onClick={() => setIsOpen(false)}
