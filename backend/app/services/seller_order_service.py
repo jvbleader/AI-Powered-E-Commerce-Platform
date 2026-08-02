@@ -22,6 +22,7 @@ from models.order_status_log import OrderStatusLog
 from models.order_cancellation import OrderCancellation
 from models.inventory_transaction import InventoryTransaction
 from repositories import inventory_repository, order_repository
+from services.notification import send_notification
 
 
 async def _get_active_seller_profile(user: User, db: AsyncSession):
@@ -83,6 +84,17 @@ async def confirm_seller_order(
         )
 
     confirmed_order = await confirm_order(db, order)
+    
+    # Notify buyer
+    await send_notification(
+        db=db,
+        user_id=order.user_id,
+        type="order",
+        title="Đơn hàng đã được xác nhận",
+        content=f"Đơn hàng {order.order_code} đã được shop xác nhận và đang được chuẩn bị.",
+        action_url=f"/account/orders/{order.order_code}"
+    )
+    
     return OrderResponse.model_validate(confirmed_order)
 
 
@@ -104,6 +116,17 @@ async def update_order_to_shipping(
         )
 
     shipped_order = await update_order_status_to_shipping(db, order)
+    
+    # Notify buyer
+    await send_notification(
+        db=db,
+        user_id=order.user_id,
+        type="order",
+        title="Đơn hàng đang giao",
+        content=f"Đơn hàng {order.order_code} đã được giao cho đơn vị vận chuyển.",
+        action_url=f"/account/orders/{order.order_code}"
+    )
+    
     return OrderResponse.model_validate(shipped_order)
 
 
@@ -182,6 +205,16 @@ async def cancel_seller_order(
                     note=f"Hoàn tồn kho khóa do shop từ chối đơn",
                 ),
             )
+
+    # Notify buyer
+    await send_notification(
+        db=db,
+        user_id=order.user_id,
+        type="order",
+        title="Đơn hàng bị từ chối",
+        content=f"Rất tiếc, đơn hàng {order.order_code} đã bị shop từ chối với lý do: {reason}",
+        action_url=f"/account/orders/{order.order_code}"
+    )
 
     return OrderResponse.model_validate(order)
 

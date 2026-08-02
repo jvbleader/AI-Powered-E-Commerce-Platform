@@ -4,6 +4,7 @@ import { Bot, User } from "lucide-react";
 import { AIChatMessage } from "@/services/aiChatService";
 import { ProductCardInChat } from "./ProductCardInChat";
 import { cn } from "@/lib/utils";
+import { formatDate } from "@/lib/helpers";
 
 function formatMarkdown(text: string): string {
   if (!text) return "";
@@ -45,6 +46,7 @@ export function ChatMessageItem({
                 ? "bg-emerald-600 text-white rounded-tr-sm border-transparent"
                 : "bg-white text-ink border border-slate-200 rounded-tl-sm"
             )}
+            title={message.createdAt ? formatDate(message.createdAt) : undefined}
           >
             {isAssistant ? (
               hasContent ? (

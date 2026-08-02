@@ -9,8 +9,12 @@ from core.database import DBSession
 from core.redis import get_redis_client
 from dependencies.auth import CurrentUser
 from models.notification import Notification
+from pydantic import BaseModel
 
 router = APIRouter()
+
+class ReadByUrlRequest(BaseModel):
+    action_url: str
 
 @router.get("/stream")
 async def stream_notifications(request: Request, current_user: CurrentUser):
@@ -40,15 +44,38 @@ async def stream_notifications(request: Request, current_user: CurrentUser):
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
 
+@router.get("/")
+async def get_notifications(
+    current_user: CurrentUser, 
+    db: DBSession,
+    skip: int = 0,
+    limit: int = 20
+):
+    stmt = select(Notification).where(
+        Notification.user_id == current_user.id
+    ).order_by(Notification.created_at.desc()).offset(skip).limit(limit)
+    result = await db.execute(stmt)
+    notifications = result.scalars().all()
+    return notifications
+
 @router.get("/unread-count")
 async def get_unread_count(current_user: CurrentUser, db: DBSession):
-    stmt = select(func.count(Notification.id)).where(
+    stmt_total = select(func.count(Notification.id)).where(
         Notification.user_id == current_user.id,
         Notification.is_read == False
     )
-    result = await db.execute(stmt)
-    count = result.scalar_one()
-    return {"unread_count": count}
+    result_total = await db.execute(stmt_total)
+    total_count = result_total.scalar_one()
+    
+    stmt_chat = select(func.count(Notification.id)).where(
+        Notification.user_id == current_user.id,
+        Notification.is_read == False,
+        Notification.action_url.like('/chat%')
+    )
+    result_chat = await db.execute(stmt_chat)
+    chat_count = result_chat.scalar_one()
+
+    return {"unread_count": total_count, "chat_unread_count": chat_count}
 
 @router.put("/{notif_id}/read")
 async def mark_notification_as_read(notif_id: str, current_user: CurrentUser, db: DBSession):
@@ -75,3 +102,14 @@ async def mark_all_as_read(current_user: CurrentUser, db: DBSession):
     await db.execute(stmt)
     await db.commit()
     return {"message": "All notifications marked as read"}
+
+@router.put("/read-by-url")
+async def mark_by_url(req: ReadByUrlRequest, current_user: CurrentUser, db: DBSession):
+    stmt = update(Notification).where(
+        Notification.user_id == current_user.id,
+        Notification.action_url == req.action_url,
+        Notification.is_read == False
+    ).values(is_read=True)
+    await db.execute(stmt)
+    await db.commit()
+    return {"message": "Notifications marked as read"}

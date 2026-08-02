@@ -153,6 +153,17 @@ async def update_violation_report_status(
     report.status = new_status
     if new_status in ("RESOLVED", "REJECTED"):
         report.resolved_at = datetime.utcnow()
+        
+        if report.reporter_id:
+            from services.notification import send_notification
+            await send_notification(
+                db=db,
+                user_id=report.reporter_id,
+                type="system",
+                title="Cập nhật báo cáo vi phạm",
+                content=f"Báo cáo vi phạm của bạn về sản phẩm {report.product.name if report.product else 'đã bị xóa'} đã được xử lý (Trạng thái: {new_status}).",
+                action_url="/account/violation-reports"
+            )
 
     await db.flush()
 

@@ -17,19 +17,41 @@ export default function SupporterLayout({
 
   if (!store.ready) {
     return (
-      <DashboardFrame kind="supporter">
-         <div className="p-4 space-y-4 h-full flex flex-col">
-           <Skeleton className="h-8 w-64 mb-4" />
-           <div className="flex-1 rounded-panel border border-line bg-white p-6">
-             <Skeleton className="h-10 w-full mb-6" />
-             <div className="space-y-4">
-               <Skeleton className="h-16 w-full" />
-               <Skeleton className="h-16 w-full" />
-               <Skeleton className="h-16 w-full" />
-             </div>
-           </div>
-         </div>
-      </DashboardFrame>
+      <>
+        <div id="supporter-ssr-blank" style={{ display: "block" }} suppressHydrationWarning>
+          <div className="min-h-screen bg-canvas" />
+        </div>
+        <div id="supporter-ssr-skeleton" style={{ display: "none" }} suppressHydrationWarning>
+          <div className="bg-canvas min-h-screen text-slate-900">
+            <DashboardFrame kind="supporter">
+              <div className="p-4 space-y-4 h-full flex flex-col">
+                <div className="h-8 w-64 mb-4 rounded-md bg-slate-200/50 animate-pulse" />
+                <div className="flex-1 rounded-panel border border-line bg-white" />
+              </div>
+            </DashboardFrame>
+          </div>
+        </div>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              try {
+                var s = localStorage.getItem('shepoo-marketplace-state-v5');
+                if (s) {
+                  var p = JSON.parse(s);
+                  if (p.activeRole === 'SUPPORTER') {
+                    var b = document.getElementById('supporter-ssr-blank');
+                    var sk = document.getElementById('supporter-ssr-skeleton');
+                    if (b && sk) {
+                      b.style.display = 'none';
+                      sk.style.display = 'block';
+                    }
+                  }
+                }
+              } catch(e) {}
+            `
+          }}
+        />
+      </>
     );
   }
 

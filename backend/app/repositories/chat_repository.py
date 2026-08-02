@@ -39,7 +39,7 @@ async def get_or_create_session(
         )
         session = result.scalars().first()
 
-    if session is None and user_id is not None:
+    if session is None and user_id is not None and not session_id and not session_token:
         user_sessions = await list_user_sessions(user_id=user_id, limit=1, db=db)
         if user_sessions:
             session = user_sessions[0]
@@ -83,6 +83,16 @@ async def add_chat_message(
         metadata_info=metadata_info,
     )
     db.add(msg)
+    
+    # Update the parent session's updated_at
+    from models.base import utc_now
+    from sqlalchemy import update
+    await db.execute(
+        update(ChatSession)
+        .where(ChatSession.id == session_id)
+        .values(updated_at=utc_now())
+    )
+    
     await db.flush()
     return msg
 
@@ -116,6 +126,23 @@ async def list_user_sessions(
 
     result = await db.execute(
         select(ChatSession)
+        .where(ChatSession.user_id == user_id)
+        .order_by(ChatSession.updated_at.desc())
+        .limit(limit)
+    )
+    return list(result.scalars().all())
+
+async def list_user_sessions_with_first_message(
+    user_id: int,
+    limit: int = 20,
+    db: AsyncSession | None = None,
+) -> list[ChatSession]:
+    if db is None:
+        raise ValueError("Database session (db) is required")
+
+    result = await db.execute(
+        select(ChatSession)
+        .options(selectinload(ChatSession.messages))
         .where(ChatSession.user_id == user_id)
         .order_by(ChatSession.updated_at.desc())
         .limit(limit)

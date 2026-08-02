@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
-import { Bot, MessageSquare, Send, Sparkles, Plus, Loader2, UserCircle2, ArrowLeft, Menu, AlertCircle } from "lucide-react";
+import React, { useState, useRef, useEffect, useCallback, Fragment } from "react";
+import { Bot, MessageSquare, Send, Sparkles, Plus, Loader2, UserCircle2, ArrowLeft, Menu, AlertCircle, Headset } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -24,10 +24,50 @@ export default function ChatPage() {
   const store = useMarketplaceStore();
   const { showToast } = store;
   
+  const [isMounted, setIsMounted] = useState(false);
   const [activeTab, setActiveTab] = useState<"AI" | "SUPPORTER">("AI");
   const [input, setInput] = useState("");
   const [showMobileSidebar, setShowMobileSidebar] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [activeSupportSessionId, setActiveSupportSessionId] = useState<string | null>(null);
+
+  useEffect(() => {
+    setIsMounted(true);
+    if (typeof window !== "undefined") {
+      const urlParams = new URLSearchParams(window.location.search);
+      const isReload = window.performance?.navigation?.type === 1 || 
+                       (window.performance?.getEntriesByType("navigation")?.[0] as PerformanceNavigationTiming)?.type === "reload";
+
+      const tab = urlParams.get("tab") || (isReload ? sessionStorage.getItem("chat_active_tab") : null);
+      const sessionId = urlParams.get("session_id") || (isReload ? sessionStorage.getItem("chat_active_support_session_id") : null);
+      
+      if (tab === "SUPPORTER") {
+        setActiveTab("SUPPORTER");
+      } else if (tab === "AI") {
+        setActiveTab("AI");
+      }
+
+      if (sessionId) {
+        setActiveSupportSessionId(sessionId);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      sessionStorage.setItem("chat_active_tab", activeTab);
+    }
+  }, [activeTab]);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      if (activeSupportSessionId) {
+        sessionStorage.setItem("chat_active_support_session_id", activeSupportSessionId);
+      } else {
+        sessionStorage.removeItem("chat_active_support_session_id");
+      }
+    }
+  }, [activeSupportSessionId]);
 
   const {
     sessionId,
@@ -44,7 +84,6 @@ export default function ChatPage() {
   } = useAIChatStream();
 
   const { supportSessions, isLoadingSupportSessions, loadSupportSessions } = useSupportSessions();
-  const [activeSupportSessionId, setActiveSupportSessionId] = useState<string | null>(null);
 
   useEffect(() => {
     if (activeTab === "SUPPORTER") {
@@ -62,6 +101,22 @@ export default function ChatPage() {
     const timeout = setTimeout(scrollToBottom, 50);
     return () => clearTimeout(timeout);
   }, [messages, currentStatus, isStreaming, activeTab]);
+
+  const handleSupportSessionClick = async (sessionId: string) => {
+    setActiveSupportSessionId(sessionId);
+    setShowMobileSidebar(false);
+    
+    // Call API to mark notifications as read
+    try {
+      const { apiFetch } = await import("@/services/api");
+      await apiFetch("/notifications/read-by-url", {
+        method: "PUT",
+        body: JSON.stringify({ action_url: `/chat?tab=SUPPORTER&session_id=${sessionId}` })
+      });
+      window.dispatchEvent(new CustomEvent('chat-unread-refresh'));
+      loadSupportSessions(true);
+    } catch (e) {}
+  };
 
   const handleSendAI = async (text: string) => {
     const trimmed = text.trim();
@@ -83,6 +138,30 @@ export default function ChatPage() {
   const handleClearSupportChat = () => {
     setActiveSupportSessionId(null);
   };
+
+  const handleConversationUpdated = useCallback(() => {
+    loadSupportSessions(true);
+  }, [loadSupportSessions]);
+
+  if (!isMounted) {
+    return (
+      <main className="flex-1 flex flex-col w-full max-w-5xl mx-auto px-3 md:px-4 py-3 md:py-4 font-body-tech h-[calc(100vh-2rem)] overflow-hidden">
+        <header className="flex items-center justify-between pb-3 shrink-0">
+          <Link href="/" className="flex items-center gap-2 text-slate-500 font-tech font-bold text-sm md:text-base">
+            <ArrowLeft className="w-4 h-4 md:w-5 md:h-5" />
+            <span>Về trang chủ</span>
+          </Link>
+          <div className="font-tech font-bold text-lg md:text-xl text-slate-900 flex items-center gap-2">
+            Shepoo <span className="text-emerald-600">Support</span>
+          </div>
+          <div className="w-[100px] hidden sm:block"></div>
+        </header>
+        <div className="overflow-hidden rounded-xl flex items-center justify-center flex-1 min-h-0 border border-slate-200 bg-white shadow-sm">
+           <Loader2 className="w-8 h-8 animate-spin text-slate-300" />
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main className="flex-1 flex flex-col w-full max-w-5xl mx-auto px-3 md:px-4 py-3 md:py-4 font-body-tech h-[calc(100vh-2rem)] overflow-hidden">
@@ -127,7 +206,7 @@ export default function ChatPage() {
             <div className="p-3 border-b border-slate-200 shrink-0">
               <div className="flex bg-slate-200/80 p-1 rounded-xl">
                 <button 
-                  onClick={() => { setActiveTab("AI"); setShowMobileSidebar(false); }}
+                  onClick={() => { setActiveTab("AI"); }}
                   className={cn(
                     "flex-1 py-2 px-3 rounded-lg text-xs md:text-sm font-bold flex items-center justify-center gap-1.5 transition-all",
                     activeTab === "AI" ? "bg-white shadow-sm text-emerald-700" : "text-slate-500 hover:text-slate-700 hover:bg-slate-200"
@@ -136,13 +215,13 @@ export default function ChatPage() {
                   <Bot className="w-4 h-4" /> AI Assistant
                 </button>
                 <button 
-                  onClick={() => { setActiveTab("SUPPORTER"); setShowMobileSidebar(false); }}
+                  onClick={() => { setActiveTab("SUPPORTER"); }}
                   className={cn(
                     "flex-1 py-2 px-3 rounded-lg text-xs md:text-sm font-bold flex items-center justify-center gap-1.5 transition-all",
                     activeTab === "SUPPORTER" ? "bg-white shadow-sm text-blue-500" : "text-slate-500 hover:text-slate-700 hover:bg-slate-200"
                   )}
                 >
-                  <MessageSquare className="w-4 h-4" /> Supporter
+                  <Headset className="w-4 h-4" /> Supporter
                 </button>
               </div>
             </div>
@@ -156,14 +235,7 @@ export default function ChatPage() {
                       </div>
                     ) : (
                       <div className="flex flex-col gap-2">
-                        {sessionId && !chatSessions.find(s => s.sessionId === sessionId) && (
-                          <button className="w-full p-4 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm text-left border border-emerald-500 transition-transform hover:-translate-y-0.5">
-                            <div className="flex flex-col gap-1">
-                              <p className="font-bold text-sm line-clamp-1">Đoạn chat mới</p>
-                              <p className="text-xs text-emerald-100">Đang trực tuyến</p>
-                            </div>
-                          </button>
-                        )}
+
                         {chatSessions.map((session) => {
                           const isActive = session.sessionId === sessionId;
                           return (
@@ -191,12 +263,9 @@ export default function ChatPage() {
                       </div>
                     )
                   ) : (
-                    <button className="w-full p-4 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm text-left transition-transform hover:-translate-y-0.5">
-                      <div>
-                        <p className="font-bold text-sm">Phiên chat hiện tại</p>
-                        <p className="text-xs text-emerald-100 mt-0.5">Chưa đăng nhập</p>
-                      </div>
-                    </button>
+                    <div className="text-center p-4 text-xs text-slate-400">
+                      Vui lòng đăng nhập để lưu lịch sử chat.
+                    </div>
                   )
               ) : (
                 isLoadingSupportSessions ? (
@@ -205,41 +274,34 @@ export default function ChatPage() {
                   </div>
                 ) : (
                   <div className="flex flex-col gap-2">
-                    {!activeSupportSessionId && (
-                      <button className="w-full p-4 rounded-2xl bg-blue-500 hover:bg-blue-600 text-white shadow-sm text-left border border-blue-400 transition-transform hover:-translate-y-0.5">
-                        <div className="flex flex-col gap-1">
-                          <p className="font-bold text-sm line-clamp-1">Yêu cầu hỗ trợ mới</p>
-                          <p className="text-xs text-blue-100">Sẵn sàng kết nối</p>
-                        </div>
-                      </button>
-                    )}
+
                     {supportSessions.map((session) => {
                       const isActive = session.id === activeSupportSessionId;
                       const isClosed = session.status === "CLOSED";
                       return (
                         <button
                           key={session.id}
-                          onClick={() => { setActiveSupportSessionId(session.id); setShowMobileSidebar(false); }}
+                          onClick={() => handleSupportSessionClick(session.id)}
                           className={cn(
-                            "w-full p-4 rounded-2xl shadow-sm text-left transition-transform hover:-translate-y-0.5 border",
+                            "w-full p-4 rounded-2xl shadow-sm text-left transition-transform hover:-translate-y-0.5 border relative",
                             isActive
                               ? "bg-blue-500 hover:bg-blue-600 text-white border-blue-400"
-                              : "bg-white hover:bg-blue-50 text-slate-700 border-slate-200"
+                              : session.has_unread 
+                                ? "bg-blue-50 hover:bg-blue-100 text-blue-900 border-blue-300 shadow-sm font-bold"
+                                : "bg-white hover:bg-blue-50 text-slate-700 border-slate-200"
                           )}
                         >
-                          <div className="flex flex-col gap-1">
+                          <div className="flex flex-col gap-1 pr-4">
                             <p className={cn("font-bold text-sm line-clamp-1", isActive ? "text-white" : "text-slate-800")}>
                               {session.last_message || "Yêu cầu hỗ trợ"}
                             </p>
-                            <p className={cn("text-xs flex justify-between items-center mt-0.5", isActive ? "text-blue-100" : "text-slate-500")}>
-                              <span>{formatDate(session.updated_at)}</span>
-                              {isClosed ? (
-                                <span className={cn("px-1.5 py-0.5 rounded text-[10px] font-bold uppercase", isActive ? "bg-white/20 text-white" : "bg-slate-200 text-slate-600")}>Đã đóng</span>
-                              ) : (
-                                <span className={cn("px-1.5 py-0.5 rounded text-[10px] font-bold uppercase", isActive ? "bg-white/20 text-white" : "bg-blue-100 text-blue-700")}>Mở</span>
-                              )}
+                            <p className={cn("text-xs mt-0.5", isActive ? "text-blue-100" : "text-slate-500")}>
+                              {formatDate(session.updated_at)}
                             </p>
                           </div>
+                          {session.has_unread && (
+                            <span className="absolute top-4 right-4 h-2.5 w-2.5 rounded-full bg-blue-500 shadow-sm animate-pulse"></span>
+                          )}
                         </button>
                       );
                     })}
@@ -279,7 +341,6 @@ export default function ChatPage() {
                   <div>
                     <h1 className="font-bold text-base md:text-lg text-white flex items-center gap-1.5">
                       Shepoo AI
-                      <span className="flex h-2 w-2 rounded-full bg-emerald-300 animate-pulse"></span>
                     </h1>
                     <p className="text-[10px] md:text-xs text-emerald-100 mt-1 uppercase tracking-wider">Trợ lý tư vấn bán hàng</p>
                   </div>
@@ -296,7 +357,7 @@ export default function ChatPage() {
                   <Button 
                     variant="ghost" 
                     onClick={handleClearChat} 
-                    className="text-xs text-white border border-white/20 bg-emerald-700/30 hover:bg-emerald-700/50 hover:text-white shadow-xs min-h-8 py-1 px-2 md:px-3 flex items-center gap-1.5 transition-colors" 
+                    className="text-xs !text-white border border-white/20 !bg-black/15 hover:!bg-black/30 shadow-xs min-h-8 py-1 px-2 md:px-3 flex items-center gap-1.5 transition-colors" 
                     title="Đoạn chat mới"
                   >
                     <Plus className="h-4 w-4" />
@@ -347,13 +408,34 @@ export default function ChatPage() {
                   </div>
                 ) : (
                   <div className="space-y-5">
-                    {messages.map((msg, idx) => (
-                      <ChatMessageItem
-                        key={msg.id || idx}
-                        message={msg}
-                        isStreaming={isStreaming && idx === messages.length - 1 && msg.role === "assistant"}
-                      />
-                    ))}
+                    {messages.map((msg, idx) => {
+                      let showTimeHeader = false;
+                      if (idx === 0) {
+                        showTimeHeader = true;
+                      } else {
+                        const prevMsg = messages[idx - 1];
+                        if (msg.createdAt && prevMsg.createdAt) {
+                          const diff = new Date(msg.createdAt).getTime() - new Date(prevMsg.createdAt).getTime();
+                          if (diff >= 30 * 60 * 1000) showTimeHeader = true;
+                        }
+                      }
+                      
+                      return (
+                        <Fragment key={msg.id || idx}>
+                          {showTimeHeader && msg.createdAt && (
+                            <div className="flex justify-center my-4">
+                              <span className="text-[10px] text-slate-400 font-medium bg-slate-100 px-2.5 py-1 rounded-full">
+                                {formatDate(msg.createdAt)}
+                              </span>
+                            </div>
+                          )}
+                          <ChatMessageItem
+                            message={msg}
+                            isStreaming={isStreaming && idx === messages.length - 1 && msg.role === "assistant"}
+                          />
+                        </Fragment>
+                      );
+                    })}
 
                     {currentStatus && (
                       <div className="flex items-center gap-2.5 rounded-2xl bg-emerald-50/90 border border-emerald-200 p-3.5 text-xs md:text-sm text-emerald-800 animate-fade-in max-w-[80%] shadow-xs">
@@ -412,7 +494,7 @@ export default function ChatPage() {
             <CustomerSupportChat 
               conversationId={activeSupportSessionId}
               setConversationId={setActiveSupportSessionId}
-              onConversationUpdated={loadSupportSessions}
+              onConversationUpdated={handleConversationUpdated}
               onMenuClick={() => setShowMobileSidebar(!showMobileSidebar)} 
               onClearChat={handleClearSupportChat}
             />
@@ -451,26 +533,13 @@ function CustomerSupportChat({
 
     const initChat = async () => {
       try {
-        const { apiFetch } = await import("@/services/api");
         let guestId = localStorage.getItem("guest_id");
         if (!guestId) {
           guestId = "guest_" + Math.random().toString(36).substring(2, 11);
           localStorage.setItem("guest_id", guestId);
         }
-        
-        try {
-          // Check for existing conversation without creating a new one
-          const conv = await apiFetch<any>(`/api/support-chat/conversations?guest_id=${guestId}&create=false`, {
-            method: "POST"
-          });
-          if (conv && conv.id) {
-            setConversationId(conv.id);
-          }
-        } catch (e) {
-          // 404 No active conversation, safely ignore
-        }
       } catch (error) {
-        // network error
+        // ignore
       } finally {
         setIsInitializing(false);
       }
@@ -550,13 +619,13 @@ function CustomerSupportChat({
             <Menu className="h-5 w-5" />
           </Button>
           <div className="flex h-10 w-10 md:h-11 md:w-11 items-center justify-center rounded-2xl bg-white/20 text-white shadow-xs">
-            <UserCircle2 className="h-6 w-6 md:h-7 md:w-7" />
+            <Headset className="h-6 w-6 md:h-7 md:w-7" />
           </div>
           <div>
-            <h1 className="font-tech font-bold text-base md:text-lg text-white">
+            <h1 className="font-bold text-base md:text-lg text-white">
               {assignedSupporter}
             </h1>
-            <p className="text-[10px] md:text-xs text-blue-100 mt-1 font-bold uppercase tracking-wider">
+            <p className="text-[10px] md:text-xs text-blue-100 mt-1 uppercase tracking-wider">
               {isInitializing ? "Đang tải..." : (!conversationId || !conversation ? "Sẵn sàng hỗ trợ" : (isConnected ? (isClosed ? 'Đã đóng' : 'Đang online') : 'Đang kết nối...'))}
             </p>
           </div>
@@ -566,7 +635,7 @@ function CustomerSupportChat({
           <Button 
             variant="ghost" 
             onClick={onClearChat} 
-            className="text-xs text-white border border-blue-400/30 bg-blue-600/20 hover:bg-blue-600/40 hover:text-white shadow-xs min-h-8 py-1 px-2 md:px-3 flex items-center gap-1.5 transition-colors" 
+            className="text-xs !text-white border border-white/20 !bg-black/15 hover:!bg-black/30 shadow-xs min-h-8 py-1 px-2 md:px-3 flex items-center gap-1.5 transition-colors" 
             title="Tạo yêu cầu mới"
           >
             <Plus className="h-4 w-4" />
@@ -582,44 +651,71 @@ function CustomerSupportChat({
       ) : (!conversationId || !conversation) ? (
         <div className="flex-1 flex flex-col items-center justify-center p-6 text-center animate-fade-in-up">
            <div className="w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center mb-4 shadow-sm">
-             <UserCircle2 className="w-8 h-8 text-blue-500" />
+             <Headset className="w-8 h-8 text-blue-500" />
            </div>
            <h3 className="text-lg md:text-xl font-bold text-slate-800 mb-2">Bạn cần hỗ trợ gì?</h3>
            <p className="text-slate-500 text-sm max-w-[250px]">Hãy gửi tin nhắn đầu tiên để kết nối ngay với tư vấn viên của chúng tôi.</p>
         </div>
       ) : (
         <div className="flex-1 overflow-y-auto overflow-x-hidden p-4 md:p-6 space-y-5 no-scrollbar">
-        {messages.map((msg) => {
+        {messages.map((msg, idx) => {
+          let showTimeHeader = false;
+          if (idx === 0) {
+            showTimeHeader = true;
+          } else {
+            const prevMsg = messages[idx - 1];
+            if (msg.created_at && prevMsg.created_at) {
+              const diff = new Date(msg.created_at).getTime() - new Date(prevMsg.created_at).getTime();
+              if (diff >= 30 * 60 * 1000) showTimeHeader = true;
+            }
+          }
+
           if (msg.sender_type === "SYSTEM") {
             return (
-              <div key={msg.id} className="flex justify-center my-4">
-                <div className="bg-slate-100 text-slate-500 text-xs py-1 px-3 rounded-full font-medium">
-                  {msg.content}
+              <Fragment key={msg.id}>
+                {showTimeHeader && (
+                  <div className="flex justify-center my-4">
+                    <span className="text-[10px] text-slate-400 font-medium bg-slate-100 px-2.5 py-1 rounded-full">
+                      {formatDate(msg.created_at)}
+                    </span>
+                  </div>
+                )}
+                <div className="flex justify-center my-4">
+                  <div className="bg-slate-100 text-slate-500 text-xs py-1 px-3 rounded-full font-medium">
+                    {msg.content}
+                  </div>
                 </div>
-              </div>
+              </Fragment>
             );
           }
           return (
-            <div key={msg.id} className={cn("flex", msg.sender_type === "CUSTOMER" ? "justify-end" : "justify-start")}>
-              {msg.sender_type === "SUPPORTER" && (
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-blue-100 text-blue-500 mr-2.5 mt-1 shadow-xs">
-                  <UserCircle2 className="h-5 w-5" />
+            <Fragment key={msg.id}>
+              {showTimeHeader && (
+                <div className="flex justify-center my-4">
+                  <span className="text-[10px] text-slate-400 font-medium bg-slate-100 px-2.5 py-1 rounded-full">
+                    {formatDate(msg.created_at)}
+                  </span>
                 </div>
               )}
-              <div
-                className={cn(
-                  "px-4 py-3 rounded-2xl max-w-[85%] md:max-w-[75%] text-sm leading-relaxed shadow-sm break-words",
-                  msg.sender_type === "CUSTOMER"
-                    ? "bg-blue-500 text-white rounded-tr-sm border-transparent"
-                    : "bg-white border border-slate-200 text-slate-800 rounded-tl-sm"
+              <div className={cn("flex", msg.sender_type === "CUSTOMER" ? "justify-end" : "justify-start")}>
+                {msg.sender_type === "SUPPORTER" && (
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-blue-100 text-blue-500 mr-2.5 mt-1 shadow-xs">
+                    <Headset className="h-5 w-5" />
+                  </div>
                 )}
-              >
-                <p>{msg.content}</p>
-                <p className={cn("mt-1 text-[10px] font-semibold", msg.sender_type === "CUSTOMER" ? "text-blue-100 text-right" : "text-slate-400")}>
-                  {formatDate(msg.created_at)}
-                </p>
+                <div
+                  className={cn(
+                    "px-4 py-3 rounded-2xl max-w-[85%] md:max-w-[75%] text-sm leading-relaxed shadow-sm break-words",
+                    msg.sender_type === "CUSTOMER"
+                      ? "bg-blue-500 text-white rounded-tr-sm border-transparent"
+                      : "bg-white border border-slate-200 text-slate-800 rounded-tl-sm"
+                  )}
+                  title={formatDate(msg.created_at)}
+                >
+                  <p>{msg.content}</p>
+                </div>
               </div>
-            </div>
+            </Fragment>
           );
         })}
         <div ref={messagesEndRef} />

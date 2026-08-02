@@ -45,8 +45,8 @@ export const createAddressSlice: StateCreator<MarketplaceStore, [], [], any> = (
         console.error("Failed to fetch addresses", error);
       }
     },
-    addAddress: async (address: Omit<Address, "id" | "userId">) => {
-      if (!get().getCurrentUser()) return false;
+    addAddress: async (address: Omit<Address, "id" | "userId">): Promise<true | string> => {
+      if (!get().getCurrentUser()) return "Vui lòng đăng nhập";
       try {
         const resp = await createAddressApi({
           receiver_name: address.receiverName,
@@ -81,9 +81,9 @@ export const createAddressSlice: StateCreator<MarketplaceStore, [], [], any> = (
           ]
         }));
         return true;
-      } catch (error) {
+      } catch (error: any) {
         console.error("Failed to add address", error);
-        return false;
+        return error?.message || "Thêm địa chỉ thất bại";
       }
     },
     updateAddress: async (id: string, updates: Partial<Omit<Address, "id" | "userId">>) => {

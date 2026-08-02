@@ -22,6 +22,7 @@ from repositories import (
     seller_profile_repository,
     user_address_repository,
 )
+from services.notification import send_notification
 
 
 def generate_order_code() -> str:
@@ -181,6 +182,25 @@ async def _process_checkout(
                 order_id=order.id, new_status="PLACED", note="Đơn hàng được tạo mới"
             ),
         )
+        # Notify buyer
+        await send_notification(
+            db=db,
+            user_id=user.id,
+            type="order",
+            title=f"Đặt hàng thành công",
+            content=f"Đơn hàng {order.order_code} đã được đặt thành công.",
+            action_url=f"/account/orders/{order.order_code}"
+        )
+        # Notify seller
+        seller_user_id = sellers[order.seller_id].user_id
+        await send_notification(
+            db=db,
+            user_id=seller_user_id,
+            type="order",
+            title=f"Đơn hàng mới!",
+            content=f"Bạn vừa nhận được đơn hàng mới {order.order_code}.",
+            action_url=f"/seller/orders/{order.order_code}"
+        )
 
     # Xóa các cart items đã mua (nếu từ giỏ hàng)
     cart_item_ids = [
@@ -317,6 +337,19 @@ async def confirm_receipt(user: User, order_code: str, db: AsyncSession):
         stats.total_sold += sum(i.quantity for i in order.items)
         stats.total_revenue += Decimal(str(order.total_amount))
 
+    # Lấy seller user_id
+    from repositories.seller_profile_repository import get_seller_profile_by_id
+    seller = await get_seller_profile_by_id(order.seller_id, db)
+    if seller:
+        await send_notification(
+            db=db,
+            user_id=seller.user_id,
+            type="order",
+            title="Đơn hàng đã giao thành công",
+            content=f"Người mua đã xác nhận nhận được đơn hàng {order_code}.",
+            action_url=f"/seller/orders/{order.order_code}"
+        )
+
     return order
 
 
@@ -378,6 +411,18 @@ async def cancel_order(user: User, order_code: str, reason: str, db: AsyncSessio
                     note=f"Hoàn tồn kho khóa do đơn {order_code} hủy",
                 ),
             )
+
+    from repositories.seller_profile_repository import get_seller_profile_by_id
+    seller = await get_seller_profile_by_id(order.seller_id, db)
+    if seller:
+        await send_notification(
+            db=db,
+            user_id=seller.user_id,
+            type="order",
+            title="Đơn hàng bị hủy",
+            content=f"Đơn hàng {order_code} đã bị người mua hủy.",
+            action_url=f"/seller/orders/{order.order_code}"
+        )
 
     return order
 

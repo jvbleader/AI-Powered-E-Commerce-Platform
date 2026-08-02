@@ -166,7 +166,7 @@ export default function CheckoutPage() {
                       const result = await store.checkout(addressId, method, note);
                       showToast(result.message, result.ok ? "success" : "danger");
                       if (result.ok) {
-                        router.push("/checkout/success");
+                        router.push(`/payment/${result.paymentCode}`);
                       } else {
                         setIsOrdering(false);
                       }

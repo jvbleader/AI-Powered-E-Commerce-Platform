@@ -22,7 +22,33 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="vi">
+    <html lang="vi" suppressHydrationWarning>
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              try {
+                var s = localStorage.getItem('shepoo-marketplace-state-v5');
+                if (s) {
+                  var p = JSON.parse(s);
+                  var isDashboard = window.location.pathname.startsWith('/admin') || window.location.pathname.startsWith('/seller') || window.location.pathname.startsWith('/supporter');
+                  if (!isDashboard && p.activeRole && p.users) {
+                    var c = p.users.find(function(u) { return u.id === p.sessionUserId });
+                    if (c && c.roles) {
+                       if ((p.activeRole === 'ADMIN' && c.roles.includes('ADMIN')) || 
+                           (p.activeRole === 'SELLER' && c.roles.includes('SELLER')) || 
+                           (p.activeRole === 'SUPPORTER' && c.roles.includes('SUPPORTER'))) {
+                          document.documentElement.classList.add('hide-until-redirect');
+                       }
+                    }
+                  }
+                }
+              } catch(e) {}
+            `
+          }}
+        />
+        <style dangerouslySetInnerHTML={{ __html: ".hide-until-redirect { opacity: 0 !important; pointer-events: none !important; }" }} />
+      </head>
       <body>
         <MarketplaceStoreProvider>
           {children}

@@ -69,7 +69,7 @@ export default function AuthPage({ mode: initialMode }: { mode: "login" | "regis
   const [submitting, setSubmitting] = useState(false);
   const submittingRef = useRef(false);
 
-  if (store.ready && currentUser) {
+  if (store.ready && currentUser && !submitting) {
     return null;
   }
 

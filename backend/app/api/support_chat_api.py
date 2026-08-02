@@ -137,6 +137,22 @@ async def list_my_conversations(
     conversations = result.scalars().all()
     
     response_list = []
+    
+    # Pre-fetch all unread chat notifications for this user
+    unread_chat_notifs = set()
+    if current_user:
+        from models.notification import Notification
+        notif_stmt = select(Notification.action_url).where(
+            Notification.user_id == current_user.id,
+            Notification.is_read == False,
+            Notification.action_url.like('/chat?tab=SUPPORTER&session_id=%')
+        )
+        notif_result = await db.execute(notif_stmt)
+        for url in notif_result.scalars().all():
+            if url:
+                session_id = url.split('session_id=')[-1]
+                unread_chat_notifs.add(session_id)
+
     for conv in conversations:
         # Sort messages by created_at ascending
         sorted_messages = sorted(conv.messages, key=lambda m: m.created_at) if conv.messages else []
@@ -150,6 +166,8 @@ async def list_my_conversations(
         else:
             title = "Yêu cầu hỗ trợ mới"
         
+        has_unread = conv.id in unread_chat_notifs
+        
         response_list.append({
             "id": conv.id,
             "status": conv.status,
@@ -159,7 +177,8 @@ async def list_my_conversations(
             "created_at": conv.created_at,
             "updated_at": conv.updated_at,
             "supporter": conv.supporter,
-            "last_message": title
+            "last_message": title,
+            "has_unread": has_unread
         })
         
     return response_list
@@ -302,6 +321,14 @@ async def websocket_endpoint(
             data_text = await websocket.receive_text()
             try:
                 data = json.loads(data_text)
+                
+                # Check for presence ping
+                if data.get("action") == "ping":
+                    p_sender = data.get("sender_type")
+                    if p_sender:
+                        await manager.redis.set(f"presence:{conversation_id}:{p_sender}", "1", ex=10)
+                    continue
+                
                 content = data.get("content")
                 sender_type = data.get("sender_type") # "CUSTOMER" or "SUPPORTER"
                 
@@ -346,6 +373,30 @@ async def websocket_endpoint(
                 conversation.updated_at = utc_now()
                 await db.commit()
                 await db.refresh(message)
+                
+                # Nếu SUPPORTER nhắn, check presence của CUSTOMER
+                if sender_type == "SUPPORTER" and conversation.customer_id:
+                    is_online = await manager.redis.get(f"presence:{conversation_id}:CUSTOMER")
+                    if not is_online:
+                        # Lấy tên supporter
+                        supporter_name = "Nhân viên hỗ trợ"
+                        if conversation.supporter_id:
+                            supporter_result = await db.execute(
+                                select(User.full_name).where(User.id == conversation.supporter_id)
+                            )
+                            name = supporter_result.scalar_one_or_none()
+                            if name:
+                                supporter_name = name
+                        from services.notification import send_notification
+                        await send_notification(
+                            db=db,
+                            user_id=conversation.customer_id,
+                            type="support",
+                            title="Tin nhắn CSKH mới",
+                            content=f"Nhân viên {supporter_name} vừa phản hồi tin nhắn của bạn.",
+                            action_url=f"/chat?tab=SUPPORTER&session_id={conversation_id}"
+                        )
+
                 
                 # Format tin nhắn để gửi qua websocket
                 ws_message = {

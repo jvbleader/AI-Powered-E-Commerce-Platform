@@ -73,3 +73,27 @@ class ChatHistoryResponse(BaseModel):
     )
     messages: list[ChatMessageResponse] = Field(default_factory=list)
 
+
+class ChatSessionSummaryResponse(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+    
+    session_id: str = Field(
+        validation_alias=AliasChoices("session_id", "sessionId"),
+        serialization_alias="sessionId",
+    )
+    title: str
+    created_at: datetime = Field(
+        validation_alias=AliasChoices("created_at", "createdAt"),
+        serialization_alias="createdAt",
+    )
+    updated_at: datetime = Field(
+        validation_alias=AliasChoices("updated_at", "updatedAt"),
+        serialization_alias="updatedAt",
+    )
+
+class ChatSessionListResponse(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+    
+    sessions: list[ChatSessionSummaryResponse] = Field(default_factory=list)
+
+

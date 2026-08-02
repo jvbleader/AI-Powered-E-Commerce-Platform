@@ -48,6 +48,8 @@ class SupportConversationListResponse(SupportConversationBase):
     updated_at: Optional[datetime]
     customer: Optional[SupportUserResponse] = None
     supporter: Optional[SupportUserResponse] = None
+    last_message: Optional[str] = None
+    has_unread: Optional[bool] = False
 
     model_config = ConfigDict(from_attributes=True)
 

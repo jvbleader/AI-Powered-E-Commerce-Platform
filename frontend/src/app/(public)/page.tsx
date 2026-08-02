@@ -198,6 +198,7 @@ export default function HomePageComponent() {
   const BadgeIconComponent = activeSlide.badgeIcon;
 
   useEffect(() => {
+    if (!store.ready) return;
     let isMounted = true;
     const loadHomeData = async () => {
       setLoading(true);
@@ -235,7 +236,7 @@ export default function HomePageComponent() {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [store.ready]);
 
   const activeBestSellers = bestSellers.filter(p => {
     const isHidden = store.state.hiddenProductIds.includes(p.id) || store.state.hiddenProductIds.includes(p.slug);

@@ -16,7 +16,27 @@ import {
 
 export function useAIChatStream() {
   const sessionUserId = useMarketplaceStore((s) => s.state.sessionUserId);
-  const [sessionId, setSessionId] = useState<string>("");
+  const [sessionId, setSessionId] = useState<string>(() => {
+    if (typeof window !== "undefined") {
+      const isReload = window.performance?.navigation?.type === 1 || 
+                       (window.performance?.getEntriesByType("navigation")?.[0] as PerformanceNavigationTiming)?.type === "reload";
+      if (isReload) {
+        return sessionStorage.getItem("chat_active_ai_session_id") || "";
+      }
+    }
+    return "";
+  });
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      if (sessionId) {
+        sessionStorage.setItem("chat_active_ai_session_id", sessionId);
+      } else {
+        sessionStorage.removeItem("chat_active_ai_session_id");
+      }
+    }
+  }, [sessionId]);
+
   const [messages, setMessages] = useState<AIChatMessage[]>([]);
   const [isStreaming, setIsStreaming] = useState<boolean>(false);
   const [currentStatus, setCurrentStatus] = useState<string | null>(null);
@@ -25,35 +45,42 @@ export function useAIChatStream() {
   
   const [chatSessions, setChatSessions] = useState<AIChatSessionSummary[]>([]);
   const [isLoadingSessions, setIsLoadingSessions] = useState<boolean>(true);
+  const isInitialLoad = useRef(true);
 
   const abortControllerRef = useRef<AbortController | null>(null);
   const messagesRef = useRef<AIChatMessage[]>(messages);
   messagesRef.current = messages;
 
-  const loadSessions = useCallback(async () => {
+  const loadSessions = useCallback(async (silent = false) => {
     if (!sessionUserId) {
       setChatSessions([]);
-      setIsLoadingSessions(false);
+      if (!silent) setIsLoadingSessions(false);
       return;
     }
-    setIsLoadingSessions(true);
+    if (!silent && isInitialLoad.current) setIsLoadingSessions(true);
     const sessions = await fetchChatSessions();
     setChatSessions(sessions);
-    setIsLoadingSessions(false);
+    isInitialLoad.current = false;
+    if (!silent) setIsLoadingSessions(false);
   }, [sessionUserId]);
 
   useEffect(() => {
     loadSessions();
   }, [loadSessions]);
 
+  const isInternalSessionChange = useRef(false);
+
   // Initialize session & load history based on logged-in state
   useEffect(() => {
-    const id = getOrCreateSessionId(sessionUserId);
-    setSessionId(id);
+    if (isInternalSessionChange.current) {
+      isInternalSessionChange.current = false;
+      return;
+    }
 
-    if (sessionUserId) {
+    // Only load history if a sessionId is explicitly set (e.g. clicked from sidebar)
+    if (sessionId) {
       setIsLoadingHistory(true);
-      fetchChatHistory(id)
+      fetchChatHistory(sessionId)
         .then((history) => {
           setMessages(history);
         })
@@ -65,16 +92,30 @@ export function useAIChatStream() {
           setIsLoadingHistory(false);
         });
     } else {
-      // Guest mode: do not load history from DB, start empty
       setMessages([]);
       setIsLoadingHistory(false);
     }
-  }, [sessionUserId]);
+  }, [sessionId, sessionUserId]);
 
   const sendMessage = useCallback(
     async (text: string) => {
       const trimmed = text.trim();
-      if (!trimmed || isStreaming || !sessionId) return;
+      if (!trimmed || isStreaming) return;
+
+      let activeSessionId = sessionId;
+      if (!activeSessionId) {
+        // Create a fresh session ID
+        const generateUuid = () =>
+          typeof crypto.randomUUID === "function"
+            ? crypto.randomUUID()
+            : `session-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+        activeSessionId = generateUuid();
+        if (sessionUserId) {
+          setSessionIdLocal(sessionUserId, activeSessionId);
+        }
+        isInternalSessionChange.current = true;
+        setSessionId(activeSessionId);
+      }
 
       setError(null);
       setCurrentStatus(null);
@@ -103,13 +144,15 @@ export function useAIChatStream() {
         content: m.content
       }));
 
-      setMessages((prev) => [...prev, userMsg, assistantMsg]);
+      // Append AI response skeleton
+      const newMessages = [...messagesRef.current, userMsg, assistantMsg];
+      setMessages(newMessages);
 
       abortControllerRef.current = new AbortController();
 
       await sendStreamChatMessage({
         message: trimmed,
-        sessionId,
+        sessionId: activeSessionId,
         history: historyPayload,
         signal: abortControllerRef.current.signal,
         onStatus: (status) => {
@@ -136,7 +179,7 @@ export function useAIChatStream() {
           setIsStreaming(false);
           setCurrentStatus(null);
           // Reload sessions to update sidebar ordering and timestamps
-          loadSessions();
+          loadSessions(true);
         },
         onError: (err) => {
           setIsStreaming(false);
@@ -145,7 +188,7 @@ export function useAIChatStream() {
         }
       });
     },
-    [isStreaming, sessionId]
+    [isStreaming, sessionId, sessionUserId, loadSessions]
   );
 
   const switchChat = useCallback((newSessionId: string) => {
@@ -176,8 +219,7 @@ export function useAIChatStream() {
       abortControllerRef.current.abort();
     }
     clearSessionId(sessionUserId);
-    const newId = getOrCreateSessionId(sessionUserId);
-    setSessionId(newId);
+    setSessionId("");
     setMessages([]);
     setIsStreaming(false);
     setCurrentStatus(null);
