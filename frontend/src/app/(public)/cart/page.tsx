@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import { Checkbox } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Panel, Section } from "@/components/ui/containers";
@@ -9,11 +10,26 @@ import { useMarketplaceStore } from "@/store/use-marketplace-store";
 import { groupCartByShop, selectedCheckoutGroups, formatVnd } from "@/lib/helpers";
 import Unauthorized from "@/components/shared/unauthorized-page";
 import { useRouter } from "next/navigation";
+import { Loader2 } from "lucide-react";
 
 export default function CartPage() {
   const store = useMarketplaceStore();
   const router = useRouter();
   const { showToast } = store;
+
+  useEffect(() => {
+    store.refreshCart?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  if (!store.ready) {
+    return (
+      <main className="mx-auto max-w-7xl px-4 py-16 text-center">
+        <Loader2 className="mx-auto h-8 w-8 animate-spin text-emerald-600 mb-3" />
+        <p className="text-sm font-medium text-muted">Đang tải giỏ hàng...</p>
+      </main>
+    );
+  }
 
   if (!store.getCurrentUser()) {
     return <Unauthorized title="Giỏ hàng cần đăng nhập" description="Vui lòng đăng nhập để xem giỏ hàng." />;
@@ -45,9 +61,6 @@ export default function CartPage() {
                   checked={store.getCartRows().length > 0 && store.getCartRows().every((row) => row.item.isSelected)}
                   onChange={(event) => store.selectAllCart(event.target.checked)}
                 />
-                <Button variant="secondary" onClick={() => showToast("Đã cập nhật giá hiện tại.", "success")}>
-                  Cập nhật giá
-                </Button>
               </Panel>
               {groups.map((group) => (
                 <Panel key={group.shop.id}>
@@ -63,9 +76,13 @@ export default function CartPage() {
                           onChange={(event) => store.updateCartItem(row.item.id, { isSelected: event.target.checked })}
                           aria-label={`Chọn ${row.product.name}`}
                         />
-                        <img src={row.product.thumbnailUrl} alt={row.product.name} className="h-20 w-20 rounded-panel object-cover" />
+                        <a href={`/shops/${group.shop.shopSlug}/products/${row.product.slug}`} className="block overflow-hidden rounded-panel">
+                          <img src={row.product.thumbnailUrl} alt={row.product.name} className="h-20 w-20 rounded-panel object-cover transition-transform hover:scale-105" />
+                        </a>
                         <div>
-                          <p className="font-bold text-ink">{row.product.name}</p>
+                          <a href={`/shops/${group.shop.shopSlug}/products/${row.product.slug}`} className="font-bold text-ink hover:text-primary hover:underline">
+                            {row.product.name}
+                          </a>
                           <p className="text-sm text-muted">Biến thể: {row.variant.variantName}</p>
                           {row.unavailable ? <p className="mt-1 text-sm font-semibold text-coral">{row.reason}</p> : null}
                           <PriceDisplay price={row.variant.price} salePrice={row.variant.salePrice} compact />

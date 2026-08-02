@@ -34,6 +34,8 @@ from schemas.user_schema import UserMeResponse, UserUpdateRequest
 from utils.hash_and_verify import hash_password, hash_token, verify_password
 
 
+from services.notification import send_notification
+
 async def register_user(data: RegisterRequest, db: AsyncSession):
     email = data.email
     phone = data.phone
@@ -63,9 +65,20 @@ async def register_user(data: RegisterRequest, db: AsyncSession):
             "email": data.email,
             "phone": data.phone,
             "password_hash": hash_password(data.password),
+            "phone_verified_at": datetime.now(UTC).replace(tzinfo=None),
         },
         db=db,
         roles=["CUSTOMER"],
+    )
+
+    # Gửi thông báo chào mừng
+    await send_notification(
+        db=db,
+        user_id=user.id,
+        type="system",
+        title="Chào mừng bạn!",
+        content="Chào mừng bạn đến với AI-Powered E-Commerce Platform. Chúc bạn mua sắm vui vẻ!",
+        action_url="/"
     )
 
     return RegisterResponse(

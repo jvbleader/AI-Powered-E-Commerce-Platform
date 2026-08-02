@@ -2,7 +2,8 @@ import { MarketplaceStore, persistState } from './types';
 import { StateCreator } from "zustand";
 import type { AppState } from "@/types/models";
 import { ApiError } from "@/services/api";
-import { addToCartApi, updateCartItemApi, removeCartItemApi, selectAllCartApi } from "@/services/cart-api";
+import { addToCartApi, updateCartItemApi, removeCartItemApi, selectAllCartApi, fetchMyCart } from "@/services/cart-api";
+import { normalizeProduct } from "@/services/product-api";
 
 export const createCartSlice: StateCreator<MarketplaceStore, [], [], any> = (set, get) => {
   const setState = (updater: ((state: AppState) => AppState) | Partial<AppState>) => {
@@ -22,31 +23,28 @@ export const createCartSlice: StateCreator<MarketplaceStore, [], [], any> = (set
     }
     try {
       const apiItem = await addToCartApi(variantId, quantity);
-      setState((prev: AppState) => {
-        const existingIndex = prev.cartItems.findIndex((item) => item.variantId === variantId);
-        if (existingIndex >= 0) {
-          const newItems = [...prev.cartItems];
-          newItems[existingIndex] = {
-            id: String(apiItem.id),
-            variantId: apiItem.variantPublicId,
-            quantity: apiItem.quantity,
-            isSelected: apiItem.isSelected
-          };
-          return { ...prev, cartItems: newItems };
-        }
-        return {
-          ...prev,
-          cartItems: [
-            ...prev.cartItems,
-            { id: String(apiItem.id), variantId: apiItem.variantPublicId, quantity: apiItem.quantity, isSelected: apiItem.isSelected }
-          ]
-        };
-      });
+      await get().refreshCart();
       return { ok: true, message: "Đã thêm vào giỏ hàng." };
     } catch (e: any) {
       return { ok: false, message: e.message || "Lỗi khi thêm vào giỏ hàng" };
     }
   },
+    buyNow: async (variantId: string, quantity: number) => {
+      const { state } = get();
+
+      if (!state.sessionUserId) {
+        return { ok: false, message: "Vui lòng đăng nhập để mua hàng." };
+      }
+      try {
+        await selectAllCartApi(false);
+        const apiItem = await addToCartApi(variantId, quantity);
+        await updateCartItemApi(apiItem.id, undefined, true);
+        await get().refreshCart();
+        return { ok: true, message: "Đã chuẩn bị đơn hàng." };
+      } catch (e: any) {
+        return { ok: false, message: e.message || "Lỗi khi đặt hàng trực tiếp" };
+      }
+    },
     updateCartItem: async (cartItemId: string, changes: { quantity?: number; isSelected?: boolean }) => {
       const { state, verificationContext } = get();
 
@@ -84,5 +82,63 @@ export const createCartSlice: StateCreator<MarketplaceStore, [], [], any> = (set
       console.error("Failed to select all cart items:", e);
     }
   },
+    refreshCart: async () => {
+      const { state } = get();
+      if (!state.sessionUserId) return;
+      try {
+        const cartResp = await fetchMyCart();
+        setState((prev: AppState) => {
+          const newProducts = [...prev.products];
+          const newVariants = [...prev.variants];
+          const newShops = [...prev.shops];
+
+          if (cartResp.products) {
+            for (const backendProduct of cartResp.products) {
+              const normalized = normalizeProduct(backendProduct);
+              const pIndex = newProducts.findIndex((p) => p.id === normalized.product.id);
+              if (pIndex >= 0) {
+                newProducts[pIndex] = normalized.product;
+              } else {
+                newProducts.push(normalized.product);
+              }
+
+              for (const variant of normalized.variants) {
+                const vIndex = newVariants.findIndex((v) => v.id === variant.id);
+                if (vIndex >= 0) {
+                  newVariants[vIndex] = variant;
+                } else {
+                  newVariants.push(variant);
+                }
+              }
+
+              if (normalized.shop) {
+                const sIndex = newShops.findIndex((s) => s.id === normalized.shop!.id);
+                if (sIndex >= 0) {
+                  newShops[sIndex] = normalized.shop!;
+                } else {
+                  newShops.push(normalized.shop!);
+                }
+              }
+            }
+          }
+
+          return {
+            ...prev,
+            products: newProducts,
+            variants: newVariants,
+            shops: newShops,
+            cartItems: cartResp.items.map((item: any) => ({
+              id: String(item.id),
+              variantId: item.variantPublicId,
+              quantity: item.quantity,
+              isSelected: item.isSelected
+            }))
+          };
+        });
+      } catch (e) {
+        console.error("Failed to refresh cart:", e);
+      }
+    },
   };
 };
+

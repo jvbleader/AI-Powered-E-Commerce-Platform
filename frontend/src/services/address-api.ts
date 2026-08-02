@@ -38,25 +38,25 @@ export interface AddressUpdatePayload {
 }
 
 export const fetchAddressesApi = () => {
-  return apiFetch<BackendAddressResponse[]>("/api/v1/addresses");
+  return apiFetch<BackendAddressResponse[]>("/addresses");
 };
 
 export const createAddressApi = (data: AddressCreatePayload) => {
-  return apiFetch<BackendAddressResponse>("/api/v1/addresses", {
+  return apiFetch<BackendAddressResponse>("/addresses", {
     method: "POST",
     body: JSON.stringify(data),
   });
 };
 
 export const updateAddressApi = (id: number, data: AddressUpdatePayload) => {
-  return apiFetch<BackendAddressResponse>(`/api/v1/addresses/${id}`, {
+  return apiFetch<BackendAddressResponse>(`/addresses/${id}`, {
     method: "PUT",
     body: JSON.stringify(data),
   });
 };
 
 export const deleteAddressApi = (id: number) => {
-  return apiFetch<{ message: string }>(`/api/v1/addresses/${id}`, {
+  return apiFetch<{ message: string }>(`/addresses/${id}`, {
     method: "DELETE",
   });
 };

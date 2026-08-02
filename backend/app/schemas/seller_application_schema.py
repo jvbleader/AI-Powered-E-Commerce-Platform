@@ -37,6 +37,15 @@ class SellerMeResponse(BaseModel):
     can_access_seller_dashboard: bool
 
 
+class SellerDashboardSummaryResponse(BaseModel):
+    total_revenue: float
+    total_sold: int
+    pending_orders: int
+    total_products: int
+    updated_at: datetime | None = None
+
+
+
 class SellerApplicationRequest(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True)
 
@@ -48,6 +57,7 @@ class SellerApplicationRequest(BaseModel):
     bank_name: str = Field(min_length=2, max_length=150)
     bank_account_number: str = Field(min_length=3, max_length=30)
     bank_account_name: str = Field(min_length=8, max_length=100)
+    shipping_fee: float = Field(default=0.0, ge=0.0)
 
     @field_validator("email")
     @classmethod
@@ -71,6 +81,7 @@ class SellerApplicationResponse(BaseModel):
     bank_name: str
     bank_account_number: str
     bank_account_name: str
+    shipping_fee: float
     status: str
     public_id: str
     shop_slug: str

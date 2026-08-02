@@ -52,6 +52,9 @@ export const useMarketplaceStore = create<MarketplaceStore>()((set, get, store) 
       .then(async (user) => {
         if (!cancelled) {
           set((prev) => ({ state: applyBackendUser(prev.state, user) }));
+          if (user.roles?.includes("SELLER")) {
+            get().getSellerApplication().catch(() => {});
+          }
           try {
             const cartResp = await fetchMyCart();
             set((prev) => {
@@ -99,7 +102,7 @@ export const useMarketplaceStore = create<MarketplaceStore>()((set, get, store) 
       .catch((error) => {
         if (!cancelled && error instanceof ApiError && ["NOT_AUTHENTICATED", "USER_NOT_VERIFIED"].includes(error.code ?? "")) {
           set((prev) => {
-            const nextState = { ...prev.state, sessionUserId: undefined, activeRole: "GUEST" as const };
+            const nextState = { ...prev.state, sessionUserId: undefined, activeRole: "GUEST" as const, cartItems: [] };
             if (prev.state.sessionUserId) {
               persistState(nextState);
               window.location.href = "/login";
@@ -111,7 +114,7 @@ export const useMarketplaceStore = create<MarketplaceStore>()((set, get, store) 
 
     const handleUnauthorized = () => {
       set((prev) => {
-        const nextState = { ...prev.state, sessionUserId: undefined, activeRole: "GUEST" as const };
+        const nextState = { ...prev.state, sessionUserId: undefined, activeRole: "GUEST" as const, cartItems: [] };
         if (prev.state.sessionUserId) {
           persistState(nextState);
           window.location.href = "/login";

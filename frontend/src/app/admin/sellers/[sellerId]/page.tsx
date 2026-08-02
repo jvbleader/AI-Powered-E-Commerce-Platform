@@ -112,7 +112,7 @@ export default function AdminSellerDetailPage() {
 
   if (loadingDetail) {
     return (
-      <Section title="Seller detail">
+      <Section title="Chi tiết người bán">
         <Panel>
           <div className="flex items-center gap-3">
             <RefreshCcw className="h-5 w-5 animate-spin text-primary" aria-hidden="true" />
@@ -125,7 +125,7 @@ export default function AdminSellerDetailPage() {
 
   if (detailError) {
     return (
-      <Section title="Seller detail">
+      <Section title="Chi tiết người bán">
         <ErrorState title="Không tải được chi tiết seller" description={detailError} />
       </Section>
     );

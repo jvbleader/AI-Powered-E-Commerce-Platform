@@ -101,7 +101,6 @@ class ProductResponse(BaseModel):
     average_rating: float
     review_count: int
     sold_count: int
-    view_count: int
     created_at: datetime
     updated_at: Optional[datetime]
     variant_options: Optional[List[dict]] = None

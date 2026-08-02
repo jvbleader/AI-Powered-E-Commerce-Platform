@@ -26,11 +26,7 @@ class ViolationReport(Base):
             "status IN ('PENDING', 'REVIEWING', 'RESOLVED', 'REJECTED')",
             name="ck_violation_reports_status",
         ),
-        UniqueConstraint(
-            "reporter_id",
-            "product_id",
-            name="uq_violation_reports_reporter_product",
-        ),
+        Index("ix_violation_reports_reporter_id", "reporter_id"),
         Index("ix_violation_reports_product_id", "product_id"),
         Index("ix_violation_reports_status", "status"),
         Index("ix_violation_reports_created_at", "created_at"),

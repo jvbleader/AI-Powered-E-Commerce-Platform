@@ -1,82 +1,765 @@
 "use client";
 
-import { useState } from "react";
-import { Bot, MessageSquare } from "lucide-react";
+import React, { useState, useRef, useEffect, useCallback, Fragment } from "react";
+import { Bot, MessageSquare, Send, Sparkles, Plus, Loader2, UserCircle2, ArrowLeft, Menu, AlertCircle, Headset } from "lucide-react";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Panel, Section } from "@/components/ui/containers";
 import { cn } from "@/lib/utils";
 import { useMarketplaceStore } from "@/store/use-marketplace-store";
+import { useAIChatStream } from "@/hooks/useAIChatStream";
+import { useSupporterChat } from "@/hooks/useSupporterChat";
+import { useSupportSessions } from "@/hooks/useSupportSessions";
+import { ChatMessageItem } from "@/components/ai/ChatMessageItem";
 import { formatDate } from "@/lib/helpers";
+import TextareaAutosize from 'react-textarea-autosize';
+
+const SUGGESTIONS = [
+  "Tìm tai nghe chống ồn tốt nhất?",
+  "Cách theo dõi đơn hàng?",
+  "Chính sách đổi trả như nào?",
+  "Gợi ý quà tặng dưới 500k",
+];
 
 export default function ChatPage() {
   const store = useMarketplaceStore();
   const { showToast } = store;
-  const [mode, setMode] = useState<"AI" | "SUPPORTER">("AI");
-  const conversation = store.state.conversations[0];
+  
+  const [isMounted, setIsMounted] = useState(false);
+  const [activeTab, setActiveTab] = useState<"AI" | "SUPPORTER">("AI");
+  const [input, setInput] = useState("");
+  const [showMobileSidebar, setShowMobileSidebar] = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [activeSupportSessionId, setActiveSupportSessionId] = useState<string | null>(null);
 
-  return (
-    <main className="mx-auto max-w-7xl px-4 py-5">
-      <Section title="Chat hỗ trợ">
-        <div className="grid gap-4 lg:grid-cols-[320px_1fr]">
-          <Panel>
-            <div className="grid gap-2">
-              <Button variant={mode === "AI" ? "primary" : "secondary"} onClick={() => setMode("AI")}>
-                <Bot className="h-4 w-4" />Chat AI
-              </Button>
-              <Button variant={mode === "SUPPORTER" ? "primary" : "secondary"} onClick={() => setMode("SUPPORTER")}>
-                <MessageSquare className="h-4 w-4" />Gặp supporter
-              </Button>
-            </div>
-            <div className="mt-4 space-y-2">
-              {store.state.conversations.map((item) => (
-                <a key={item.id} href={`/supporter/conversations/${item.id}`} className="block rounded-panel border border-line p-3 hover:border-primary/40">
-                  <p className="font-bold">{item.title}</p>
-                  <p className="text-xs text-muted">{item.mode} - {item.status}</p>
-                </a>
-              ))}
-            </div>
-          </Panel>
-          {conversation ? (
-            <ChatWindow conversationId={conversation.id} mode={mode} />
-          ) : (
-            <Panel className="min-h-[560px] flex items-center justify-center">
-              <p className="text-muted text-sm font-semibold">Không có cuộc trò chuyện nào.</p>
-            </Panel>
-          )}
-        </div>
-      </Section>
-    </main>
-  );
+  useEffect(() => {
+    setIsMounted(true);
+    if (typeof window !== "undefined") {
+      const urlParams = new URLSearchParams(window.location.search);
+      const isReload = window.performance?.navigation?.type === 1 || 
+                       (window.performance?.getEntriesByType("navigation")?.[0] as PerformanceNavigationTiming)?.type === "reload";
 
-  function ChatWindow({ conversationId, mode }: { conversationId: string; mode?: "AI" | "SUPPORTER" }) {
-    const conversationItem = store.state.conversations.find((item) => item.id === conversationId) ?? store.state.conversations[0];
+      const tab = urlParams.get("tab") || (isReload ? sessionStorage.getItem("chat_active_tab") : null);
+      const sessionId = urlParams.get("session_id") || (isReload ? sessionStorage.getItem("chat_active_support_session_id") : null);
+      
+      if (tab === "SUPPORTER") {
+        setActiveTab("SUPPORTER");
+      } else if (tab === "AI") {
+        setActiveTab("AI");
+      }
+
+      if (sessionId) {
+        setActiveSupportSessionId(sessionId);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      sessionStorage.setItem("chat_active_tab", activeTab);
+    }
+  }, [activeTab]);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      if (activeSupportSessionId) {
+        sessionStorage.setItem("chat_active_support_session_id", activeSupportSessionId);
+      } else {
+        sessionStorage.removeItem("chat_active_support_session_id");
+      }
+    }
+  }, [activeSupportSessionId]);
+
+  const {
+    sessionId,
+    messages,
+    isStreaming,
+    currentStatus,
+    isLoadingHistory,
+    error,
+    chatSessions,
+    isLoadingSessions,
+    sendMessage,
+    clearChat: clearAIChat,
+    switchChat
+  } = useAIChatStream();
+
+  const { supportSessions, isLoadingSupportSessions, loadSupportSessions } = useSupportSessions();
+
+  useEffect(() => {
+    if (activeTab === "SUPPORTER") {
+      loadSupportSessions();
+    }
+  }, [activeTab, loadSupportSessions]);
+
+  const scrollToBottom = () => {
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: "auto" });
+    }
+  };
+
+  useEffect(() => {
+    const timeout = setTimeout(scrollToBottom, 50);
+    return () => clearTimeout(timeout);
+  }, [messages, currentStatus, isStreaming, activeTab]);
+
+  const handleSupportSessionClick = async (sessionId: string) => {
+    setActiveSupportSessionId(sessionId);
+    setShowMobileSidebar(false);
+    
+    // Call API to mark notifications as read
+    try {
+      const { apiFetch } = await import("@/services/api");
+      await apiFetch("/notifications/read-by-url", {
+        method: "PUT",
+        body: JSON.stringify({ action_url: `/chat?tab=SUPPORTER&session_id=${sessionId}` })
+      });
+      window.dispatchEvent(new CustomEvent('chat-unread-refresh'));
+      loadSupportSessions(true);
+    } catch (e) {}
+  };
+
+  const handleSendAI = async (text: string) => {
+    const trimmed = text.trim();
+    if (!trimmed || isStreaming) return;
+    setInput("");
+    await sendMessage(trimmed);
+  };
+
+  const handleClearChat = () => {
+    if (messages.length === 0) {
+      // Optional: don't show toast, or show a subtle info
+      // showToast("Đoạn chat hiện tại đang trống", "info");
+      return;
+    }
+    clearAIChat();
+    showToast("Đã tạo đoạn chat mới", "success");
+  };
+
+  const handleClearSupportChat = () => {
+    setActiveSupportSessionId(null);
+  };
+
+  const handleConversationUpdated = useCallback(() => {
+    loadSupportSessions(true);
+  }, [loadSupportSessions]);
+
+  if (!isMounted) {
     return (
-      <Panel className="min-h-[560px]">
-        <div className="flex items-center justify-between gap-3 border-b border-line pb-3">
-          <div>
-            <h3 className="font-bold">{conversationItem.title}</h3>
-            <p className="text-sm text-muted">{mode ?? conversationItem.mode} - {conversationItem.status}</p>
+      <main className="flex-1 flex flex-col w-full max-w-5xl mx-auto px-3 md:px-4 py-3 md:py-4 font-body-tech h-[calc(100vh-2rem)] overflow-hidden">
+        <header className="flex items-center justify-between pb-3 shrink-0">
+          <Link href="/" className="flex items-center gap-2 text-slate-500 font-tech font-bold text-sm md:text-base">
+            <ArrowLeft className="w-4 h-4 md:w-5 md:h-5" />
+            <span>Về trang chủ</span>
+          </Link>
+          <div className="font-tech font-bold text-lg md:text-xl text-slate-900 flex items-center gap-2">
+            Shepoo <span className="text-emerald-600">Support</span>
           </div>
-          <Button variant="secondary" onClick={() => showToast("Đã gửi yêu cầu hỗ trợ.", "success")}>Chuyển hỗ trợ</Button>
+          <div className="w-[100px] hidden sm:block"></div>
+        </header>
+        <div className="overflow-hidden rounded-xl flex items-center justify-center flex-1 min-h-0 border border-slate-200 bg-white shadow-sm">
+           <Loader2 className="w-8 h-8 animate-spin text-slate-300" />
         </div>
-        <div className="mt-4 space-y-3">
-          {conversationItem.messages.map((message) => (
-            <div key={message.id} className={cn("flex", message.sender === "CUSTOMER" ? "justify-end" : "justify-start")}>
-              <div className={cn("max-w-[78%] rounded-panel border p-3 text-sm", message.sender === "CUSTOMER" ? "border-primary bg-primary text-white" : "border-line bg-canvas text-ink")}>
-                <p className="font-bold">{message.sender}</p>
-                <p className="mt-1 leading-6">{message.text}</p>
-                <p className="mt-1 text-xs opacity-75">{formatDate(message.createdAt)} - {message.isRead ? "Đã đọc" : "Chưa đọc"}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-        <div className="mt-4 grid gap-2 border-t border-line pt-3 sm:grid-cols-[1fr_auto_auto]">
-          <Input placeholder="Nhập tin nhắn" />
-          <Input type="file" aria-label="Đính kèm ảnh hoặc file" />
-          <Button onClick={() => showToast("Đã gửi tin nhắn.", "success")}>Gửi</Button>
-        </div>
-      </Panel>
+      </main>
     );
   }
+
+  return (
+    <main className="flex-1 flex flex-col w-full max-w-5xl mx-auto px-3 md:px-4 py-3 md:py-4 font-body-tech h-[calc(100vh-2rem)] overflow-hidden">
+      {/* Minimal Header for Chat Page */}
+      <header className="flex items-center justify-between pb-3 shrink-0">
+        <Link href="/" className="flex items-center gap-2 text-slate-500 hover:text-emerald-600 font-tech font-bold text-sm md:text-base transition-colors">
+          <ArrowLeft className="w-4 h-4 md:w-5 md:h-5" />
+          <span>Về trang chủ</span>
+        </Link>
+        <div className="font-tech font-bold text-lg md:text-xl text-slate-900 flex items-center gap-2">
+          Shepoo <span className="text-emerald-600">Support</span>
+        </div>
+        <div className="w-[100px] hidden sm:block"></div> {/* Spacer for centering */}
+      </header>
+
+      <div className="overflow-hidden rounded-xl flex flex-row flex-1 min-h-0 border border-slate-200 bg-white relative shadow-sm">
+        
+        {/* Sidebar */}
+        <div 
+          className={cn(
+            "w-full md:w-[280px] lg:w-[320px] flex-col shrink-0 transition-all z-20 md:static absolute inset-0 md:flex",
+            showMobileSidebar ? "flex" : "hidden md:flex"
+          )}
+        >
+          <div className={cn(
+            "px-4 border-r flex items-center justify-between h-16 md:h-[76px] shrink-0 shadow-sm relative z-20 transition-colors duration-300 ease-in-out",
+            activeTab === "SUPPORTER" ? "bg-blue-500 border-blue-400/50" : "bg-emerald-600 border-emerald-500/50"
+          )}>
+            <h2 className="font-bold text-lg md:text-xl text-white">Tin nhắn</h2>
+            <button 
+              onClick={() => setShowMobileSidebar(false)}
+              className={cn(
+                "md:hidden text-sm font-semibold hover:text-white transition-colors",
+                activeTab === "SUPPORTER" ? "text-blue-100" : "text-emerald-100"
+              )}
+            >
+              Đóng
+            </button>
+          </div>
+
+          <div className="flex-1 flex flex-col bg-slate-50 border-r border-slate-200 min-h-0 relative z-10">
+            <div className="p-3 border-b border-slate-200 shrink-0">
+              <div className="flex bg-slate-200/80 p-1 rounded-xl">
+                <button 
+                  onClick={() => { setActiveTab("AI"); }}
+                  className={cn(
+                    "flex-1 py-2 px-3 rounded-lg text-xs md:text-sm font-bold flex items-center justify-center gap-1.5 transition-all",
+                    activeTab === "AI" ? "bg-white shadow-sm text-emerald-700" : "text-slate-500 hover:text-slate-700 hover:bg-slate-200"
+                  )}
+                >
+                  <Bot className="w-4 h-4" /> AI Assistant
+                </button>
+                <button 
+                  onClick={() => { setActiveTab("SUPPORTER"); }}
+                  className={cn(
+                    "flex-1 py-2 px-3 rounded-lg text-xs md:text-sm font-bold flex items-center justify-center gap-1.5 transition-all",
+                    activeTab === "SUPPORTER" ? "bg-white shadow-sm text-blue-500" : "text-slate-500 hover:text-slate-700 hover:bg-slate-200"
+                  )}
+                >
+                  <Headset className="w-4 h-4" /> Supporter
+                </button>
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-3 space-y-2 no-scrollbar">
+              {activeTab === "AI" ? (
+                  store.state.sessionUserId ? (
+                    isLoadingSessions ? (
+                      <div className="flex justify-center p-4">
+                        <Loader2 className="w-5 h-5 animate-spin text-emerald-500" />
+                      </div>
+                    ) : (
+                      <div className="flex flex-col gap-2">
+
+                        {chatSessions.map((session) => {
+                          const isActive = session.sessionId === sessionId;
+                          return (
+                            <button
+                              key={session.sessionId}
+                              onClick={() => { switchChat(session.sessionId); setShowMobileSidebar(false); }}
+                              className={cn(
+                                "w-full p-4 rounded-2xl shadow-sm text-left transition-transform hover:-translate-y-0.5 border",
+                                isActive
+                                  ? "bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-500"
+                                  : "bg-white hover:bg-emerald-50 text-slate-700 border-slate-200"
+                              )}
+                            >
+                              <div className="flex flex-col gap-1">
+                                <p className={cn("font-bold text-sm line-clamp-1", isActive ? "text-white" : "text-slate-800")}>
+                                  {session.title}
+                                </p>
+                                <p className={cn("text-xs", isActive ? "text-emerald-100" : "text-slate-500")}>
+                                  {formatDate(session.updatedAt)}
+                                </p>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )
+                  ) : (
+                    <div className="text-center p-4 text-xs text-slate-400">
+                      Vui lòng đăng nhập để lưu lịch sử chat.
+                    </div>
+                  )
+              ) : (
+                isLoadingSupportSessions ? (
+                  <div className="flex justify-center p-4">
+                    <Loader2 className="w-5 h-5 animate-spin text-blue-500" />
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-2">
+
+                    {supportSessions.map((session) => {
+                      const isActive = session.id === activeSupportSessionId;
+                      const isClosed = session.status === "CLOSED";
+                      return (
+                        <button
+                          key={session.id}
+                          onClick={() => handleSupportSessionClick(session.id)}
+                          className={cn(
+                            "w-full p-4 rounded-2xl shadow-sm text-left transition-transform hover:-translate-y-0.5 border relative",
+                            isActive
+                              ? "bg-blue-500 hover:bg-blue-600 text-white border-blue-400"
+                              : session.has_unread 
+                                ? "bg-blue-50 hover:bg-blue-100 text-blue-900 border-blue-300 shadow-sm font-bold"
+                                : "bg-white hover:bg-blue-50 text-slate-700 border-slate-200"
+                          )}
+                        >
+                          <div className="flex flex-col gap-1 pr-4">
+                            <p className={cn("font-bold text-sm line-clamp-1", isActive ? "text-white" : "text-slate-800")}>
+                              {session.last_message || "Yêu cầu hỗ trợ"}
+                            </p>
+                            <p className={cn("text-xs mt-0.5", isActive ? "text-blue-100" : "text-slate-500")}>
+                              {formatDate(session.updated_at)}
+                            </p>
+                          </div>
+                          {session.has_unread && (
+                            <span className="absolute top-4 right-4 h-2.5 w-2.5 rounded-full bg-blue-500 shadow-sm animate-pulse"></span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Chat Area */}
+        <div className="flex-1 flex flex-col bg-white relative min-w-0">
+          
+          {/* PERSISTENT HEADER BACKGROUND FOR SMOOTH TRANSITION */}
+          <div className={cn(
+            "absolute top-0 left-0 right-0 h-16 md:h-[76px] z-0 transition-colors duration-300 ease-in-out shadow-sm",
+            activeTab === "SUPPORTER" ? "bg-blue-500" : "bg-emerald-600"
+          )} />
+
+          {activeTab === "AI" ? (
+            <>
+              {/* Header AI */}
+              <div className="flex items-center justify-between px-3 md:px-4 bg-transparent relative z-10 h-16 md:h-[76px] shrink-0">
+                <div className="flex items-center gap-2.5">
+                  <Button
+                    variant="ghost"
+                    onClick={() => setShowMobileSidebar(!showMobileSidebar)}
+                    className="md:hidden text-emerald-100 hover:text-white min-h-0 h-9 w-9 p-0"
+                    title="Menu Hộp Thư"
+                  >
+                    <Menu className="h-5 w-5" />
+                  </Button>
+
+                  <div className="flex h-10 w-10 md:h-11 md:w-11 items-center justify-center rounded-2xl bg-white/20 text-white shadow-xs">
+                    <Bot className="h-5 w-5 md:h-6 md:h-6" />
+                  </div>
+                  <div>
+                    <h1 className="font-bold text-base md:text-lg text-white flex items-center gap-1.5">
+                      Shepoo AI
+                    </h1>
+                    <p className="text-[10px] md:text-xs text-emerald-100 mt-1 uppercase tracking-wider">Trợ lý tư vấn bán hàng</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <Button 
+                    variant="secondary" 
+                    onClick={() => { setActiveTab("SUPPORTER"); showToast("Đã chuyển sang Supporter", "info"); }} 
+                    className="text-xs text-emerald-700 border-emerald-200 bg-white hover:bg-emerald-50 shadow-xs min-h-8 py-1 px-3"
+                  >
+                    Gặp nhân viên
+                  </Button>
+                  <Button 
+                    variant="ghost" 
+                    onClick={handleClearChat} 
+                    className="text-xs !text-white border border-white/20 !bg-black/15 hover:!bg-black/30 shadow-xs min-h-8 py-1 px-2 md:px-3 flex items-center gap-1.5 transition-colors" 
+                    title="Đoạn chat mới"
+                  >
+                    <Plus className="h-4 w-4" />
+                    <span className="hidden sm:inline font-medium">Chat mới</span>
+                  </Button>
+                </div>
+              </div>
+
+              {/* Error Banner if any */}
+              {error && (
+                <div className="p-3 bg-rose-50/90 border-b border-rose-100 text-rose-700 text-xs font-medium flex items-center justify-between px-4">
+                  <div className="flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4 shrink-0 text-rose-500" />
+                    <span>{error}</span>
+                  </div>
+                  <button onClick={handleClearChat} className="underline hover:text-rose-900 text-xs font-semibold">
+                    Thử lại
+                  </button>
+                </div>
+              )}
+
+              {/* Messages AI */}
+              <div className="flex-1 overflow-y-auto overflow-x-hidden p-4 md:p-6 space-y-5 no-scrollbar">
+                {isLoadingHistory ? (
+                  <div className="flex h-full flex-col items-center justify-center space-y-3">
+                    <Loader2 className="h-8 w-8 animate-spin text-emerald-600" />
+                    <p className="text-sm text-slate-500 font-medium">Đang tải lịch sử trò chuyện...</p>
+                  </div>
+                ) : messages.length === 0 ? (
+                  <div className="flex h-full flex-col items-center justify-center space-y-8 animate-fade-in-up py-8">
+                    <div className="text-center">
+                      <h2 className="text-xl md:text-2xl font-bold text-slate-800">Xin chào! 👋</h2>
+                      <p className="text-slate-500 mt-2 text-xs md:text-sm max-w-sm mx-auto leading-relaxed">
+                        Tôi là AI thông minh của Shepoo. Bạn muốn tìm kiếm sản phẩm gì hôm nay?
+                      </p>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 w-full max-w-lg">
+                      {SUGGESTIONS.map((sug) => (
+                        <button
+                          key={sug}
+                          onClick={() => handleSendAI(sug)}
+                          className="p-3.5 text-xs md:text-sm text-left rounded-2xl border border-white bg-white/70 hover:bg-white hover:border-emerald-300 hover:shadow-md transition-all duration-200 text-slate-700 font-medium"
+                        >
+                          💡 {sug}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-5">
+                    {messages.map((msg, idx) => {
+                      let showTimeHeader = false;
+                      if (idx === 0) {
+                        showTimeHeader = true;
+                      } else {
+                        const prevMsg = messages[idx - 1];
+                        if (msg.createdAt && prevMsg.createdAt) {
+                          const diff = new Date(msg.createdAt).getTime() - new Date(prevMsg.createdAt).getTime();
+                          if (diff >= 30 * 60 * 1000) showTimeHeader = true;
+                        }
+                      }
+                      
+                      return (
+                        <Fragment key={msg.id || idx}>
+                          {showTimeHeader && msg.createdAt && (
+                            <div className="flex justify-center my-4">
+                              <span className="text-[10px] text-slate-400 font-medium bg-slate-100 px-2.5 py-1 rounded-full">
+                                {formatDate(msg.createdAt)}
+                              </span>
+                            </div>
+                          )}
+                          <ChatMessageItem
+                            message={msg}
+                            isStreaming={isStreaming && idx === messages.length - 1 && msg.role === "assistant"}
+                          />
+                        </Fragment>
+                      );
+                    })}
+
+                    {currentStatus && (
+                      <div className="flex items-center gap-2.5 rounded-2xl bg-emerald-50/90 border border-emerald-200 p-3.5 text-xs md:text-sm text-emerald-800 animate-fade-in max-w-[80%] shadow-xs">
+                        <Sparkles className="h-4 w-4 text-emerald-600 animate-spin shrink-0" />
+                        <span className="font-medium">{currentStatus}</span>
+                      </div>
+                    )}
+
+                    <div ref={messagesEndRef} />
+                  </div>
+                )}
+              </div>
+
+              {/* Input AI */}
+              <div className="p-3 md:p-4 bg-slate-100 border-t border-slate-200">
+                <form
+                  onSubmit={(e) => { e.preventDefault(); handleSendAI(input); }}
+                  className="flex gap-3 items-end max-w-4xl mx-auto"
+                >
+                  <TextareaAutosize
+                    minRows={1}
+                    maxRows={5}
+                    value={input}
+                    onChange={(e) => setInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        handleSendAI(input);
+                      }
+                    }}
+                    placeholder="Nhập câu hỏi của bạn..."
+                    className="flex-1 min-h-[48px] md:min-h-[56px] rounded-xl border-2 border-slate-200 bg-white px-4 py-3 md:py-4 text-sm md:text-base text-ink placeholder:text-muted/60 transition-all focus:border-emerald-500 focus:outline-none focus:ring-4 focus:ring-emerald-500/10 shadow-sm resize-none no-scrollbar"
+                    disabled={isStreaming}
+                  />
+                  <button
+                     type="submit"
+                     disabled={!input.trim() || isStreaming}
+                     className={cn(
+                       "flex h-12 w-12 md:h-14 md:w-14 shrink-0 items-center justify-center rounded-xl transition-all duration-300 shadow-sm",
+                       (!input.trim() || isStreaming)
+                         ? "bg-slate-200 text-slate-400 pointer-events-none"
+                         : "bg-emerald-600 text-white hover:bg-emerald-700 hover:scale-105 active:scale-95"
+                     )}
+                   >
+                     {isStreaming ? (
+                       <Loader2 className="h-5 w-5 md:h-6 md:w-6 animate-spin" />
+                     ) : (
+                       <Send className="h-5 w-5 md:h-6 md:w-6 -ml-0.5" />
+                     )}
+                   </button>
+                </form>
+              </div>
+            </>
+          ) : (
+            // SUPPORTER TAB
+            <CustomerSupportChat 
+              conversationId={activeSupportSessionId}
+              setConversationId={setActiveSupportSessionId}
+              onConversationUpdated={handleConversationUpdated}
+              onMenuClick={() => setShowMobileSidebar(!showMobileSidebar)} 
+              onClearChat={handleClearSupportChat}
+            />
+          )}
+        </div>
+      </div>
+    </main>
+  );
+}
+
+function CustomerSupportChat({ 
+  conversationId, 
+  setConversationId,
+  onConversationUpdated,
+  onMenuClick,
+  onClearChat
+}: { 
+  conversationId: string | null;
+  setConversationId: (id: string | null) => void;
+  onConversationUpdated: () => void;
+  onMenuClick: () => void;
+  onClearChat: () => void;
+}) {
+  const store = useMarketplaceStore();
+  const { showToast } = store;
+  const [input, setInput] = useState("");
+  const [isInitializing, setIsInitializing] = useState(true);
+  const [isCreating, setIsCreating] = useState(false);
+  const [pendingMessage, setPendingMessage] = useState<string | null>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const hasInitialized = useRef(false);
+  
+  useEffect(() => {
+    if (hasInitialized.current) return;
+    hasInitialized.current = true;
+
+    const initChat = async () => {
+      try {
+        let guestId = localStorage.getItem("guest_id");
+        if (!guestId) {
+          guestId = "guest_" + Math.random().toString(36).substring(2, 11);
+          localStorage.setItem("guest_id", guestId);
+        }
+      } catch (error) {
+        // ignore
+      } finally {
+        setIsInitializing(false);
+      }
+    };
+    initChat();
+  }, []);
+
+  const { messages, conversation, isConnected, sendMessage } = useSupporterChat(conversationId, 'CUSTOMER');
+
+  useEffect(() => {
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView();
+    }
+  }, [messages]);
+
+  // Trigger sidebar update when conversation state or messages change (for real-time re-ordering and status tag)
+  useEffect(() => {
+    if (conversationId && (messages.length > 0 || conversation)) {
+      onConversationUpdated();
+    }
+  }, [messages, conversation?.status, conversation?.supporter_id, onConversationUpdated, conversationId]);
+
+  // Send pending message when WS connects
+  useEffect(() => {
+    if (isConnected && pendingMessage) {
+      sendMessage(pendingMessage);
+      setPendingMessage(null);
+    }
+  }, [isConnected, pendingMessage, sendMessage]);
+
+  const handleCreateAndSend = async (msg: string) => {
+    setIsCreating(true);
+    try {
+      const { apiFetch } = await import("@/services/api");
+      const guestId = localStorage.getItem("guest_id");
+      const conv = await apiFetch<any>(`/api/support-chat/conversations?guest_id=${guestId}&create=true&force_new=true`, {
+        method: "POST"
+      });
+      if (conv && conv.id) {
+        setPendingMessage(msg);
+        setConversationId(conv.id);
+        onConversationUpdated();
+      }
+    } catch (error) {
+      showToast("Lỗi kết nối máy chủ", "error");
+    } finally {
+      setIsCreating(false);
+    }
+  };
+
+  const handleFormSubmit = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!input.trim() || isCreating) return;
+    
+    if (!conversationId) {
+       handleCreateAndSend(input.trim());
+       setInput("");
+    } else if (isConnected) {
+       sendMessage(input.trim());
+       setInput("");
+    }
+  };
+
+  const assignedSupporter = conversation?.supporter ? conversation.supporter.full_name : "Nhân viên hỗ trợ";
+  const isClosed = conversation?.status === "CLOSED";
+
+  return (
+    <>
+      <div className="flex items-center justify-between px-3 md:px-4 bg-transparent relative z-10 h-16 md:h-[76px] shrink-0">
+        <div className="flex items-center gap-3">
+          <Button
+            variant="ghost"
+            onClick={onMenuClick}
+            className="md:hidden text-blue-100 hover:text-white min-h-0 h-9 w-9 p-0"
+            title="Menu Hộp Thư"
+          >
+            <Menu className="h-5 w-5" />
+          </Button>
+          <div className="flex h-10 w-10 md:h-11 md:w-11 items-center justify-center rounded-2xl bg-white/20 text-white shadow-xs">
+            <Headset className="h-6 w-6 md:h-7 md:w-7" />
+          </div>
+          <div>
+            <h1 className="font-bold text-base md:text-lg text-white">
+              {assignedSupporter}
+            </h1>
+            <p className="text-[10px] md:text-xs text-blue-100 mt-1 uppercase tracking-wider">
+              {isInitializing ? "Đang tải..." : (!conversationId || !conversation ? "Sẵn sàng hỗ trợ" : (isConnected ? (isClosed ? 'Đã đóng' : 'Đang online') : 'Đang kết nối...'))}
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <Button 
+            variant="ghost" 
+            onClick={onClearChat} 
+            className="text-xs !text-white border border-white/20 !bg-black/15 hover:!bg-black/30 shadow-xs min-h-8 py-1 px-2 md:px-3 flex items-center gap-1.5 transition-colors" 
+            title="Tạo yêu cầu mới"
+          >
+            <Plus className="h-4 w-4" />
+            <span className="hidden sm:inline font-medium">Yêu cầu mới</span>
+          </Button>
+        </div>
+      </div>
+
+      {isInitializing ? (
+        <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
+           <Loader2 className="w-8 h-8 animate-spin text-blue-500 mb-3 mx-auto" />
+        </div>
+      ) : (!conversationId || !conversation) ? (
+        <div className="flex-1 flex flex-col items-center justify-center p-6 text-center animate-fade-in-up">
+           <div className="w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center mb-4 shadow-sm">
+             <Headset className="w-8 h-8 text-blue-500" />
+           </div>
+           <h3 className="text-lg md:text-xl font-bold text-slate-800 mb-2">Bạn cần hỗ trợ gì?</h3>
+           <p className="text-slate-500 text-sm max-w-[250px]">Hãy gửi tin nhắn đầu tiên để kết nối ngay với tư vấn viên của chúng tôi.</p>
+        </div>
+      ) : (
+        <div className="flex-1 overflow-y-auto overflow-x-hidden p-4 md:p-6 space-y-5 no-scrollbar">
+        {messages.map((msg, idx) => {
+          let showTimeHeader = false;
+          if (idx === 0) {
+            showTimeHeader = true;
+          } else {
+            const prevMsg = messages[idx - 1];
+            if (msg.created_at && prevMsg.created_at) {
+              const diff = new Date(msg.created_at).getTime() - new Date(prevMsg.created_at).getTime();
+              if (diff >= 30 * 60 * 1000) showTimeHeader = true;
+            }
+          }
+
+          if (msg.sender_type === "SYSTEM") {
+            return (
+              <Fragment key={msg.id}>
+                {showTimeHeader && (
+                  <div className="flex justify-center my-4">
+                    <span className="text-[10px] text-slate-400 font-medium bg-slate-100 px-2.5 py-1 rounded-full">
+                      {formatDate(msg.created_at)}
+                    </span>
+                  </div>
+                )}
+                <div className="flex justify-center my-4">
+                  <div className="bg-slate-100 text-slate-500 text-xs py-1 px-3 rounded-full font-medium">
+                    {msg.content}
+                  </div>
+                </div>
+              </Fragment>
+            );
+          }
+          return (
+            <Fragment key={msg.id}>
+              {showTimeHeader && (
+                <div className="flex justify-center my-4">
+                  <span className="text-[10px] text-slate-400 font-medium bg-slate-100 px-2.5 py-1 rounded-full">
+                    {formatDate(msg.created_at)}
+                  </span>
+                </div>
+              )}
+              <div className={cn("flex", msg.sender_type === "CUSTOMER" ? "justify-end" : "justify-start")}>
+                {msg.sender_type === "SUPPORTER" && (
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-blue-100 text-blue-500 mr-2.5 mt-1 shadow-xs">
+                    <Headset className="h-5 w-5" />
+                  </div>
+                )}
+                <div
+                  className={cn(
+                    "px-4 py-3 rounded-2xl max-w-[85%] md:max-w-[75%] text-sm leading-relaxed shadow-sm break-words",
+                    msg.sender_type === "CUSTOMER"
+                      ? "bg-blue-500 text-white rounded-tr-sm border-transparent"
+                      : "bg-white border border-slate-200 text-slate-800 rounded-tl-sm"
+                  )}
+                  title={formatDate(msg.created_at)}
+                >
+                  <p>{msg.content}</p>
+                </div>
+              </div>
+            </Fragment>
+          );
+        })}
+        <div ref={messagesEndRef} />
+      </div>
+      )}
+
+      <div className="p-3 md:p-4 bg-slate-100 border-t border-slate-200">
+        <form 
+          className="flex gap-3 items-end max-w-4xl mx-auto"
+          onSubmit={handleFormSubmit}
+        >
+          <TextareaAutosize
+            minRows={1}
+            maxRows={5}
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                handleFormSubmit();
+              }
+            }}
+            placeholder={isClosed ? "Nhập tin nhắn để mở lại yêu cầu hỗ trợ..." : "Nhập tin nhắn..."}
+            className="flex-1 min-h-[48px] md:min-h-[56px] rounded-xl border-2 border-slate-200 bg-white px-4 py-3 md:py-4 text-sm md:text-base text-ink placeholder:text-muted/60 transition-all focus:border-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-500/10 shadow-sm resize-none no-scrollbar"
+            disabled={(!isConnected && !!conversationId) || isCreating || isInitializing}
+          />
+          <button
+            type="submit"
+            disabled={!input.trim() || (!isConnected && !!conversationId) || isCreating || isInitializing}
+            className={cn(
+              "flex h-12 w-12 md:h-14 md:w-14 shrink-0 items-center justify-center rounded-xl transition-all duration-300 shadow-sm",
+              (!input.trim() || (!isConnected && !!conversationId) || isCreating || isInitializing)
+                ? "bg-slate-200 text-slate-400 pointer-events-none"
+                : "bg-blue-500 text-white hover:bg-blue-600 hover:scale-105 active:scale-95"
+            )}
+          >
+            {isCreating || (!!conversationId && !isConnected) ? (
+              <Loader2 className="h-5 w-5 md:h-6 md:w-6 animate-spin text-slate-400" />
+            ) : (
+              <Send className="h-5 w-5 md:h-6 md:w-6 -ml-0.5" />
+            )}
+          </button>
+        </form>
+      </div>
+    </>
+  );
 }

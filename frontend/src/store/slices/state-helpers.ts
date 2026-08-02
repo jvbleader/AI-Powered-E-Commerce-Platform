@@ -18,7 +18,8 @@ export const hydrateSavedState = (saved: AppState): AppState => {
     ...saved,
     users: mergeById(seed.users, saved.users),
     shops: mergeById(seed.shops, saved.shops),
-    categories: mergeById(seed.categories, saved.categories),
+    // Always refetch categories from API; do not restore stale cached data
+    categories: [],
     products: mergeById(seed.products, saved.products),
     variants: mergeById(seed.variants, saved.variants),
     addresses: [],
@@ -43,8 +44,7 @@ export const preferredRoleFor = (user: User) =>
           : "CUSTOMER";
 
 export const activeRoleForUser = (user: User, currentRole: Role | "GUEST") => {
-  if (currentRole === "CUSTOMER") return "CUSTOMER";
-  if (currentRole !== "GUEST" && user.roles.includes(currentRole)) return currentRole;
+  if (currentRole !== "GUEST" && user.roles.includes(currentRole as Role)) return currentRole;
   return preferredRoleFor(user);
 };
 

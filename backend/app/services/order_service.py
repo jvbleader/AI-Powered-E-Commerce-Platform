@@ -22,6 +22,7 @@ from repositories import (
     seller_profile_repository,
     user_address_repository,
 )
+from services.notification import send_notification
 
 
 def generate_order_code() -> str:
@@ -181,6 +182,25 @@ async def _process_checkout(
                 order_id=order.id, new_status="PLACED", note="Đơn hàng được tạo mới"
             ),
         )
+        # Notify buyer
+        await send_notification(
+            db=db,
+            user_id=user.id,
+            type="order",
+            title=f"Đặt hàng thành công",
+            content=f"Đơn hàng {order.order_code} đã được đặt thành công.",
+            action_url=f"/account/orders/{order.order_code}"
+        )
+        # Notify seller
+        seller_user_id = sellers[order.seller_id].user_id
+        await send_notification(
+            db=db,
+            user_id=seller_user_id,
+            type="order",
+            title=f"Đơn hàng mới!",
+            content=f"Bạn vừa nhận được đơn hàng mới {order.order_code}.",
+            action_url=f"/seller/orders/{order.order_code}"
+        )
 
     # Xóa các cart items đã mua (nếu từ giỏ hàng)
     cart_item_ids = [
@@ -283,8 +303,8 @@ async def confirm_receipt(user: User, order_code: str, db: AsyncSession):
         inv = await inventory_repository.get_inventory_for_update(db, item.variant_id)
         if inv:
             qty_before = inv.quantity
-            inv.quantity -= item.quantity
-            inv.reserved_quantity -= item.quantity
+            inv.quantity = max(0, inv.quantity - item.quantity)
+            inv.reserved_quantity = max(0, inv.reserved_quantity - item.quantity)
             qty_after = inv.quantity
 
             await inventory_repository.add_inventory_transaction(
@@ -300,6 +320,35 @@ async def confirm_receipt(user: User, order_code: str, db: AsyncSession):
                     note=f"Trừ tồn kho khi đơn {order_code} hoàn thành",
                 ),
             )
+
+        # Update product sold_count
+        if item.product_id:
+            from models.product import Product
+            prod = await db.get(Product, item.product_id)
+            if prod:
+                prod.sold_count += item.quantity
+
+    # Update seller statistics (total_sold & total_revenue)
+    from models.seller_statistics import SellerStatistics
+    from sqlalchemy import select
+    seller_stats_res = await db.execute(select(SellerStatistics).where(SellerStatistics.seller_id == order.seller_id))
+    stats = seller_stats_res.scalar_one_or_none()
+    if stats:
+        stats.total_sold += sum(i.quantity for i in order.items)
+        stats.total_revenue += Decimal(str(order.total_amount))
+
+    # Lấy seller user_id
+    from repositories.seller_profile_repository import get_seller_profile_by_id
+    seller = await get_seller_profile_by_id(order.seller_id, db)
+    if seller:
+        await send_notification(
+            db=db,
+            user_id=seller.user_id,
+            type="order",
+            title="Đơn hàng đã giao thành công",
+            content=f"Người mua đã xác nhận nhận được đơn hàng {order_code}.",
+            action_url=f"/seller/orders/{order.order_code}"
+        )
 
     return order
 
@@ -346,7 +395,7 @@ async def cancel_order(user: User, order_code: str, reason: str, db: AsyncSessio
         inv = await inventory_repository.get_inventory_for_update(db, item.variant_id)
         if inv:
             qty_before = inv.reserved_quantity
-            inv.reserved_quantity -= item.quantity
+            inv.reserved_quantity = max(0, inv.reserved_quantity - item.quantity)
             qty_after = inv.reserved_quantity
 
             await inventory_repository.add_inventory_transaction(
@@ -363,4 +412,168 @@ async def cancel_order(user: User, order_code: str, reason: str, db: AsyncSessio
                 ),
             )
 
+    from repositories.seller_profile_repository import get_seller_profile_by_id
+    seller = await get_seller_profile_by_id(order.seller_id, db)
+    if seller:
+        await send_notification(
+            db=db,
+            user_id=seller.user_id,
+            type="order",
+            title="Đơn hàng bị hủy",
+            content=f"Đơn hàng {order_code} đã bị người mua hủy.",
+            action_url=f"/seller/orders/{order.order_code}"
+        )
+
     return order
+
+
+async def process_expired_orders(db: AsyncSession) -> dict:
+    from sqlalchemy import select
+    from sqlalchemy.orm import selectinload
+
+    now = utc_now()
+    expired_payment_count = 0
+    expired_confirm_count = 0
+
+    # 1. Hủy các đơn hàng quá hạn thanh toán (payment_expires_at < now và payment_status == 'PENDING')
+    stmt_payment = (
+        select(Order)
+        .options(
+            selectinload(Order.items),
+        )
+        .where(
+            Order.payment_expires_at < now,
+            Order.payment_status == "PENDING",
+            Order.order_status.in_(["PLACED", "PENDING"]),
+        )
+    )
+    payment_orders_res = await db.execute(stmt_payment)
+    payment_expired_orders = list(payment_orders_res.scalars().all())
+
+    for order in payment_expired_orders:
+        old_status = order.order_status
+        order.order_status = "CANCELLED"
+        order.payment_status = "FAILED"
+        order.cancelled_at = now
+
+        await order_repository.add_order_status_log(
+            db,
+            OrderStatusLog(
+                order_id=order.id,
+                old_status=old_status,
+                new_status="CANCELLED",
+                note="Hệ thống tự động hủy đơn do hết hạn thanh toán (quá 1 ngày)",
+            ),
+        )
+
+        await order_repository.add_order_cancellation(
+            db,
+            OrderCancellation(
+                order_id=order.id,
+                cancelled_by_user_id=order.user_id,
+                cancelled_by_type="SYSTEM",
+                reason="Hệ thống tự động hủy do hết hạn thanh toán (quá 1 ngày)",
+            ),
+        )
+
+        # Hoàn trả tồn kho giữ chỗ (reserved_quantity)
+        for item in order.items:
+            if not item.variant_id:
+                continue
+            inv = await inventory_repository.get_inventory_for_update(db, item.variant_id)
+            if inv:
+                qty_before = inv.reserved_quantity
+                inv.reserved_quantity = max(0, inv.reserved_quantity - item.quantity)
+                qty_after = inv.reserved_quantity
+
+                await inventory_repository.add_inventory_transaction(
+                    db,
+                    InventoryTransaction(
+                        variant_id=inv.variant_id,
+                        transaction_type="CANCEL_RELEASE",
+                        quantity_change=-item.quantity,
+                        quantity_before=qty_before,
+                        quantity_after=qty_after,
+                        reference_type="ORDER",
+                        reference_id=order.id,
+                        note=f"Tự động hoàn tồn kho do đơn {order.order_code} hết hạn thanh toán",
+                    ),
+                )
+        expired_payment_count += 1
+
+    # 2. Hủy các đơn hàng quá hạn Shop xác nhận (seller_confirm_expires_at < now và seller_confirmed == False)
+    stmt_seller = (
+        select(Order)
+        .options(
+            selectinload(Order.items),
+        )
+        .where(
+            Order.seller_confirm_expires_at < now,
+            Order.seller_confirmed == False,
+            Order.order_status.in_(["PLACED", "READY_TO_SHIP"]),
+        )
+    )
+    seller_orders_res = await db.execute(stmt_seller)
+    seller_expired_orders = list(seller_orders_res.scalars().all())
+
+    for order in seller_expired_orders:
+        old_status = order.order_status
+        order.order_status = "CANCELLED"
+        order.cancelled_at = now
+
+        if order.payment_status == "PAID":
+            order.payment_status = "REFUND_PENDING"
+
+        await order_repository.add_order_status_log(
+            db,
+            OrderStatusLog(
+                order_id=order.id,
+                old_status=old_status,
+                new_status="CANCELLED",
+                note="Hệ thống tự động hủy đơn do Shop không xác nhận (quá 3 ngày)",
+            ),
+        )
+
+        await order_repository.add_order_cancellation(
+            db,
+            OrderCancellation(
+                order_id=order.id,
+                cancelled_by_user_id=order.user_id,
+                cancelled_by_type="SYSTEM",
+                reason="Hệ thống tự động hủy do Shop không xác nhận đơn (quá 3 ngày)",
+            ),
+        )
+
+        # Hoàn trả tồn kho giữ chỗ (reserved_quantity)
+        for item in order.items:
+            if not item.variant_id:
+                continue
+            inv = await inventory_repository.get_inventory_for_update(db, item.variant_id)
+            if inv:
+                qty_before = inv.reserved_quantity
+                inv.reserved_quantity = max(0, inv.reserved_quantity - item.quantity)
+                qty_after = inv.reserved_quantity
+
+                await inventory_repository.add_inventory_transaction(
+                    db,
+                    InventoryTransaction(
+                        variant_id=inv.variant_id,
+                        transaction_type="CANCEL_RELEASE",
+                        quantity_change=-item.quantity,
+                        quantity_before=qty_before,
+                        quantity_after=qty_after,
+                        reference_type="ORDER",
+                        reference_id=order.id,
+                        note=f"Tự động hoàn tồn kho do đơn {order.order_code} hết hạn shop xác nhận",
+                    ),
+                )
+        expired_confirm_count += 1
+
+    if expired_payment_count > 0 or expired_confirm_count > 0:
+        await db.commit()
+
+    return {
+        "expired_payments": expired_payment_count,
+        "expired_seller_confirms": expired_confirm_count,
+    }
+

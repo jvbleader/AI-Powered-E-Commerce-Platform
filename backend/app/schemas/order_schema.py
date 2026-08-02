@@ -1,6 +1,6 @@
 from datetime import datetime
 from decimal import Decimal
-from typing import List, Optional
+from typing import Any, List, Optional
 
 from pydantic import BaseModel, Field
 
@@ -21,7 +21,7 @@ class CheckoutCartRequest(BaseModel):
     )
     address_id: int = Field(description="ID của địa chỉ giao hàng")
     customer_note: Optional[str] = Field(
-        default=None, description="Ghi chú của khách hàng"
+        default=None, max_length=500, description="Ghi chú của khách hàng"
     )
 
 
@@ -34,7 +34,7 @@ class CheckoutDirectRequest(BaseModel):
     items: List[CheckoutDirectItem]
     address_id: int = Field(description="ID của địa chỉ giao hàng")
     customer_note: Optional[str] = Field(
-        default=None, description="Ghi chú của khách hàng"
+        default=None, max_length=500, description="Ghi chú của khách hàng"
     )
 
 
@@ -50,6 +50,14 @@ class OrderItemResponse(BaseModel):
     unit_price: Decimal
     quantity: int
     subtotal: Decimal
+    is_reviewed: bool = False
+
+    @classmethod
+    def model_validate(cls, obj: Any, *args, **kwargs):
+        inst = super().model_validate(obj, *args, **kwargs)
+        if hasattr(obj, "__dict__") and "review" in obj.__dict__ and obj.__dict__["review"] is not None:
+            inst.is_reviewed = True
+        return inst
 
     class Config:
         from_attributes = True
@@ -58,7 +66,17 @@ class OrderItemResponse(BaseModel):
 class ShopInfo(BaseModel):
     public_id: str
     shop_name: str
-    shop_logo_url: Optional[str]
+    shop_slug: Optional[str] = None
+    shop_logo_url: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+class UserInfo(BaseModel):
+    public_id: str
+    full_name: str
+    avatar_url: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -96,7 +114,9 @@ class OrderResponse(BaseModel):
     completed_at: Optional[datetime]
     cancelled_at: Optional[datetime]
     created_at: datetime
+    print_count: int
 
+    user: Optional[UserInfo] = None
     seller: Optional[ShopInfo] = None
     items: List[OrderItemResponse] = []
     shipment: Optional[ShipmentResponse] = None

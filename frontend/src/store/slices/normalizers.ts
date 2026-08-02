@@ -72,7 +72,6 @@ export const normalizeBackendProduct = (
     averageRating: backendProduct.average_rating,
     reviewCount: backendProduct.review_count,
     soldCount: backendProduct.sold_count,
-    viewCount: backendProduct.view_count,
     categoryIds: backendProduct.categories ? backendProduct.categories.map((c) => c.id.toString()) : [],
     imageUrls: backendProduct.images.map((img) => img.image_url),
     thumbnailUrl:
@@ -109,12 +108,18 @@ export const normalizeBackendOrder = (
   backendOrder: BackendOrderResponse,
   sellerId: string,
   userId: string
-): Order => ({
-  id: backendOrder.public_id,
-  orderCode: backendOrder.order_code,
-  userId: userId,
-  sellerId: sellerId,
-  orderStatus: backendOrder.order_status,
+): Order => {
+  const shopName = backendOrder.seller?.shop_name || backendOrder.items?.[0]?.seller_name_snapshot || undefined;
+  const shopSlug = backendOrder.seller?.shop_slug || undefined;
+
+  return {
+    id: backendOrder.public_id,
+    orderCode: backendOrder.order_code,
+    userId: backendOrder.user?.public_id || userId,
+    sellerId: sellerId,
+    shopName,
+    shopSlug,
+    orderStatus: backendOrder.order_status,
   paymentStatus: backendOrder.payment_status,
   sellerConfirmed: backendOrder.seller_confirmed,
   sellerConfirmedAt: backendOrder.seller_confirmed_at ?? undefined,
@@ -139,7 +144,8 @@ export const normalizeBackendOrder = (
     skuSnapshot: item.sku_snapshot || "",
     unitPrice: Number(item.unit_price),
     quantity: item.quantity,
-    subtotal: Number(item.subtotal)
+    subtotal: Number(item.subtotal),
+    isReviewed: Boolean(item.is_reviewed)
   })),
   shipment: backendOrder.shipment ? {
     shippingProviderName: backendOrder.shipment.shipping_provider_name || "Chưa có thông tin",
@@ -163,8 +169,10 @@ export const normalizeBackendOrder = (
     addressType: "HOME"
   },
   timeline: [],
-  createdAt: backendOrder.created_at
-});
+  createdAt: backendOrder.created_at,
+  printCount: (backendOrder as any).print_count ?? 0
+  };
+};
 
 export const sellerApplicationToShop = (
   application: SellerApplication,

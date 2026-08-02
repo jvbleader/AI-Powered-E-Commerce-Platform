@@ -55,6 +55,13 @@ export const createAuthSlice: StateCreator<MarketplaceStore, [], [], any> = (set
         const backendUser = await apiFetch<BackendUser>(AUTH_ROUTES.me);
         const user = normalizeBackendUser(backendUser);
         setState((prev: AppState) => applyBackendUser(prev, backendUser, false));
+        if (user.roles?.includes("SELLER")) {
+          try {
+            await get().getSellerApplication();
+          } catch (e) {
+            console.error("Failed to fetch seller application on login", e);
+          }
+        }
         try {
           const cartResp = await fetchMyCart();
           setState((prev: AppState) => ({
@@ -89,7 +96,7 @@ export const createAuthSlice: StateCreator<MarketplaceStore, [], [], any> = (set
         };
       }
     },
-    register: async (payload: Pick<User, "fullName" | "email" | "phone"> & { password: string; confirmPassword: string }) => {
+    register: async (payload: Pick<User, "fullName" | "email" | "phone"> & { userName: string; password: string; confirmPassword: string }) => {
       const { state, verificationContext } = get();
 
       const validation = validateRegistrationPayload(payload);
@@ -102,7 +109,7 @@ export const createAuthSlice: StateCreator<MarketplaceStore, [], [], any> = (set
           method: "POST",
           body: JSON.stringify({
             full_name: validation.fullName,
-            user_name: usernameFromRegistration(validation.email, validation.phone),
+            user_name: validation.userName,
             email: validation.email,
             phone: validation.phone,
             password: validation.password,
@@ -115,25 +122,25 @@ export const createAuthSlice: StateCreator<MarketplaceStore, [], [], any> = (set
         setVerificationContext(context);
         setState((prev) => ({ ...prev, sessionUserId: undefined, activeRole: "GUEST" }));
 
-        let message = registrationStatus.message;
-      try {
-        const query = new URLSearchParams({ phone: validation.phone });
-        const otpResult = await apiFetch<MessageResponse>(`${AUTH_ROUTES.resendPhone}?${query.toString()}`, {
-          method: "POST"
-        });
-        message = otpResult.message;
-      } catch (error) {
-        message =
-          error instanceof ApiError
-            ? `Đăng ký thành công, nhưng chưa gửi được OTP: ${error.message}`
-            : "Đăng ký thành công, nhưng chưa gửi được OTP. Hãy bấm Gửi lại mã.";
-      }
+        // Phone verification is bypassed, skip OTP
+        // Automatically send email verification
+        try {
+          const query = new URLSearchParams({
+            email: context.email,
+            full_name: validation.fullName
+          });
+          await apiFetch<MessageResponse>(`${AUTH_ROUTES.resendEmail}?${query.toString()}`, {
+            method: "POST"
+          });
+        } catch (error) {
+          console.error("Failed to auto-send verification email", error);
+        }
 
-      return {
-        ok: true,
-        message,
-        redirectTo: "/verify-phone"
-      };
+        return {
+          ok: true,
+          message: registrationStatus.message,
+          redirectTo: "/verify-email"
+        };
     } catch (error) {
       if (error instanceof ApiError) {
         return { ok: false, message: error.message };
@@ -372,14 +379,19 @@ export const createAuthSlice: StateCreator<MarketplaceStore, [], [], any> = (set
     }
   },
     logout: async () => {
-      const { state, verificationContext } = get();
-
       try {
         await apiFetch<{ message: string }>(AUTH_ROUTES.logout, { method: "POST" });
       } catch {
         // Keep logout local even if the backend is offline.
       } finally {
-        setState((prev: AppState) => ({ ...prev, sessionUserId: undefined, activeRole: "GUEST" }));
+        const nextState = { ...get().state, sessionUserId: undefined, activeRole: "GUEST" as const, cartItems: [] };
+        if (typeof window !== "undefined") {
+          sessionStorage.removeItem("last_visited_page");
+          persistState(nextState);
+          window.location.href = "/login?logout=1";
+        } else {
+          setState((prev: AppState) => nextState);
+        }
       }
     },
     logoutAll: async () => {
@@ -387,7 +399,14 @@ export const createAuthSlice: StateCreator<MarketplaceStore, [], [], any> = (set
 
       try {
         const result = await apiFetch<MessageResponse>(AUTH_ROUTES.logoutAll, { method: "POST" });
-        setState((prev: AppState) => ({ ...prev, sessionUserId: undefined, activeRole: "GUEST" }));
+        const nextState = { ...get().state, sessionUserId: undefined, activeRole: "GUEST" as const, cartItems: [] };
+        if (typeof window !== "undefined") {
+          sessionStorage.removeItem("last_visited_page");
+          persistState(nextState);
+          window.location.href = "/login?logout=1";
+        } else {
+          setState((prev: AppState) => nextState);
+        }
         return { ok: true, message: result.message };
       } catch (error) {
         if (error instanceof ApiError) {
@@ -400,7 +419,7 @@ export const createAuthSlice: StateCreator<MarketplaceStore, [], [], any> = (set
       const { state, verificationContext } = get();
 
       const user = state.users.find((entry: any) => entry.id === state.sessionUserId);
-      if (role !== "GUEST" && role !== "CUSTOMER" && !user?.roles.includes(role)) {
+      if (role !== "GUEST" && !user?.roles.includes(role as Role)) {
         return false;
       }
 
@@ -409,23 +428,42 @@ export const createAuthSlice: StateCreator<MarketplaceStore, [], [], any> = (set
       return true;
     },
     toggleUserLock: async (userId: string) => {
-      const { state, verificationContext } = get();
-
-      setState((prev: AppState) => ({
-        ...prev,
-        users: prev.users.map((user) =>
-          user.id === userId
-            ? user.status === "LOCKED"
-              ? { ...user, status: "ACTIVE", lockedUntil: undefined, lockReason: undefined }
-              : {
-                  ...user,
-                  status: "LOCKED",
-                  lockedUntil: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-                  lockReason: "Admin khóa thủ công từ dashboard."
-                }
-            : user
-        )
-      }));
+      const { showToast } = get();
+      try {
+        const updatedUser = await apiFetch<any>(`/admin/users/${userId}/toggle-lock`, {
+          method: "POST"
+        });
+        const normalized = {
+          id: updatedUser.publicId ?? updatedUser.public_id ?? updatedUser.email,
+          fullName: updatedUser.fullName ?? updatedUser.full_name ?? updatedUser.fullname ?? updatedUser.email,
+          email: updatedUser.email,
+          phone: updatedUser.phone,
+          avatarUrl: updatedUser.avatarUrl ?? updatedUser.avatar_url ?? "https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=240&q=80",
+          gender: updatedUser.gender ?? undefined,
+          birthday: updatedUser.dateOfBirth ?? updatedUser.date_of_birth ?? undefined,
+          emailVerified: Boolean(updatedUser.emailVerifiedAt ?? updatedUser.email_verified_at),
+          phoneVerified: Boolean(updatedUser.phoneVerifiedAt ?? updatedUser.phone_verified_at),
+          status: updatedUser.status ?? "ACTIVE",
+          lockedUntil: updatedUser.lockedUntil ?? updatedUser.locked_until ?? undefined,
+          lockReason: updatedUser.lockReason ?? updatedUser.lock_reason ?? undefined,
+          roles: updatedUser.roles ?? ["CUSTOMER"]
+        };
+        setState((prev: AppState) => ({
+          ...prev,
+          users: prev.users.map((u) => u.id === userId ? normalized : u)
+        }));
+        if (showToast) {
+          showToast(
+            normalized.status === "LOCKED" ? "Đã khóa tài khoản thành công." : "Đã mở khóa tài khoản thành công.",
+            "success"
+          );
+        }
+      } catch (error: any) {
+        console.error("Failed to toggle lock:", error);
+        if (showToast) {
+          showToast(error.message ?? "Lỗi cập nhật trạng thái khóa.", "danger");
+        }
+      }
     },
     updateSellerStatus: async (shopId: string, status: SellerStatus, reason?: string) => {
       const { state, verificationContext } = get();

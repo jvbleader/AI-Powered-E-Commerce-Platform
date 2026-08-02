@@ -8,7 +8,9 @@ import {
   normalizeBackendSellerApplication,
   upsertSellerApplicationShop,
   BackendSellerApplicationDetail,
+  BackendSellerDashboardSummary,
   SellerApplicationPayload,
+
   validateSellerApplicationPayload,
   normalizeBackendUser,
   upsertBackendUser,
@@ -228,5 +230,23 @@ export const createSellerSlice: StateCreator<MarketplaceStore, [], [], any> = (s
         return { ...prev, shops: [...prev.shops, shop] };
       });
     },
+    fetchSellerDashboardSummary: async (recalculate = false) => {
+      try {
+        const route = recalculate
+          ? SELLER_ROUTES.recalculateDashboardSummary
+          : SELLER_ROUTES.dashboardSummary;
+        const summary = await apiFetch<BackendSellerDashboardSummary>(route, {
+          method: recalculate ? "POST" : "GET"
+        });
+        return { ok: true as const, summary };
+      } catch (error: any) {
+        const message =
+          error?.message ??
+          (typeof error === "string" ? error : "Không thể nạp dữ liệu thống kê từ máy chủ.");
+        return { ok: false as const, message };
+      }
+    },
+
   };
 };
+

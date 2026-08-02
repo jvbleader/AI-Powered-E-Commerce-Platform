@@ -2,29 +2,22 @@
 
 import { useEffect } from "react";
 import { useParams } from "next/navigation";
+import { ArrowLeft, Copy, User, CreditCard, Receipt, Printer } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Panel, Section } from "@/components/ui/containers";
 import { StatusBadge } from "@/components/ui/badge";
-import { OrderTimeline } from "@/components/shared/cards";
 import {
   canSellerCancel,
   canSellerConfirm,
   canSellerShip,
+  formatDate,
   formatVnd,
   orderStatusLabel,
-  paymentStatusLabel
+  paymentStatusLabel,
+  paymentMethodLabel
 } from "@/lib/helpers";
 import { useMarketplaceStore } from "@/store/use-marketplace-store";
 import Unauthorized from "@/components/shared/unauthorized-page";
-
-function InfoRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-panel border border-line bg-white p-3">
-      <p className="text-xs text-muted">{label}</p>
-      <p className="mt-1 font-semibold text-ink">{value}</p>
-    </div>
-  );
-}
 
 export default function SellerOrderDetailPage() {
   const params = useParams();
@@ -47,15 +40,7 @@ export default function SellerOrderDetailPage() {
     return <Unauthorized title="Cần đăng nhập" description="Bạn cần đăng nhập trước khi xem chi tiết đơn hàng." />;
   }
 
-  if (!shop) {
-    return (
-      <main className="mx-auto max-w-4xl px-4 py-8">
-        <p className="text-sm font-semibold text-muted">Đang tải thông tin shop...</p>
-      </main>
-    );
-  }
-
-  if (!order) {
+  if (!shop || !order) {
     return (
       <div className="flex justify-center p-8">
         <span className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></span>
@@ -63,63 +48,196 @@ export default function SellerOrderDetailPage() {
     );
   }
 
-  const orderShop = store.state.shops.find((s) => s.id === order.sellerId);
+  const findPaymentForOrder = (orderCode: string) =>
+    store.state.payments.find((payment) => payment.orderCodes.includes(orderCode));
+
+  const handleCopy = (text: string, label: string) => {
+    navigator.clipboard.writeText(text);
+    showToast(`Đã sao chép ${label}!`, "success");
+  };
+
+  const payment = findPaymentForOrder(order.orderCode);
+  const pm = payment?.paymentMethod ?? "MOCK";
+  const paymentTime = payment?.paidAt
+    ? formatDate(payment.paidAt)
+    : payment?.createdAt
+    ? formatDate(payment.createdAt)
+    : order.paymentStatus === "PAID"
+    ? formatDate(order.createdAt)
+    : null;
 
   return (
-    <Section title={`Chi tiết đơn ${order.orderCode}`}>
-      <div className="grid gap-4 lg:grid-cols-[1fr_360px]">
-        <div className="space-y-4">
-          <Panel>
-            <div className="flex flex-wrap items-center gap-2">
+    <Section title={null} className="pt-2">
+      <div className="mb-4">
+        <a
+          href="/seller/orders"
+          className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-600 hover:text-emerald-700 transition"
+        >
+          <ArrowLeft className="h-4 w-4 text-slate-400" />
+          Quay lại danh sách đơn hàng
+        </a>
+      </div>
+
+      <div className="space-y-4">
+        {/* HEADER: ID & ACTIONS */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-4 rounded-panel border border-line shadow-sm">
+          <div>
+            <div className="flex items-center gap-2">
+              <h2 className="text-xl font-black text-slate-900">#{order.orderCode}</h2>
+              <button
+                type="button"
+                onClick={() => handleCopy(order.orderCode, "mã đơn hàng")}
+                className="p-1 text-slate-400 hover:text-emerald-700 transition"
+                title="Sao chép mã đơn"
+              >
+                <Copy className="h-4 w-4" />
+              </button>
               <StatusBadge status={order.orderStatus} label={orderStatusLabel[order.orderStatus]} />
-              <StatusBadge status={order.paymentStatus} label={paymentStatusLabel[order.paymentStatus]} />
-              <span className="text-sm text-muted">{orderShop?.shopName}</span>
             </div>
-            <div className="mt-4 space-y-3">
-              {order.items.map((item) => (
-                <div key={item.id} className="flex gap-3 border-t border-line pt-3">
-                  <img src={item.productImageSnapshot} alt={item.productNameSnapshot} className="h-16 w-16 rounded-panel object-cover" />
-                  <div className="min-w-0 flex-1">
-                    <p className="font-bold">{item.productNameSnapshot}</p>
-                    <p className="text-sm text-muted">{item.variantNameSnapshot} - SKU {item.skuSnapshot}</p>
-                  </div>
-                  <p className="font-bold">{formatVnd(item.subtotal)}</p>
-                </div>
-              ))}
+            <p className="text-xs text-slate-500 mt-1">
+              Ngày đặt: <span className="font-semibold text-slate-700">{formatDate(order.createdAt)}</span>
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            {canSellerConfirm(order) && (
+              <Button onClick={() => store.confirmSellerOrder(order.id).then((res) => { if (res.ok) showToast("Đã xác nhận đơn hàng.", "success"); else showToast(res.message || "Lỗi xác nhận", "danger"); })}>
+                Xác nhận đơn
+              </Button>
+            )}
+            {canSellerShip(order) && (
+              <Button variant="secondary" onClick={() => store.shippingSellerOrder(order.id).then((res) => { if (res.ok) { showToast("Đã chuyển shipping.", "success"); window.open(`/seller/print-orders?ids=${order.id}`, '_blank'); } else { showToast(res.message || "Lỗi chuyển shipping", "danger"); } })}>
+                Chuyển giao hàng
+              </Button>
+            )}
+            {canSellerCancel(order) && (
+              <Button variant="danger" onClick={() => store.cancelSellerOrder(order.id).then((res) => { if (res.ok) showToast("Đã từ chối đơn hàng.", "success"); else showToast(res.message || "Lỗi từ chối", "danger"); })}>
+                Từ chối đơn
+              </Button>
+            )}
+            {order.orderStatus === "SHIPPING" && (
+              <Button 
+                variant="secondary" 
+                disabled={(order.printCount || 0) >= 2} 
+                title={(order.printCount || 0) >= 2 ? "Đã hết lượt in lại" : ""}
+                onClick={() => store.incrementPrintCount(order.id).then((res) => { if (res.ok) { window.open(`/seller/print-orders?ids=${order.id}`, '_blank'); } else { showToast(res.message || "Lỗi in lại", "danger"); } })}
+              >
+                <Printer className="h-4 w-4 mr-1" />
+                In lại ({Math.max(0, 2 - (order.printCount || 0))})
+              </Button>
+            )}
+          </div>
+        </div>
+
+        {/* 3-COLUMN KPI INFO GRID */}
+        <div className="grid gap-4 md:grid-cols-3">
+          {/* Customer */}
+          <Panel className="p-4 flex flex-col gap-2 bg-white h-full">
+            <div className="flex items-center gap-2 text-slate-700 font-bold mb-1">
+              <User className="h-4 w-4 text-emerald-600" />
+              Khách hàng & Giao hàng
+            </div>
+            <div className="text-sm">
+              <span className="font-semibold text-slate-900">{order.shipment.receiverName}</span>
+              <span className="text-slate-500 ml-2">{order.shipment.receiverPhone}</span>
+            </div>
+            <div className="text-xs text-slate-600 leading-relaxed mt-1">
+              {order.shipment.detailAddress}, {order.shipment.ward}, {order.shipment.district}, {order.shipment.province}
+            </div>
+            {order.customerNote && (
+              <div className="mt-2 bg-amber-50 border border-amber-200 text-amber-800 text-xs p-2 rounded max-h-20 overflow-y-auto">
+                <span className="font-semibold">Ghi chú:</span> {order.customerNote}
+              </div>
+            )}
+          </Panel>
+
+          {/* Payment & Status */}
+          <Panel className="p-4 flex flex-col gap-2 bg-white h-full">
+            <div className="flex items-center gap-2 text-slate-700 font-bold mb-1">
+              <CreditCard className="h-4 w-4 text-emerald-600" />
+              Thanh toán & Trạng thái
+            </div>
+            <div className="grid grid-cols-[100px_1fr] gap-y-2 text-xs items-center">
+              <span className="text-slate-500">Thanh toán</span>
+              <div><StatusBadge status={order.paymentStatus} label={paymentStatusLabel[order.paymentStatus]} /></div>
+              
+              <span className="text-slate-500">Phương thức</span>
+              <span className="font-semibold text-slate-800">{paymentMethodLabel[pm] || pm}</span>
+              
+              {paymentTime && (
+                <>
+                  <span className="text-slate-500">Thời gian TT</span>
+                  <span className="font-semibold text-slate-800">{paymentTime}</span>
+                </>
+              )}
             </div>
           </Panel>
-          <Panel>
-            <h3 className="font-bold">Timeline</h3>
-            <div className="mt-3">
-              <OrderTimeline order={order} />
+
+          {/* Financials */}
+          <Panel className="p-4 flex flex-col gap-2 bg-white h-full">
+            <div className="flex items-center gap-2 text-slate-700 font-bold mb-1">
+              <Receipt className="h-4 w-4 text-emerald-600" />
+              Tài chính
+            </div>
+            <div className="grid gap-1.5 text-sm mt-1">
+              <div className="flex justify-between text-slate-600">
+                <span>Tổng tiền hàng</span>
+                <span>{formatVnd(order.subtotalAmount)}</span>
+              </div>
+              <div className="flex justify-between text-slate-600">
+                <span>Phí vận chuyển</span>
+                <span>{formatVnd(order.shippingFee)}</span>
+              </div>
+              <div className="flex justify-between font-bold text-slate-900 border-t border-slate-100 pt-2 mt-1">
+                <span>Tổng cộng</span>
+                <span className="text-emerald-700">{formatVnd(order.totalAmount)}</span>
+              </div>
             </div>
           </Panel>
         </div>
-        <Panel className="h-fit">
-          <h3 className="font-bold">Shipment snapshot</h3>
-          <p className="mt-2 text-sm leading-6 text-muted">
-            {order.shipment.receiverName} - {order.shipment.receiverPhone}
-            <br />
-            {order.shipment.detailAddress}, {order.shipment.ward}, {order.shipment.district}, {order.shipment.province}
-          </p>
-          <div className="mt-4 grid gap-2">
-            <InfoRow label="Subtotal" value={formatVnd(order.subtotalAmount)} />
-            <InfoRow label="Phí ship" value={formatVnd(order.shippingFee)} />
-            <InfoRow label="Tổng" value={formatVnd(order.totalAmount)} />
+
+        {/* ORDER ITEMS TABLE */}
+        <Panel className="p-0 overflow-hidden bg-white">
+          <div className="overflow-x-auto overflow-y-auto max-h-80">
+            <table className="w-full text-left text-sm border-collapse">
+              <thead className="bg-slate-50 text-xs font-bold text-slate-500 uppercase border-b border-line sticky top-0 z-10">
+                <tr>
+                  <th className="px-4 py-3 font-semibold text-slate-600">Sản phẩm</th>
+                  <th className="px-4 py-3 font-semibold text-slate-600">SKU</th>
+                  <th className="px-4 py-3 font-semibold text-slate-600 text-right">Đơn giá</th>
+                  <th className="px-4 py-3 font-semibold text-slate-600 text-center">SL</th>
+                  <th className="px-4 py-3 font-semibold text-slate-600 text-right">Thành tiền</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-line">
+                {order.items.map((item) => (
+                  <tr key={item.id} className="hover:bg-slate-50/50 transition-colors">
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-3 min-w-[240px]">
+                        <img src={item.productImageSnapshot} alt={item.productNameSnapshot} className="h-10 w-10 rounded border border-line object-cover shrink-0" />
+                        <div>
+                          <p className="font-bold text-slate-900 line-clamp-1" title={item.productNameSnapshot}>{item.productNameSnapshot}</p>
+                          <p className="text-xs text-slate-500 mt-0.5">{item.variantNameSnapshot}</p>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-slate-600 whitespace-nowrap">
+                      {item.skuSnapshot || "-"}
+                    </td>
+                    <td className="px-4 py-3 text-right text-slate-600 whitespace-nowrap">
+                      {formatVnd(item.unitPrice)}
+                    </td>
+                    <td className="px-4 py-3 text-center font-semibold text-slate-800">
+                      {item.quantity}
+                    </td>
+                    <td className="px-4 py-3 text-right font-bold text-slate-900 whitespace-nowrap">
+                      {formatVnd(item.subtotal)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
-          {canSellerConfirm(order) || canSellerShip(order) || canSellerCancel(order) ? (
-            <div className="mt-4 grid gap-2">
-              {canSellerConfirm(order) ? (
-                <Button onClick={() => store.confirmSellerOrder(order.id).then((res) => { if (res.ok) showToast("Đã xác nhận đơn hàng.", "success"); else showToast(res.message || "Lỗi xác nhận", "danger"); })}>Xác nhận đơn</Button>
-              ) : null}
-              {canSellerShip(order) ? (
-                <Button variant="secondary" onClick={() => store.shippingSellerOrder(order.id).then((res) => { if (res.ok) showToast("Đã chuyển shipping.", "success"); else showToast(res.message || "Lỗi chuyển shipping", "danger"); })}>Chuyển shipping</Button>
-              ) : null}
-              {canSellerCancel(order) ? (
-                <Button variant="danger" onClick={() => store.cancelSellerOrder(order.id).then((res) => { if (res.ok) showToast("Đã từ chối đơn hàng.", "success"); else showToast(res.message || "Lỗi từ chối", "danger"); })}>Từ chối đơn</Button>
-              ) : null}
-            </div>
-          ) : null}
         </Panel>
       </div>
     </Section>

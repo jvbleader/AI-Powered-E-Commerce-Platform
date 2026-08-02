@@ -18,6 +18,7 @@ from models.base import Base, new_public_id, utc_now
 
 if TYPE_CHECKING:
     from models.cart import Cart
+    from models.chat_session import ChatSession
     from models.coupon_usage import CouponUsage
     from models.notification import Notification
     from models.order import Order
@@ -124,3 +125,6 @@ class User(Base):
         back_populates="recipient",
     )
     search_logs: Mapped[list["SearchLog"]] = relationship(back_populates="user")
+    chat_sessions: Mapped[list["ChatSession"]] = relationship(
+        back_populates="user",
+    )

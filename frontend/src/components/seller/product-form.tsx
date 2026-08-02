@@ -178,7 +178,23 @@ export default function ProductForm({ productId }: { productId?: string }) {
               <Field label="Bảo hành"><Input value={warranty} onChange={(e) => setWarranty(e.target.value)} /></Field>
             </div>
             <Field label="URL ảnh sản phẩm chính">
-              <Input type="text" value={imageUrl} onChange={(e) => setImageUrl(e.target.value)} placeholder="Nhập URL ảnh" />
+              <div className="flex gap-2">
+                <Input type="text" value={imageUrl} onChange={(e) => setImageUrl(e.target.value)} placeholder="Nhập URL ảnh" />
+                <Button 
+                  type="button" 
+                  variant="secondary" 
+                  onClick={() => {
+                    // Mock upload to Cloudinary/S3
+                    store.showToast("Đang tải ảnh lên...", "info");
+                    setTimeout(() => {
+                      setImageUrl("https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=900&q=80");
+                      store.showToast("Tải ảnh thành công (Mock)!", "success");
+                    }, 1000);
+                  }}
+                >
+                  Upload
+                </Button>
+              </div>
             </Field>
             <Field label="Danh mục sản phẩm">
               <div className="grid gap-2 sm:grid-cols-2">

@@ -2,8 +2,8 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from core.database import get_db
-from dependencies.auth import get_current_user
+from core.database import DBSession
+from dependencies.auth import CurrentUser
 from models.user import User
 from schemas.cart_schema import (
     AddToCartRequest,
@@ -14,13 +14,13 @@ from schemas.cart_schema import (
 from schemas.auth_schema import MessageResponse
 from services import cart_service
 
-router = APIRouter(prefix="/api/v1/cart", tags=["Cart"])
+router = APIRouter(prefix="/cart", tags=["Cart"])
 
 
 @router.get("", response_model=CartResponse)
 async def get_cart(
-    user: Annotated[User, Depends(get_current_user)],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    user: CurrentUser,
+    db: DBSession,
 ):
     return await cart_service.get_my_cart(user, db)
 
@@ -29,9 +29,9 @@ async def get_cart(
     "/items", response_model=CartItemResponse, status_code=status.HTTP_201_CREATED
 )
 async def add_cart_item(
-    user: Annotated[User, Depends(get_current_user)],
+    user: CurrentUser,
     data: AddToCartRequest,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: DBSession,
 ):
     try:
         result = await cart_service.add_to_cart(user, data, db)
@@ -45,9 +45,9 @@ async def add_cart_item(
 @router.patch("/items/{item_id}", response_model=CartItemResponse)
 async def update_cart_item(
     item_id: int,
-    user: Annotated[User, Depends(get_current_user)],
+    user: CurrentUser,
     data: UpdateCartItemRequest,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: DBSession,
 ):
     try:
         result = await cart_service.update_cart_item(user, item_id, data, db)
@@ -61,8 +61,8 @@ async def update_cart_item(
 @router.delete("/items/{item_id}", response_model=MessageResponse)
 async def remove_cart_item(
     item_id: int,
-    user: Annotated[User, Depends(get_current_user)],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    user: CurrentUser,
+    db: DBSession,
 ):
     try:
         await cart_service.remove_cart_item_by_id(user, item_id, db)
@@ -76,8 +76,8 @@ async def remove_cart_item(
 @router.patch("/select-all", response_model=MessageResponse)
 async def select_all_items(
     is_selected: bool,
-    user: Annotated[User, Depends(get_current_user)],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    user: CurrentUser,
+    db: DBSession,
 ):
     try:
         await cart_service.select_all_cart(user, is_selected, db)
@@ -86,3 +86,4 @@ async def select_all_items(
         await db.rollback()
         raise
     return MessageResponse(message="Đã cập nhật trạng thái chọn tất cả")
+

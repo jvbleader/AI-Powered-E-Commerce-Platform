@@ -27,6 +27,7 @@ from repositories.seller_profile_repository import (
 )
 from repositories.user_repositoriy import get_user_by_id
 from repositories.user_role_repository import add_role_by_user_id
+from services.notification import send_notification
 
 
 def _generate_slug(value: str) -> str:
@@ -100,6 +101,7 @@ async def submit_seller_application(
         bank_name=data.bank_name,
         bank_account_number=data.bank_account_number,
         bank_account_name=data.bank_account_name,
+        shipping_fee=data.shipping_fee,
         db=db,
     )
 
@@ -161,6 +163,7 @@ async def update_my_seller_application(
     seller_profile.bank_name = data.bank_name
     seller_profile.bank_account_name = data.bank_account_name
     seller_profile.bank_account_number = data.bank_account_number
+    seller_profile.shipping_fee = data.shipping_fee
 
     return seller_profile
 
@@ -224,6 +227,16 @@ async def approve_seller_application(
     if user:
         await add_role_by_user_id("SELLER", user.id, db)
         await db.flush()
+        
+        # Gửi thông báo phê duyệt
+        await send_notification(
+            db=db,
+            user_id=user.id,
+            type="system",
+            title="Mở shop thành công",
+            content="Yêu cầu mở shop của bạn đã được duyệt! Khám phá Seller Dashboard ngay.",
+            action_url="/seller/dashboard"
+        )
     else:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -256,5 +269,15 @@ async def reject_seller_application(
     seller_profile.rejected_reason = data.rejected_reason
 
     await db.flush()
+
+    # Gửi thông báo từ chối
+    await send_notification(
+        db=db,
+        user_id=seller_profile.user_id,
+        type="system",
+        title="Yêu cầu mở shop bị từ chối",
+        content=f"Yêu cầu mở shop của bạn đã bị từ chối với lý do: {data.rejected_reason}",
+        action_url="/account/seller-application"
+    )
 
     return seller_profile

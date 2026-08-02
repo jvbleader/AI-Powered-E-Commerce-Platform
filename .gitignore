@@ -50,5 +50,21 @@ redis_data/
 *.swo
 *~
 
-other
 *.demo.*
+
+/docs/other
+/docs/project_document
+/docs/artifacts
+
+# Understand Anything
+.ua/
+
+#agent
+.agents/
+
+#CodeGraph
+.codegraph/
+
+/backend/database
+
+docker-compose.tunnel.yml

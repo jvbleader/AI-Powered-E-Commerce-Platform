@@ -12,9 +12,19 @@ async def get_my_addresses(user: User, db: AsyncSession) -> List[UserAddress]:
     return await user_address_repository.get_user_addresses(db, user.id)
 
 
+MAX_ADDRESSES_PER_USER = 10
+
+
 async def create_address(
     user: User, data: UserAddressCreate, db: AsyncSession
 ) -> UserAddress:
+    existing = await user_address_repository.get_user_addresses(db, user.id)
+    if len(existing) >= MAX_ADDRESSES_PER_USER:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Bạn chỉ có thể thêm tối đa {MAX_ADDRESSES_PER_USER} địa chỉ. Vui lòng xoá bớt để tiếp tục."
+        )
+
     if data.is_default:
         await user_address_repository.unset_user_default_addresses(db, user.id)
 

@@ -1,8 +1,8 @@
 from typing import Annotated
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from core.database import get_db
-from dependencies.auth import get_current_user
+from core.database import DBSession
+from dependencies.auth import CurrentUser
 from models.user import User
 from schemas.seller_product_schema import (
     ProductCreateRequest,
@@ -24,9 +24,9 @@ router = APIRouter(prefix="/seller/products", tags=["Seller Products"])
 
 @router.post("", response_model=ProductResponse, status_code=status.HTTP_201_CREATED)
 async def create_product_api(
-    user: Annotated[User, Depends(get_current_user)],
+    user: CurrentUser,
     data: ProductCreateRequest,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: DBSession,
 ) -> ProductResponse:
     result = None
     try:
@@ -40,8 +40,8 @@ async def create_product_api(
 
 @router.get("", response_model=ProductListResponse)
 async def get_products_api(
-    user: Annotated[User, Depends(get_current_user)],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    user: CurrentUser,
+    db: DBSession,
     page: int = Query(1, ge=1),
     limit: int = Query(10, ge=1, le=100),
 ) -> ProductListResponse:
@@ -59,9 +59,9 @@ async def get_products_api(
 @router.put("/{product_id}", response_model=ProductResponse)
 async def update_product_api(
     product_id: str,
-    user: Annotated[User, Depends(get_current_user)],
+    user: CurrentUser,
     data: ProductUpdateRequest,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: DBSession,
 ) -> ProductResponse:
     result = None
     try:
@@ -76,8 +76,8 @@ async def update_product_api(
 @router.patch("/{product_id}/hide", response_model=ProductResponse)
 async def hide_product_api(
     product_id: str,
-    user: Annotated[User, Depends(get_current_user)],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    user: CurrentUser,
+    db: DBSession,
 ) -> ProductResponse:
     result = None
     try:
@@ -92,8 +92,8 @@ async def hide_product_api(
 @router.patch("/{product_id}/unhide", response_model=ProductResponse)
 async def unhide_product_api(
     product_id: str,
-    user: Annotated[User, Depends(get_current_user)],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    user: CurrentUser,
+    db: DBSession,
 ) -> ProductResponse:
     result = None
     try:
@@ -105,12 +105,11 @@ async def unhide_product_api(
     return result
 
 
-
 @router.delete("/{product_id}", response_model=ProductResponse)
 async def delete_product_api(
     product_id: str,
-    user: Annotated[User, Depends(get_current_user)],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    user: CurrentUser,
+    db: DBSession,
 ) -> ProductResponse:
     result = None
     try:
@@ -120,3 +119,4 @@ async def delete_product_api(
         await db.rollback()
         raise
     return result
+

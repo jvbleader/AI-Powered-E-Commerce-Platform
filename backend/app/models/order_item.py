@@ -68,3 +68,9 @@ class OrderItem(Base):
         back_populates="order_item",
         uselist=False,
     )
+
+    @property
+    def is_reviewed(self) -> bool:
+        if hasattr(self, "__dict__") and "review" in self.__dict__:
+            return self.__dict__["review"] is not None
+        return False

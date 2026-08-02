@@ -9,7 +9,8 @@ import type {
   Product,
   ProductVariant,
   Shop,
-  User
+  User,
+  ViolationReport
 } from "@/types/models";
 
 export const categories: Category[] = [];
@@ -22,6 +23,7 @@ export const orders: Order[] = [];
 export const payments: Payment[] = [];
 export const notifications: Notification[] = [];
 export const conversations: Conversation[] = [];
+export const violationReports: ViolationReport[] = [];
 
 export const initialState: AppState = {
   users,
@@ -35,6 +37,8 @@ export const initialState: AppState = {
   payments,
   notifications,
   conversations,
+  violationReports,
+  hiddenProductIds: [],
   sessionUserId: undefined,
   activeRole: "GUEST",
   lastCheckoutPaymentCode: undefined

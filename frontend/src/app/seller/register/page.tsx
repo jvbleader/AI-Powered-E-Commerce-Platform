@@ -36,6 +36,8 @@ export default function SellerRegisterPage() {
   useEffect(() => {
     let cancelled = false;
 
+    if (!store.ready) return;
+
     if (!store.getCurrentUser()) {
       setLoadingApplication(false);
       return () => {
@@ -89,6 +91,7 @@ export default function SellerRegisterPage() {
       cancelled = true;
     };
   }, [
+    store.ready,
     store.getCurrentUser()?.id,
     store.getCurrentUser()?.email,
     store.getCurrentUser()?.phone,
@@ -118,11 +121,7 @@ export default function SellerRegisterPage() {
     window.location.href = result.redirectTo;
   };
 
-  if (!store.getCurrentUser()) {
-    return <Unauthorized title="Cần đăng nhập" description="Bạn cần đăng nhập trước khi gửi hồ sơ mở shop." />;
-  }
-
-  if (loadingApplication) {
+  if (!store.ready || loadingApplication) {
     return (
       <main className="mx-auto max-w-4xl px-4 py-8">
         <Panel>
@@ -133,6 +132,10 @@ export default function SellerRegisterPage() {
         </Panel>
       </main>
     );
+  }
+
+  if (!store.getCurrentUser()) {
+    return <Unauthorized title="Cần đăng nhập" description="Bạn cần đăng nhập trước khi gửi hồ sơ mở shop." />;
   }
 
   if (applicationStatus === "APPROVED") {

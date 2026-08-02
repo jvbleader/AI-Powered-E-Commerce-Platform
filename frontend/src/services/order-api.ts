@@ -39,30 +39,30 @@ export interface OrderListResponse {
 
 export const orderApi = {
   checkoutCart: (data: CheckoutCartRequest) =>
-    apiFetch<Order[]>("/api/v1/orders/checkout-cart", {
+    apiFetch<Order[]>("/orders/checkout-cart", {
       method: "POST",
       body: JSON.stringify(data),
     }),
 
   checkoutDirect: (data: CheckoutDirectRequest) =>
-    apiFetch<Order[]>("/api/v1/orders/checkout-direct", {
+    apiFetch<Order[]>("/orders/checkout-direct", {
       method: "POST",
       body: JSON.stringify(data),
     }),
 
   getMyOrders: () =>
-    apiFetch<OrderListResponse>("/api/v1/orders"),
+    apiFetch<OrderListResponse>("/orders"),
 
   getOrderDetail: (orderCode: string) =>
-    apiFetch<Order>(`/api/v1/orders/${orderCode}`),
+    apiFetch<Order>(`/orders/${orderCode}`),
 
   confirmReceipt: (orderCode: string) =>
-    apiFetch<Order>(`/api/v1/orders/${orderCode}/confirm-receipt`, {
+    apiFetch<Order>(`/orders/${orderCode}/confirm-receipt`, {
       method: "PATCH",
     }),
 
   cancelOrder: (orderCode: string, data: CancelOrderRequest) =>
-    apiFetch<Order>(`/api/v1/orders/${orderCode}/cancel`, {
+    apiFetch<Order>(`/orders/${orderCode}/cancel`, {
       method: "POST",
       body: JSON.stringify(data),
     }),

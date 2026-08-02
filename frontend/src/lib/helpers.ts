@@ -22,15 +22,27 @@ export const formatVnd = (value: number) =>
     maximumFractionDigits: 0
   }).format(value);
 
-export const formatDate = (value?: string) => {
+export const formatDate = (value?: string | Date) => {
   if (!value) return "Chưa có";
+  let dateObj: Date;
+  if (typeof value === "string") {
+    let s = value.trim();
+    if (/^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(\.\d+)?$/.test(s)) {
+      s = s.replace(" ", "T") + "Z";
+    }
+    dateObj = new Date(s);
+  } else {
+    dateObj = value;
+  }
+  if (isNaN(dateObj.getTime())) return "Chưa có";
   return new Intl.DateTimeFormat("vi-VN", {
+    timeZone: "Asia/Ho_Chi_Minh",
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
     hour: "2-digit",
     minute: "2-digit"
-  }).format(new Date(value));
+  }).format(dateObj);
 };
 
 export const currentPrice = (variant: ProductVariant) => variant.salePrice ?? variant.price;
@@ -65,12 +77,13 @@ export const roleLabel: Record<Role | "GUEST", string> = {
 };
 
 export const sellerStatusLabel: Record<SellerStatus, string> = {
-  PENDING: "Chờ duyệt",
-  APPROVED: "Đã duyệt",
-  REJECTED: "Bị từ chối",
-  SUSPENDED: "Tạm ngưng",
-  CLOSED: "Đã đóng"
+  PENDING: "Chưa hoạt động",
+  APPROVED: "Đang hoạt động",
+  REJECTED: "Từ chối",
+  SUSPENDED: "Đã bị khóa",
+  CLOSED: "Đã đóng cửa"
 };
+
 
 export const productStatusLabel: Record<Product["status"], string> = {
   ACTIVE: "Đang bán",
@@ -143,7 +156,7 @@ export const filterProducts = (
       (!category || product.categoryIds.includes(category.id)) &&
       (!shop || product.sellerId === shop.id) &&
       (!query.sellerId || product.sellerId === query.sellerId) &&
-      (!query.rating || product.averageRating >= query.rating) &&
+      (!query.rating || product.averageRating >= query.rating || product.reviewCount === 0) &&
       (!query.minPrice || price >= query.minPrice) &&
       (!query.maxPrice || price <= query.maxPrice)
     );
@@ -153,10 +166,15 @@ export const filterProducts = (
     if (query.sort === "price-asc") return getProductPriceRange(a, variants).min - getProductPriceRange(b, variants).min;
     if (query.sort === "price-desc") return getProductPriceRange(b, variants).min - getProductPriceRange(a, variants).min;
     if (query.sort === "sold") return b.soldCount - a.soldCount;
-    if (query.sort === "rating") return b.averageRating - a.averageRating;
+    if (query.sort === "rating") {
+      if (a.reviewCount === 0 && b.reviewCount > 0) return 1;
+      if (b.reviewCount === 0 && a.reviewCount > 0) return -1;
+      return b.averageRating - a.averageRating;
+    }
     return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
   });
 };
+
 
 export const searchSuggestions = (
   keyword: string,
@@ -169,7 +187,7 @@ export const searchSuggestions = (
   const productHits = products
     .filter((product) => product.name.toLowerCase().includes(normalized))
     .slice(0, 4)
-    .map((product) => ({ label: product.name, href: `/shops/${getShop(shops, product.sellerId)?.shopSlug}/products/${product.slug}`, type: "Sản phẩm" }));
+    .map((product) => ({ label: product.name, href: `/shops/${getShop(shops, product.sellerId)?.shopSlug || "shop"}/products/${product.slug}`, type: "Sản phẩm" }));
   const shopHits = shops
     .filter((shop) => shop.shopName.toLowerCase().includes(normalized))
     .slice(0, 3)
@@ -313,7 +331,8 @@ export const createOrderFromGroup = (
         createdAt: new Date().toISOString()
       }
     ],
-    createdAt: new Date().toISOString()
+    createdAt: new Date().toISOString(),
+    printCount: 0
   };
 };
 
@@ -338,11 +357,11 @@ export const createPaymentFromOrders = (
 
 export const canCustomerCancel = (order: Order) => order.orderStatus === "PLACED" || order.orderStatus === "READY_TO_SHIP";
 
-export const canSellerCancel = (order: Order) => order.paymentStatus !== "PAID" && !order.sellerConfirmed && order.orderStatus === "PLACED";
+export const canSellerCancel = (order: Order) => order.orderStatus === "PLACED";
 
 export const canCustomerConfirmReceipt = (order: Order) => order.orderStatus === "SHIPPING";
 
-export const canSellerConfirm = (order: Order) => order.orderStatus === "PLACED" && !order.sellerConfirmed;
+export const canSellerConfirm = (order: Order) => order.orderStatus === "PLACED";
 
 export const canSellerShip = (order: Order) => order.orderStatus === "READY_TO_SHIP";
 
