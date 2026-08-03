@@ -27,13 +27,14 @@ from api.product_api import router as product_router
 from middleware.auth_middleware import validate_auth_cookie_middleware
 
 
-def csv_env(name: str, default: str) -> list[str]:
-    value = os.getenv(name, default)
+from core.config import settings
+
+def csv_env(value: str) -> list[str]:
     return [item.strip() for item in value.split(",") if item.strip()]
 
 
 logging.basicConfig(
-    level=os.getenv("LOG_LEVEL", "INFO").upper(),
+    level=settings.LOG_LEVEL.upper(),
     format="%(asctime)s %(levelname)s %(name)s %(message)s",
 )
 
@@ -64,8 +65,8 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title=os.getenv("APP_NAME", "Shepoo Ecommerce API"),
-    version=os.getenv("APP_VERSION", "0.1.0"),
+    title=settings.APP_NAME,
+    version=settings.APP_VERSION,
     lifespan=lifespan,
 )
 
@@ -73,9 +74,7 @@ app.middleware("http")(validate_auth_cookie_middleware)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=csv_env(
-        "CORS_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000"
-    ),
+    allow_origins=csv_env(settings.CORS_ORIGINS),
     allow_origin_regex=r"https?://(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[0-1])\.\d+\.\d+)(:\d+)?",
     allow_credentials=True,
     allow_methods=["*"],
@@ -118,7 +117,7 @@ app.include_router(search_router)
 async def health_check() -> dict[str, str]:
     return {
         "status": "ok",
-        "env": os.getenv("APP_ENV", "development"),
+        "env": settings.APP_ENV,
     }
 
 

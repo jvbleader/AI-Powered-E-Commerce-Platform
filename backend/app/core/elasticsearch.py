@@ -8,7 +8,9 @@ logger = logging.getLogger(__name__)
 
 _es_client: AsyncElasticsearch | None = None
 
-ELASTICSEARCH_URL = os.getenv("ELASTICSEARCH_URL", "http://localhost:9200")
+from core.config import settings
+
+ELASTICSEARCH_URL = settings.ELASTICSEARCH_URL
 
 
 def get_es_client() -> AsyncElasticsearch:

@@ -1,6 +1,8 @@
 import { apiFetch, ApiError, getApiBaseUrl } from "@/services/api";
 
-const SESSION_STORAGE_KEY = "shepoo_ai_session_id";
+import { STORAGE_KEYS } from "@/constants/storage-keys";
+
+const SESSION_STORAGE_KEY = STORAGE_KEYS.AI_SESSION;
 
 export interface AIProductItem {
   id: number;

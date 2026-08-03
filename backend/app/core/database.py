@@ -8,10 +8,9 @@ load_dotenv()
 # Load from parent directory if running from backend/app folder
 load_dotenv(os.path.join(os.path.dirname(__file__), "..", "..", ".env"))
 
-ASYNC_DATABASE_URL = os.getenv("ASYNC_DATABASE_URL") or os.getenv("DATABASE_URL")
-if ASYNC_DATABASE_URL:
-    if ASYNC_DATABASE_URL.startswith("mysql:asyncmy//"):
-        ASYNC_DATABASE_URL = ASYNC_DATABASE_URL.replace("mysql:asyncmy//", "mysql+asyncmy://", 1)
+from core.config import settings
+
+ASYNC_DATABASE_URL = settings.get_async_database_url
 
 engine = create_async_engine(ASYNC_DATABASE_URL, pool_pre_ping=True)
 AsyncSessionLocal = async_sessionmaker(engine, expire_on_commit=False)

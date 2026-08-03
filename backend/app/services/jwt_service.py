@@ -28,12 +28,14 @@ def env_bool(name: str, default: bool = False) -> bool:
     return default
 
 
-SECRET_KEY = os.getenv("ACCESS_TOKEN_SECRET")
-ACCESS_TOKEN_TTL_MINUTES = int(os.getenv("ACCESS_TOKEN_TTL_MINUTES") or 1)
-REFRESH_TOKEN_TTL_DAYS = int(os.getenv("REFRESH_TOKEN_TTL_DAYS") or 30)
-COOKIE_SECURE = env_bool("COOKIE_SECURE")
-COOKIE_SAME_SITE = os.getenv("COOKIE_SAME_SITE")
-COOKIE_DOMAIN = os.getenv("COOKIE_DOMAIN")
+from core.config import settings
+
+SECRET_KEY = settings.ACCESS_TOKEN_SECRET
+ACCESS_TOKEN_TTL_MINUTES = settings.ACCESS_TOKEN_TTL_MINUTES
+REFRESH_TOKEN_TTL_DAYS = settings.REFRESH_TOKEN_TTL_DAYS
+COOKIE_SECURE = settings.COOKIE_SECURE
+COOKIE_SAME_SITE = settings.COOKIE_SAME_SITE
+COOKIE_DOMAIN = settings.COOKIE_DOMAIN
 ALGORITHM = "HS256"
 ISSUER = "shepoo_ecommerce-platform"
 AUDIENCE = "shepoo_ecommerce-platform"

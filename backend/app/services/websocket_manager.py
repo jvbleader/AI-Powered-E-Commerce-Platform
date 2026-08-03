@@ -10,7 +10,9 @@ from fastapi import WebSocket
 
 logger = logging.getLogger(__name__)
 
-REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379/0")
+from core.config import settings
+
+REDIS_URL = settings.REDIS_URL
 
 
 class ConnectionManager:

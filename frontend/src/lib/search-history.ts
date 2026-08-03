@@ -1,4 +1,6 @@
-const STORAGE_KEY = "search_history";
+import { STORAGE_KEYS } from "@/constants/storage-keys";
+
+const STORAGE_KEY = STORAGE_KEYS.SEARCH_HISTORY;
 const MAX_ITEMS = 10;
 
 export function getSearchHistory(): string[] {
