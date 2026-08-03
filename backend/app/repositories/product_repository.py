@@ -1,6 +1,6 @@
 from typing import List, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, update, func, or_, desc, delete
+from sqlalchemy import select, update, func, or_, desc, delete, case
 from sqlalchemy.orm import selectinload, joinedload
 from models.product import Product
 from models.product_category import ProductCategory
@@ -333,6 +333,7 @@ async def get_public_products(
     min_rating: Optional[float] = None,
     skip: int = 0,
     limit: int = 20,
+    es_product_ids: list[int] | None = None,
 ) -> tuple[List[Product], int]:
     base_filter = (
         select(Product)
@@ -351,8 +352,15 @@ async def get_public_products(
             .filter(Category.slug == category_slug)
         )
 
-    if keyword:
-        # Simple LIKE search on name or short_description
+    if es_product_ids is not None:
+        # Use Elasticsearch results (already filtered by keyword)
+        if es_product_ids:
+            base_filter = base_filter.filter(Product.id.in_(es_product_ids))
+        else:
+            # ES returned no results
+            return [], 0
+    elif keyword:
+        # Fallback: Simple LIKE search on name or short_description
         search_pattern = f"%{keyword}%"
         base_filter = base_filter.filter(
             or_(
@@ -388,6 +396,24 @@ async def get_public_products(
     total = total_result.scalar_one()
 
     # Apply sorting
+    total_qty_subq = (
+        select(func.coalesce(func.sum(Inventory.quantity), 0))
+        .select_from(ProductVariant)
+        .join(Inventory, Inventory.variant_id == ProductVariant.id)
+        .where(
+            ProductVariant.product_id == Product.id,
+            ProductVariant.status != "DELETED"
+        )
+        .correlate(Product)
+        .scalar_subquery()
+    )
+
+    status_order = case(
+        (Product.status == "OUT_OF_STOCK", 1),
+        (total_qty_subq <= 0, 1),
+        else_=0
+    )
+
     if sort_by == "price_asc":
         min_price_subq = (
             select(func.min(ProductVariant.price))
@@ -395,7 +421,7 @@ async def get_public_products(
             .correlate(Product)
             .scalar_subquery()
         )
-        base_filter = base_filter.order_by(min_price_subq.asc())
+        base_filter = base_filter.order_by(status_order, min_price_subq.asc())
     elif sort_by == "price_desc":
         max_price_subq = (
             select(func.max(ProductVariant.price))
@@ -403,16 +429,16 @@ async def get_public_products(
             .correlate(Product)
             .scalar_subquery()
         )
-        base_filter = base_filter.order_by(max_price_subq.desc())
+        base_filter = base_filter.order_by(status_order, max_price_subq.desc())
     elif sort_by == "newest":
-        base_filter = base_filter.order_by(desc(Product.created_at))
+        base_filter = base_filter.order_by(status_order, desc(Product.created_at))
     elif sort_by == "best_selling":
-        base_filter = base_filter.order_by(desc(Product.sold_count))
+        base_filter = base_filter.order_by(status_order, desc(Product.sold_count))
     elif sort_by == "high_rating":
-        base_filter = base_filter.order_by(desc(Product.average_rating))
+        base_filter = base_filter.order_by(status_order, desc(Product.average_rating))
     else:
         # default sort
-        base_filter = base_filter.order_by(desc(Product.created_at))
+        base_filter = base_filter.order_by(status_order, desc(Product.created_at))
 
     # Get items with eager loading
     items_query = (

@@ -4,22 +4,15 @@ import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowRight,
-  CheckCircle2,
   Eye,
   EyeOff,
-  KeyRound,
   Lock,
   Mail,
   Phone,
-  ShieldCheck,
-  Sparkles,
-  Star,
-  User,
-  Zap
+  User
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useMarketplaceStore } from "@/store/use-marketplace-store";
-import { BRAND_NAME } from "@/lib/constants";
 
 const authEmailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const authPhonePattern = /^0(3|5|7|8|9)\d{8}$/;
@@ -73,11 +66,10 @@ export default function AuthPage({ mode: initialMode }: { mode: "login" | "regis
     return null;
   }
 
-  // Real-time password strength calculation
   const getPasswordStrength = () => {
     if (!password) return { label: "", score: 0, color: "bg-slate-200" };
     if (password.length < 6) return { label: "Yếu", score: 33, color: "bg-rose-500" };
-    if (password.length < 10) return { label: "Trung bình", score: 66, color: "bg-amber-500" };
+    if (password.length < 10) return { label: "Trung bình", score: 66, color: "bg-amber" };
     return { label: "Mạnh", score: 100, color: "bg-emerald-600" };
   };
 
@@ -152,63 +144,9 @@ export default function AuthPage({ mode: initialMode }: { mode: "login" | "regis
 
   return (
     <div className="flex min-h-[calc(100vh-140px)] items-center justify-center p-4 sm:p-6 lg:p-8 bg-canvas">
-      <div className="bento-card relative w-full max-w-5xl overflow-hidden rounded-3xl border border-slate-200/80 bg-white/90 shadow-2xl lg:grid lg:grid-cols-12">
-        {/* LEFT BRAND PANEL (Deep Emerald Contrast) */}
-        <div className="relative hidden flex-col justify-between overflow-hidden bg-gradient-to-br from-slate-900 via-emerald-950 to-slate-900 p-10 text-white lg:col-span-5 lg:flex">
-          {/* Ambient Glows */}
-          <div className="pointer-events-none absolute -left-12 -top-12 h-64 w-64 rounded-full bg-emerald-500/20 blur-3xl" />
-          <div className="pointer-events-none absolute -bottom-16 -right-16 h-72 w-72 rounded-full bg-amber-500/15 blur-3xl" />
-
-          {/* Top Logo & Tag */}
-          <div className="relative z-10">
-            <a href="/" className="inline-flex items-center gap-3">
-              <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-500 font-heading text-xl font-black text-slate-950 shadow-lg">
-                S
-              </span>
-              <span className="font-heading text-2xl font-black tracking-tight text-white">{BRAND_NAME}</span>
-            </a>
-
-            <div className="mt-10 space-y-4">
-              <h2 className="font-heading text-3xl font-extrabold leading-tight text-white">
-                Truy cập hệ sinh thái mua sắm <span className="text-gradient-neon">thông minh</span>
-              </h2>
-
-              <p className="text-xs leading-relaxed text-slate-300">
-                Tận hưởng đặc quyền khách hàng VIP, quản lý đơn hàng theo thời gian thực và trải nghiệm mua sắm AI thế hệ mới.
-              </p>
-            </div>
-          </div>
-
-          {/* Middle Feature Highlights */}
-          <div className="relative z-10 my-6 space-y-3 border-y border-white/10 py-5">
-            <div className="flex items-center gap-3 text-xs font-semibold text-slate-200">
-              <div className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-500/20 text-emerald-400">
-                <CheckCircle2 className="h-3.5 w-3.5" />
-              </div>
-              <span>100% gian hàng được Verified bởi Shepoo</span>
-            </div>
-            <div className="flex items-center gap-3 text-xs font-semibold text-slate-200">
-              <div className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-500/20 text-emerald-400">
-                <ShieldCheck className="h-3.5 w-3.5" />
-              </div>
-              <span>Mã hóa bảo mật thông tin tuyệt đối</span>
-            </div>
-          </div>
-
-          <div className="relative z-10 rounded-2xl border border-white/10 bg-white/5 p-4">
-            <div className="flex items-center gap-1 text-amber-400">
-              {[...Array(5)].map((_, i) => (
-                <Star key={i} className="h-4 w-4 fill-amber-400" />
-              ))}
-            </div>
-            <p className="mt-2 text-xs font-medium text-slate-300">
-              "Đăng nhập nhanh chóng, trải nghiệm mua sắm vô cùng tuyệt vời!"
-            </p>
-          </div>
-        </div>
-
-        {/* RIGHT AUTH FORM PANEL (Clean Porcelain Mode) */}
-        <div className="flex flex-col justify-center p-6 sm:p-10 lg:col-span-7 bg-white/90">
+      <div className="bento-card relative w-full max-w-lg overflow-hidden rounded-3xl border border-slate-200/80 bg-white/90 shadow-2xl">
+        {/* AUTH FORM PANEL (Clean Porcelain Mode) */}
+        <div className="flex flex-col justify-center p-6 sm:p-10 bg-white/90">
 
           {/* Header Switcher Tabs */}
           <div className="mb-6 flex items-center justify-between border-b border-slate-100 pb-4">

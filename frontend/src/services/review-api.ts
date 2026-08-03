@@ -46,3 +46,27 @@ export async function fetchProductReviewsApi(
   return apiFetch<ReviewListResponse>(`/products/${productId}/reviews?page=${page}&size=${size}`);
 }
 
+export interface ProductReviewInfo {
+  id: number;
+  name: string;
+  slug: string;
+  image_url?: string;
+}
+
+export interface UserReviewResponse extends ProductReview {
+  product?: ProductReviewInfo;
+}
+
+export interface UserReviewListResponse {
+  items: UserReviewResponse[];
+  total: number;
+  page: number;
+  size: number;
+}
+
+export async function fetchMyReviewsApi(
+  page: number = 1,
+  size: number = 20
+): Promise<UserReviewListResponse> {
+  return apiFetch<UserReviewListResponse>(`/reviews/me?page=${page}&size=${size}`);
+}

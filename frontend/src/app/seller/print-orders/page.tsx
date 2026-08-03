@@ -14,6 +14,7 @@ function PrintOrdersContent() {
   const idsParam = searchParams.get("ids");
   const store = useMarketplaceStore();
   const [error, setError] = useState<string | null>(null);
+  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
 
   useEffect(() => {
     if (!idsParam) {
@@ -74,8 +75,7 @@ function PrintOrdersContent() {
         const blob = await asPdf.toBlob();
         const url = URL.createObjectURL(blob);
         
-        // Open PDF in this tab (replaces the loading screen with the native PDF viewer)
-        window.location.replace(url);
+        setPdfUrl(url);
 
       } catch (err) {
         console.error(err);
@@ -90,6 +90,16 @@ function PrintOrdersContent() {
 
   if (error) {
     return <div className="p-8 text-red-500 font-bold">{error}</div>;
+  }
+
+  if (pdfUrl) {
+    return (
+      <iframe 
+        src={pdfUrl} 
+        className="w-full h-screen border-none" 
+        title="Print Orders" 
+      />
+    );
   }
 
   return (

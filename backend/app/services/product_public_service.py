@@ -7,6 +7,10 @@ from schemas.product_public_schema import (
     ProductDetailPublicResponse,
     ProductListResponse,
 )
+import logging
+import services.search_service as search_svc
+
+logger = logging.getLogger(__name__)
 
 
 async def get_public_product_list(
@@ -23,9 +27,20 @@ async def get_public_product_list(
     size: int = 20,
 ) -> ProductListResponse:
     skip = (page - 1) * size
+
+    # Try Elasticsearch for keyword search
+    es_product_ids: list[int] | None = None
+    if keyword:
+        try:
+            es_product_ids = await search_svc.search_product_ids(
+                query=keyword, limit=200
+            )
+        except Exception:
+            logger.warning("Elasticsearch unavailable, falling back to MySQL search")
+            es_product_ids = None
     items, total = await product_repo.get_public_products(
         db=db,
-        keyword=keyword,
+        keyword=keyword if es_product_ids is None else None,
         category_slug=category_slug,
         sort_by=sort_by,
         min_price=min_price,
@@ -35,6 +50,7 @@ async def get_public_product_list(
         min_rating=min_rating,
         skip=skip,
         limit=size,
+        es_product_ids=es_product_ids,
     )
 
 

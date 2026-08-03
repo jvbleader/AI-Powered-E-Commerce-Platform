@@ -1,10 +1,11 @@
 from typing import List, Optional
-from fastapi import APIRouter, Depends, Query, HTTPException
+from fastapi import APIRouter, Depends, Query, HTTPException, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel
 from core.database import DBSession
 import services.product_public_service as product_public_service
 import repositories.seller_profile_repository as seller_profile_repo
+import services.search_log_service as search_log_svc
 from schemas.product_public_schema import (
     ProductPublicResponse,
     ProductDetailPublicResponse,
@@ -39,6 +40,8 @@ class ShopPublicDetailResponse(BaseModel):
 @router.get("/products", response_model=ProductListResponse)
 async def get_products(
     db: DBSession,
+    background_tasks: BackgroundTasks,
+    current_user: CurrentUserOptional,
     keyword: Optional[str] = Query(None, description="Search by name or description"),
     category: Optional[str] = Query(None, description="Filter by category slug"),
     sort_by: Optional[str] = Query(
@@ -66,6 +69,19 @@ async def get_products(
         page=page,
         size=size,
     )
+
+    # Log search keyword to SearchLog (background, non-blocking)
+    if keyword and keyword.strip():
+        user_id = current_user.id if current_user else None
+        background_tasks.add_task(
+            search_log_svc.log_search,
+            db=db,
+            keyword=keyword.strip(),
+            user_id=user_id,
+            result_count=result.total,
+        )
+
+    return result
 
 
 @router.get("/products/recommendations", response_model=List[ProductPublicResponse])

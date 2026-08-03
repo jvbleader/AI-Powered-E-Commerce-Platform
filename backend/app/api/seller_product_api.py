@@ -1,5 +1,7 @@
 from typing import Annotated
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, Query, status, BackgroundTasks
+from services.search_helpers import product_to_es_doc
+import services.search_service as search_svc
 from sqlalchemy.ext.asyncio import AsyncSession
 from core.database import DBSession
 from dependencies.auth import CurrentUser
@@ -27,11 +29,13 @@ async def create_product_api(
     user: CurrentUser,
     data: ProductCreateRequest,
     db: DBSession,
+    background_tasks: BackgroundTasks,
 ) -> ProductResponse:
     result = None
     try:
         result = await create_seller_product(user, data, db)
         await db.commit()
+        background_tasks.add_task(search_svc.index_product, product_to_es_doc(result))
     except Exception:
         await db.rollback()
         raise
@@ -62,11 +66,13 @@ async def update_product_api(
     user: CurrentUser,
     data: ProductUpdateRequest,
     db: DBSession,
+    background_tasks: BackgroundTasks,
 ) -> ProductResponse:
     result = None
     try:
         result = await update_seller_product(user, product_id, data, db)
         await db.commit()
+        background_tasks.add_task(search_svc.index_product, product_to_es_doc(result))
     except Exception:
         await db.rollback()
         raise
@@ -78,11 +84,13 @@ async def hide_product_api(
     product_id: str,
     user: CurrentUser,
     db: DBSession,
+    background_tasks: BackgroundTasks,
 ) -> ProductResponse:
     result = None
     try:
         result = await hide_seller_product(user, product_id, db)
         await db.commit()
+        background_tasks.add_task(search_svc.delete_product_from_index, result.id)
     except Exception:
         await db.rollback()
         raise
@@ -94,11 +102,13 @@ async def unhide_product_api(
     product_id: str,
     user: CurrentUser,
     db: DBSession,
+    background_tasks: BackgroundTasks,
 ) -> ProductResponse:
     result = None
     try:
         result = await unhide_seller_product(user, product_id, db)
         await db.commit()
+        background_tasks.add_task(search_svc.index_product, product_to_es_doc(result))
     except Exception:
         await db.rollback()
         raise
@@ -110,11 +120,13 @@ async def delete_product_api(
     product_id: str,
     user: CurrentUser,
     db: DBSession,
+    background_tasks: BackgroundTasks,
 ) -> ProductResponse:
     result = None
     try:
         result = await delete_seller_product(user, product_id, db)
         await db.commit()
+        background_tasks.add_task(search_svc.delete_product_from_index, result.id)
     except Exception:
         await db.rollback()
         raise

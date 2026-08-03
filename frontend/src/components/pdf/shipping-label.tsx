@@ -254,11 +254,16 @@ export function ShippingLabelDocument({ labels }: { labels: ShippingLabelData[] 
                 <View style={styles.itemBox}>
                   <View>
                     <Text style={styles.textBold}>Nội dung hàng (Tổng SL sản phẩm: {order.items.reduce((s, i) => s + i.quantity, 0)})</Text>
-                    {order.items.map((item, idx) => (
+                    {order.items.slice(0, 3).map((item, idx) => (
                       <Text key={idx} style={[styles.textNormal, { marginTop: 2 }]}>
                         {idx + 1}. {item.productNameSnapshot} {item.variantNameSnapshot !== "Default" ? `- ${item.variantNameSnapshot}` : ""}, SL: {item.quantity}
                       </Text>
                     ))}
+                    {order.items.length > 3 && (
+                      <Text style={[styles.textNormal, { marginTop: 2, color: "#555" }]}>
+                        ... và {order.items.length - 3} sản phẩm khác
+                      </Text>
+                    )}
                     {order.customerNote && (
                       <Text style={[styles.textNormal, { marginTop: 4 }]}>
                         Ghi chú: {order.customerNote}

@@ -119,6 +119,7 @@ export function SearchField({
   onChange,
   onFocus,
   onBlur,
+  onKeyDown,
   inputRef,
   placeholder = "Tìm kiếm sản phẩm, shop...",
   className,
@@ -128,6 +129,7 @@ export function SearchField({
   onChange: (value: string) => void;
   onFocus?: () => void;
   onBlur?: () => void;
+  onKeyDown?: (e: React.KeyboardEvent<HTMLInputElement>) => void;
   inputRef?: React.Ref<HTMLInputElement>;
   placeholder?: string;
   className?: string;
@@ -149,6 +151,7 @@ export function SearchField({
         onChange={(event) => onChange(event.target.value)}
         onFocus={onFocus}
         onBlur={onBlur}
+        onKeyDown={onKeyDown}
         autoComplete="new-password"
         name="search_query_fake_name_to_stop_autofill"
         placeholder={isScrolled ? "" : placeholder}

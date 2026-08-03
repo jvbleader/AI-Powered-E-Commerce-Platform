@@ -37,14 +37,14 @@ export default function SupporterWorkspace() {
       <div className="w-[320px] bg-white border-r border-slate-200 flex flex-col shrink-0">
         <div className="p-3 border-b flex gap-2">
           <Button 
-            variant={activeTab === "ACTIVE" ? "default" : "outline"} 
+            variant={activeTab === "ACTIVE" ? "primary" : "secondary"} 
             className={cn("flex-1", activeTab === "ACTIVE" && "bg-blue-500 hover:bg-blue-600")}
             onClick={() => setActiveTab("ACTIVE")}
           >
             Đang xử lý
           </Button>
           <Button 
-            variant={activeTab === "QUEUE" ? "default" : "outline"} 
+            variant={activeTab === "QUEUE" ? "primary" : "secondary"} 
             className={cn("flex-1", activeTab === "QUEUE" && "bg-blue-500 hover:bg-blue-600")}
             onClick={() => setActiveTab("QUEUE")}
           >
@@ -108,7 +108,7 @@ function ChatBox({ conversationId, onStateChange }: { conversationId: string, on
       const { apiFetch } = await import("@/services/api");
       await apiFetch(`/api/support-chat/conversations/${conversationId}/join`, { method: "POST" });
     } catch (e: any) {
-      store.showToast(e.message || "Lỗi", "error");
+      store.showToast(e.message || "Lỗi", "danger");
     } finally {
       onStateChange();
       await refetchConversation();
@@ -206,7 +206,7 @@ function ContextPanel({ conversationId, onStateChange, setSelectedConvId }: { co
       store.showToast("Đã kết thúc hội thoại", "success");
       onStateChange();
     } catch (e: any) {
-      store.showToast(e.message || "Lỗi", "error");
+      store.showToast(e.message || "Lỗi", "danger");
     }
   };
 
@@ -245,7 +245,7 @@ function ContextPanel({ conversationId, onStateChange, setSelectedConvId }: { co
       </div>
       
       <div className="p-4 bg-white border-t">
-        <Button variant="destructive" className="w-full font-bold shadow-sm" onClick={handleClose} disabled={conversation.status === "CLOSED" || !isAssignedToMe}>
+        <Button variant="danger" className="w-full font-bold shadow-sm" onClick={handleClose} disabled={conversation.status === "CLOSED" || !isAssignedToMe}>
           Kết thúc cuộc gọi
         </Button>
       </div>

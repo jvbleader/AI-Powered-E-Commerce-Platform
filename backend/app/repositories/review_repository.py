@@ -101,3 +101,25 @@ async def get_product_reviews(
 
     return items, total, avg_rating
 
+async def get_user_reviews(
+    db: AsyncSession,
+    user_id: int,
+    skip: int = 0,
+    limit: int = 20
+) -> Tuple[List[ProductReview], int]:
+    total_query = select(func.count(ProductReview.id)).where(ProductReview.user_id == user_id)
+    total_res = await db.execute(total_query)
+    total = total_res.scalar() or 0
+
+    query = (
+        select(ProductReview)
+        .options(selectinload(ProductReview.product).selectinload(Product.images))
+        .where(ProductReview.user_id == user_id)
+        .order_by(ProductReview.created_at.desc())
+        .offset(skip)
+        .limit(limit)
+    )
+    result = await db.execute(query)
+    items = list(result.scalars().all())
+
+    return items, total

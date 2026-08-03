@@ -38,3 +38,23 @@ class ReviewListResponse(BaseModel):
     class Config:
         from_attributes = True
 
+class ProductReviewInfo(BaseModel):
+    id: int
+    name: str
+    slug: str
+    image_url: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+class UserReviewResponse(ReviewResponse):
+    product: Optional[ProductReviewInfo] = None
+
+class UserReviewListResponse(BaseModel):
+    items: List[UserReviewResponse]
+    total: int
+    page: int
+    size: int
+
+    class Config:
+        from_attributes = True
