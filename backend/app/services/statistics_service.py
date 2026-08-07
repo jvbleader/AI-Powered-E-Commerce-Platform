@@ -3,10 +3,10 @@ from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.order import Order
-from models.order_item import OrderItem
-from models.product import Product
-from models.seller_statistics import SellerStatistics
-from models.seller_profile import SellerProfile
+from models.order import OrderItem
+from models.catalog import Product
+from models.seller import SellerStatistics
+from models.seller import SellerProfile
 from models.base import utc_now
 
 

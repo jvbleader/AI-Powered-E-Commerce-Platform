@@ -1,7 +1,7 @@
 from typing import Optional, List
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update
-from models.user_address import UserAddress
+from models.user import UserAddress
 
 
 async def get_address_by_id_and_user(

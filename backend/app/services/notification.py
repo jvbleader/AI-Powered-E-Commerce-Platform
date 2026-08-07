@@ -1,6 +1,6 @@
 import json
 from sqlalchemy.ext.asyncio import AsyncSession
-from models.notification import Notification
+from models.engagement import Notification
 from core.redis import get_redis_client
 
 async def send_notification(db: AsyncSession, user_id: str, type: str, title: str, content: str, action_url: str = None):

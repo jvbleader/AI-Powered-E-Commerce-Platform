@@ -11,9 +11,9 @@ from sqlalchemy.orm import selectinload
 
 from dependencies.auth import get_current_user_optional, get_current_user
 from core.database import get_db
-from models.seller_chat import SellerConversation, SellerMessage
+from models.chat import SellerConversation, SellerMessage
 from models.user import User
-from models.seller_profile import SellerProfile
+from models.seller import SellerProfile
 from services.websocket_manager import manager
 from models.base import utc_now
 

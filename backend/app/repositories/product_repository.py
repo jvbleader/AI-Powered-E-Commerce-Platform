@@ -2,17 +2,17 @@ from typing import List, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update, func, or_, desc, delete, case
 from sqlalchemy.orm import selectinload, joinedload
-from models.product import Product
-from models.product_category import ProductCategory
-from models.product_image import ProductImage
-from models.product_variant import ProductVariant
+from models.catalog import Product
+from models.catalog import ProductCategory
+from models.catalog import ProductImage
+from models.catalog import ProductVariant
 from models.inventory import Inventory
-from models.inventory_transaction import InventoryTransaction
-from models.seller_profile import SellerProfile
+from models.inventory import InventoryTransaction
+from models.seller import SellerProfile
 from schemas.seller_product_schema import ProductCreateRequest, ProductUpdateRequest
 from models.base import utc_now
-from models.category import Category
-from models.search_log import SearchLog
+from models.catalog import Category
+from models.engagement import SearchLog
 
 
 async def create_product(

@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from models.search_log import SearchLog
+from models.engagement import SearchLog
 
 DEFAULT_HOT_KEYWORDS = [
     "iPhone 15 Pro",

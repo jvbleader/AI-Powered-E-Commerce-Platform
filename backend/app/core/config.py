@@ -1,35 +1,34 @@
-import os
 from typing import Optional
+
 from pydantic import field_validator
 from pydantic_settings import BaseSettings
 
+
 class Settings(BaseSettings):
+    # Safe to hardcode
     APP_NAME: str = "Shepoo Ecommerce API"
     APP_VERSION: str = "0.1.0"
-    APP_ENV: str = "development"
-    LOG_LEVEL: str = "INFO"
-    
-    # Bắt buộc phải có trong .env, không có fallback
+
+    # Required from environment
+    APP_ENV: str
+    LOG_LEVEL: str
     DATABASE_URL: str
-    ASYNC_DATABASE_URL: Optional[str] = None
     ACCESS_TOKEN_SECRET: str
-    
-    # Có thể có fallback cho môi trường dev, nhưng cảnh báo
-    CORS_ORIGINS: str = "http://localhost:3000,http://127.0.0.1:3000"
-    ELASTICSEARCH_URL: str = "http://localhost:9200"
-    REDIS_URL: str = "redis://redis:6379/0"
-    
-    PHONE_OTP_MAX_ATTEMPTS: int = 5
-    PHONE_OTP_TTL_MINUTES: int = 5
-    
-    ACCESS_TOKEN_TTL_MINUTES: int = 1
-    REFRESH_TOKEN_TTL_DAYS: int = 30
-    
-    COOKIE_SECURE: bool = False
-    COOKIE_SAME_SITE: Optional[str] = None
+    CORS_ORIGINS: str
+    ELASTICSEARCH_URL: str
+    REDIS_URL: str
+    PHONE_OTP_MAX_ATTEMPTS: int
+    PHONE_OTP_TTL_MINUTES: int
+    ACCESS_TOKEN_TTL_MINUTES: int
+    REFRESH_TOKEN_TTL_DAYS: int
+    COOKIE_SECURE: bool
+    COOKIE_SAME_SITE: str
+
+    # Optional — only used when set
+    ASYNC_DATABASE_URL: Optional[str] = None
     COOKIE_DOMAIN: Optional[str] = None
 
-    @field_validator('COOKIE_SECURE', mode='before')
+    @field_validator("COOKIE_SECURE", mode="before")
     @classmethod
     def parse_cookie_secure(cls, v):
         if v == "" or v is None:
@@ -44,8 +43,8 @@ class Settings(BaseSettings):
         return url
 
     class Config:
-        # Pydantic settings config
         env_file = ".env"
         extra = "ignore"
+
 
 settings = Settings()

@@ -21,11 +21,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, or_, desc
 from sqlalchemy.orm import selectinload
 
-from models.product import Product
-from models.product_variant import ProductVariant
-from models.product_category import ProductCategory
-from models.category import Category
-from models.seller_profile import SellerProfile
+from models.catalog import Product
+from models.catalog import ProductVariant
+from models.catalog import ProductCategory
+from models.catalog import Category
+from models.seller import SellerProfile
 from repositories import product_repository
 
 

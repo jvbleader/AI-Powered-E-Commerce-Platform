@@ -10,7 +10,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from models.base import Base, utc_now
 
 if TYPE_CHECKING:
-    from models.chat_session import ChatSession
+    from .chat_session import ChatSession
 
 
 class ChatMessage(Base):

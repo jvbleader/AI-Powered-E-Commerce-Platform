@@ -10,8 +10,8 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from models.base import Base, new_public_id, utc_now
 
 if TYPE_CHECKING:
+    from models.seller import SellerProfile
     from models.user import User
-    from models.seller_profile import SellerProfile
 
 
 class SellerConversation(Base):

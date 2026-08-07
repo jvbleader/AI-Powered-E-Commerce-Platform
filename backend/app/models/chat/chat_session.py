@@ -10,8 +10,8 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from models.base import Base, new_public_id, utc_now
 
 if TYPE_CHECKING:
-    from models.chat_message import ChatMessage
     from models.user import User
+    from .chat_message import ChatMessage
 
 
 class ChatSession(Base):

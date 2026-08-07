@@ -3,10 +3,10 @@ from sqlalchemy import select, func
 from sqlalchemy.orm import selectinload, joinedload
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from models.product_review import ProductReview
-from models.order_item import OrderItem
+from models.catalog import ProductReview
+from models.order import OrderItem
 from models.order import Order
-from models.product import Product
+from models.catalog import Product
 
 async def get_order_item_for_review(db: AsyncSession, order_item_id: int, user_id: int) -> Optional[OrderItem]:
     query = (

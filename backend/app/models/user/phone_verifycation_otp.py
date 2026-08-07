@@ -7,7 +7,7 @@ from sqlalchemy.dialects import mysql
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from models.base import Base, utc_now
-from models.user import User
+from .user import User
 
 
 class PhoneVerificationOtp(Base):

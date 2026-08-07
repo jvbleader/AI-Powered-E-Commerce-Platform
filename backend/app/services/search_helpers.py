@@ -4,9 +4,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from models.product import Product
-from models.product_variant import ProductVariant
-from models.seller_profile import SellerProfile
+from models.catalog import Product
+from models.catalog import ProductVariant
+from models.seller import SellerProfile
 
 
 def product_to_es_doc(product: Product, seller: SellerProfile | None = None) -> dict:
@@ -188,12 +188,12 @@ async def update_shop_in_es(seller_id: int) -> None:
             return
             
         # 1. Update Shop Index
-        from models.seller_statistics import SellerStatistics
+        from models.seller import SellerStatistics
         stats_res = await db.execute(select(SellerStatistics).where(SellerStatistics.seller_id == seller_id))
         stats = stats_res.scalar_one_or_none()
         
         total_sold = stats.total_sold if stats else 0
-        from models.product import Product
+        from models.catalog import Product
         from sqlalchemy import func
         prod_count_res = await db.execute(select(func.count(Product.id)).where(Product.seller_id == seller_id, Product.status.in_(["ACTIVE", "OUT_OF_STOCK"])))
         product_count = prod_count_res.scalar() or 0

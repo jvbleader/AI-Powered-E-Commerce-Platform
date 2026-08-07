@@ -8,7 +8,7 @@ from sqlalchemy import func, select, update
 from core.database import DBSession
 from core.redis import get_redis_client
 from dependencies.auth import CurrentUser
-from models.notification import Notification
+from models.engagement import Notification
 from pydantic import BaseModel
 
 router = APIRouter()

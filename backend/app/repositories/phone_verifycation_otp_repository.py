@@ -3,7 +3,7 @@ from datetime import datetime
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from models.phone_verifycation_otp import PhoneVerificationOtp
+from models.user import PhoneVerificationOtp
 
 
 async def delete_phone_verifycation_otp_by_user_id(user_id: int, db: AsyncSession):

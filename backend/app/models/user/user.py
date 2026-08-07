@@ -18,18 +18,16 @@ from models.base import Base, new_public_id, utc_now
 
 if TYPE_CHECKING:
     from models.cart import Cart
-    from models.chat_session import ChatSession
-    from models.coupon_usage import CouponUsage
-    from models.notification import Notification
-    from models.order import Order
-    from models.order_cancellation import OrderCancellation
+    from models.catalog import ProductReview
+    from models.chat import ChatSession
+    from models.engagement import Notification, SearchLog
+    from models.moderation import ViolationReport
+    from models.order import Order, OrderCancellation
     from models.payment import Payment
-    from models.product_review import ProductReview
-    from models.search_log import SearchLog
-    from models.seller_profile import SellerProfile
-    from models.user_address import UserAddress
-    from models.user_role import UserRole
-    from models.violation_report import ViolationReport
+    from models.promotion import CouponUsage
+    from models.seller import SellerProfile
+    from .user_address import UserAddress
+    from .user_role import UserRole
 
 
 class User(Base):

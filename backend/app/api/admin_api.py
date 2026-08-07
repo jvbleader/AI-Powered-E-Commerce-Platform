@@ -43,7 +43,7 @@ async def get_dashboard_stats_api(
     from sqlalchemy import select, func
     from models.order import Order
     from models.user import User
-    from models.seller_profile import SellerProfile
+    from models.seller import SellerProfile
 
     try:
         revenue_stmt = select(func.sum(Order.total_amount)).where(Order.order_status == "COMPLETED")
@@ -242,7 +242,7 @@ async def update_user_roles_api(
 ) -> UserMeResponse:
     from sqlalchemy import delete
     from repositories.user_repositoriy import get_user_by_public_id
-    from models.user_role import UserRole
+    from models.user import UserRole
 
     target_user = await get_user_by_public_id(public_id, db)
     if not target_user:
@@ -349,8 +349,8 @@ async def hide_product_admin_api(
     db: DBSession,
 ):
     from sqlalchemy import select
-    from models.product import Product
-    from models.moderation_log import ModerationLog
+    from models.catalog import Product
+    from models.moderation import ModerationLog
     from repositories.product_repository import hide_product
     
     product = await db.scalar(select(Product).where(Product.public_id == public_id))
@@ -381,8 +381,8 @@ async def unhide_product_admin_api(
     db: DBSession,
 ):
     from sqlalchemy import select
-    from models.product import Product
-    from models.moderation_log import ModerationLog
+    from models.catalog import Product
+    from models.moderation import ModerationLog
     from repositories.product_repository import unhide_product
     
     product = await db.scalar(select(Product).where(Product.public_id == public_id))
@@ -407,8 +407,8 @@ async def delete_product_admin_api(
     db: DBSession,
 ):
     from sqlalchemy import select
-    from models.product import Product
-    from models.moderation_log import ModerationLog
+    from models.catalog import Product
+    from models.moderation import ModerationLog
     from repositories.product_repository import soft_delete_product
     
     product = await db.scalar(select(Product).where(Product.public_id == public_id))
@@ -454,7 +454,7 @@ async def create_category_admin_api(
     user: CurrentAdmin,
     db: DBSession,
 ) -> CategoryPublicResponse:
-    from models.category import Category
+    from models.catalog import Category
     from sqlalchemy.exc import IntegrityError
 
     new_category = Category(
@@ -480,7 +480,7 @@ async def delete_category_admin_api(
     db: DBSession,
 ):
     from sqlalchemy import select
-    from models.category import Category
+    from models.catalog import Category
 
     category = await db.scalar(select(Category).where(Category.id == category_id))
     if not category:
@@ -489,7 +489,7 @@ async def delete_category_admin_api(
     if category.is_default_other:
         raise HTTPException(status_code=400, detail="Không thể xoá danh mục mặc định 'Khác'. Vui lòng thiết lập danh mục khác làm mặc định trước khi xoá.")
 
-    from models.product_category import ProductCategory
+    from models.catalog import ProductCategory
     
     # 1. Tìm các sản phẩm đang được gắn danh mục này
     product_ids_stmt = select(ProductCategory.product_id).where(ProductCategory.category_id == category_id)
@@ -526,8 +526,8 @@ async def list_products_admin_api(
 ) -> list[ProductDetailPublicResponse]:
     from sqlalchemy import select
     from sqlalchemy.orm import selectinload
-    from models.product import Product
-    from models.product_variant import ProductVariant
+    from models.catalog import Product
+    from models.catalog import ProductVariant
 
     stmt = (
         select(Product)

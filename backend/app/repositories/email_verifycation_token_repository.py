@@ -3,7 +3,7 @@ from datetime import UTC, datetime, timedelta
 from sqlalchemy import and_, delete, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from models.email_verifycation_token import EmailVerificationToken
+from models.user import EmailVerificationToken
 
 
 async def delete_email_verifycation_token_by_user_id(user_id: int, db: AsyncSession):

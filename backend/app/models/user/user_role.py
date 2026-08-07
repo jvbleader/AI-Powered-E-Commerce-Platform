@@ -21,7 +21,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from models.base import Base, utc_now
 
 if TYPE_CHECKING:
-    from models.user import User
+    from .user import User
 
 
 class UserRole(Base):

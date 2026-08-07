@@ -3,8 +3,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, or_
 from sqlalchemy.orm import selectinload
 from models.order import Order
-from models.order_item import OrderItem
-from models.order_status_log import OrderStatusLog
+from models.order import OrderItem
+from models.order import OrderStatusLog
 from models.base import utc_now
 
 
