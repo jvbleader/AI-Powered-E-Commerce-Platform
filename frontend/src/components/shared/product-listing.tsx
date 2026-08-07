@@ -1,11 +1,13 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
-import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, SlidersHorizontal } from "lucide-react";
+import { useRouter, usePathname, useSearchParams } from "next/navigation";
+import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react";
 import { Button, IconButton } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/feedback";
-import { Field, Input, Select } from "@/components/ui/input";
-import { Panel, Section } from "@/components/ui/containers";
+import { Input, Select } from "@/components/ui/input";
+import { MultiSelect, type Option } from "@/components/ui/multi-select";
+import { Section } from "@/components/ui/containers";
 import { ProductCard } from "@/components/shared/cards";
 import { ProductGridSkeleton } from "@/components/shared/skeletons";
 import { fetchPublicProducts } from "@/services/product-api";
@@ -26,21 +28,63 @@ export default function ProductListing({
   const store = useMarketplaceStore();
   const { showToast } = store;
 
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
   const [keyword, setKeyword] = useState(initialKeyword);
-  const [sort, setSort] = useState<"newest" | "price_asc" | "price_desc" | "best_selling" | "high_rating">("newest");
-  const [sellerId, setSellerId] = useState("");
-  const [rating, setRating] = useState("");
-  const [minPrice, setMinPrice] = useState("");
-  const [maxPrice, setMaxPrice] = useState("");
+  const [sort, setSort] = useState<"newest" | "price_asc" | "price_desc" | "best_selling" | "high_rating">(
+    (searchParams.get("sort") as any) || "newest"
+  );
+  const [sellerId, setSellerId] = useState<string[]>(searchParams.get("seller_id") ? searchParams.get("seller_id")!.split(",") : []);
+  const [rating, setRating] = useState(searchParams.get("rating") || "");
+  const [minPrice, setMinPrice] = useState(searchParams.get("min_price") || "");
+  const [maxPrice, setMaxPrice] = useState(searchParams.get("max_price") || "");
+  const [location, setLocation] = useState<string[]>(searchParams.get("location") ? searchParams.get("location")!.split(",") : []);
+  const [localCategorySlug, setLocalCategorySlug] = useState<string[]>(
+    searchParams.get("category") ? searchParams.get("category")!.split(",") : (categorySlug ? [categorySlug] : [])
+  );
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [aggregations, setAggregations] = useState<any>(null);
   
   const [products, setProducts] = useState<Product[]>([]);
   const [variants, setVariants] = useState<ProductVariant[]>([]);
   const [shops, setShops] = useState<Shop[]>([]);
   const [loading, setLoading] = useState(true);
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(20);
+  const [page, setPage] = useState(Number(searchParams.get("page")) || 1);
+  const [pageSize, setPageSize] = useState(30);
   const [total, setTotal] = useState(0);
+
+  // Sync state to URL
+  useEffect(() => {
+    const params = new URLSearchParams(searchParams.toString());
+    
+    if (sort !== "newest") params.set("sort", sort); else params.delete("sort");
+    if (sellerId.length > 0) params.set("seller_id", sellerId.join(",")); else params.delete("seller_id");
+    if (rating) params.set("rating", rating); else params.delete("rating");
+    if (minPrice) params.set("min_price", minPrice); else params.delete("min_price");
+    if (maxPrice) params.set("max_price", maxPrice); else params.delete("max_price");
+    if (location.length > 0) params.set("location", location.join(",")); else params.delete("location");
+    
+    if (localCategorySlug.length > 0) {
+      if (localCategorySlug.length === 1 && localCategorySlug[0] === categorySlug) {
+        params.delete("category");
+      } else {
+        params.set("category", localCategorySlug.join(","));
+      }
+    } else {
+      params.delete("category");
+    }
+
+    if (page > 1) params.set("page", page.toString()); else params.delete("page");
+
+    const queryStr = params.toString();
+    const newUrl = queryStr ? `${pathname}?${queryStr}` : pathname;
+    
+    if (newUrl !== `${pathname}${searchParams.toString() ? '?' + searchParams.toString() : ''}`) {
+      router.replace(newUrl, { scroll: false });
+    }
+  }, [sort, sellerId, rating, minPrice, maxPrice, location, localCategorySlug, page, pathname, router, searchParams, categorySlug]);
 
   const listingTopRef = useRef<HTMLDivElement>(null);
 
@@ -54,15 +98,16 @@ export default function ProductListing({
       setLoading(true);
       const res = await fetchPublicProducts({
         keyword: keyword || undefined,
-        category: categorySlug || undefined,
+        category: localCategorySlug.length > 0 ? localCategorySlug.join(",") : undefined,
         sort_by: sort,
         page,
         size: pageSize,
         min_price: minPrice ? Number(minPrice) : undefined,
         max_price: maxPrice ? Number(maxPrice) : undefined,
-        seller_id: sellerId || undefined,
+        seller_id: sellerId.length > 0 ? sellerId.join(",") : undefined,
         shop_slug: shopSlug || undefined,
-        min_rating: rating ? Number(rating) : undefined
+        min_rating: rating ? Number(rating) : undefined,
+        location: location.length > 0 ? location.join(",") : undefined
       });
       if (isMounted) {
         if (res.ok && res.products) {
@@ -70,11 +115,13 @@ export default function ProductListing({
           setVariants(res.variants || []);
           setShops(res.shops || []);
           setTotal(res.total || 0);
+          setAggregations(res.aggregations || null);
         } else {
           setProducts([]);
           setVariants([]);
           setShops([]);
           setTotal(0);
+          setAggregations(null);
         }
         setLoading(false);
       }
@@ -88,7 +135,7 @@ export default function ProductListing({
       isMounted = false;
       clearTimeout(timer);
     };
-  }, [keyword, sort, categorySlug, shopSlug, page, pageSize, sellerId, rating, minPrice, maxPrice]);
+  }, [keyword, sort, localCategorySlug, shopSlug, page, pageSize, sellerId, rating, minPrice, maxPrice, location]);
 
   const totalPages = Math.ceil(total / pageSize) || 1;
 
@@ -112,45 +159,99 @@ export default function ProductListing({
     return [1, "...", current - 1, current, current + 1, "...", totalCount];
   };
 
+  const VIETNAM_PROVINCES = [
+    "Hà Nội", "Hải Phòng", "Huế", "Đà Nẵng", "Cần Thơ", "Hồ Chí Minh",
+    "Lai Châu", "Điện Biên", "Sơn La", "Lạng Sơn", "Cao Bằng", "Tuyên Quang",
+    "Lào Cai", "Thái Nguyên", "Phú Thọ", "Bắc Ninh", "Hưng Yên", "Ninh Bình",
+    "Quảng Ninh", "Thanh Hóa", "Nghệ An", "Hà Tĩnh", "Quảng Trị", "Quảng Ngãi",
+    "Gia Lai", "Khánh Hòa", "Lâm Đồng", "Đắk Lắk", "Đồng Nai", "Tây Ninh",
+    "Vĩnh Long", "Đồng Tháp", "Cà Mau", "An Giang"
+  ];
+
+  const locationOptions: Option[] = VIETNAM_PROVINCES.map(p => ({ label: p, value: p }));
+
+  let categoryOptions: Option[] = [];
+  if (aggregations?.categories?.buckets) {
+    categoryOptions = aggregations.categories.buckets
+      .map((b: any) => {
+        const cat = store.state.categories.find(c => c.slug === b.key);
+        return { label: cat ? cat.name : b.key, value: b.key, count: b.doc_count };
+      });
+  } else {
+    categoryOptions = store.state.categories.map(c => ({ label: c.name, value: c.slug }));
+  }
+
+  let shopOptions: Option[] = [];
+  if (aggregations?.shops?.buckets) {
+    shopOptions = aggregations.shops.buckets
+      .map((b: any) => {
+        // Note: shop.id in frontend is the shop_slug for public views
+        const shop = store.state.shops.find(s => s.id === b.key) || shops.find(s => s.id === b.key);
+        return { label: shop ? shop.shopName : b.key, value: b.key, count: b.doc_count };
+      });
+  } else {
+    shopOptions = store.state.shops.filter(s => s.status === "APPROVED").map(s => ({ label: s.shopName, value: s.id }));
+  }
+
   const filterPanel = (
-    <div className="grid gap-3">
-      <Field label="Từ khóa">
-        <Input value={keyword} onChange={(event) => { setKeyword(event.target.value); setPage(1); }} placeholder="Tên sản phẩm, shop, danh mục" />
-      </Field>
-      <Field label="Khoảng giá">
+    <div className="flex flex-wrap items-end gap-3 mb-4">
+      <div className="w-40">
+        <MultiSelect 
+          options={locationOptions} 
+          value={location} 
+          onChange={(val) => { setLocation(val); setPage(1); }} 
+          placeholder="Khu vực" 
+        />
+      </div>
+      
+      <div className="w-48">
+        <MultiSelect 
+          options={categoryOptions} 
+          value={localCategorySlug} 
+          onChange={(val) => { setLocalCategorySlug(val); setPage(1); }} 
+          placeholder="Danh mục" 
+        />
+      </div>
+
+      <div className="w-56">
         <div className="grid grid-cols-2 gap-2">
-          <Input type="number" value={minPrice} onChange={(event) => { setMinPrice(event.target.value); setPage(1); }} placeholder="Từ" />
-          <Input type="number" value={maxPrice} onChange={(event) => { setMaxPrice(event.target.value); setPage(1); }} placeholder="Đến" />
+          <Input type="number" value={minPrice} onChange={(event) => { setMinPrice(event.target.value); setPage(1); }} placeholder="Giá từ" className="h-9" />
+          <Input type="number" value={maxPrice} onChange={(event) => { setMaxPrice(event.target.value); setPage(1); }} placeholder="Đến" className="h-9" />
         </div>
-      </Field>
+      </div>
+      
       {!shopSlug && (
-        <Field label="Seller">
-          <Select value={sellerId} onChange={(event) => { setSellerId(event.target.value); setPage(1); }}>
-            <option value="">Tất cả shop</option>
-            {store.state.shops.filter((shop) => shop.status === "APPROVED").map((shop) => (
-              <option key={shop.id} value={shop.id}>
-                {shop.shopName}
-              </option>
-            ))}
-          </Select>
-        </Field>
+        <div className="w-48">
+          <MultiSelect 
+            options={shopOptions} 
+            value={sellerId} 
+            onChange={(val) => { setSellerId(val); setPage(1); }} 
+            placeholder="Shop" 
+          />
+        </div>
       )}
 
-      <Field label="Rating tối thiểu">
-        <Select value={rating} onChange={(event) => { setRating(event.target.value); setPage(1); }}>
-          <option value="">Tất cả</option>
+      <div className="w-40">
+        <Select value={rating} onChange={(event) => { setRating(event.target.value); setPage(1); }} className="h-9">
+          <option value="">Đánh giá</option>
+          <option value="1">Từ 1 sao</option>
+          <option value="2">Từ 2 sao</option>
+          <option value="3">Từ 3 sao</option>
           <option value="4">Từ 4 sao</option>
           <option value="4.5">Từ 4.5 sao</option>
         </Select>
-      </Field>
+      </div>
+      
       <Button
         variant="secondary"
+        className="h-9"
         onClick={() => {
-          setKeyword("");
-          setSellerId("");
+          setSellerId([]);
           setRating("");
           setMinPrice("");
           setMaxPrice("");
+          setLocation([]);
+          setLocalCategorySlug(categorySlug ? [categorySlug] : []);
           setPage(1);
         }}
       >
@@ -165,9 +266,6 @@ export default function ProductListing({
         title={title}
         action={
           <div className="flex gap-2">
-            <IconButton aria-label="Mở filter" className="lg:hidden" onClick={() => setFiltersOpen((value) => !value)}>
-              <SlidersHorizontal className="h-5 w-5" aria-hidden="true" />
-            </IconButton>
             <Select value={sort} onChange={(event) => { setSort(event.target.value as any); setPage(1); }} className="w-44">
               <option value="newest">Mới nhất</option>
               <option value="price_asc">Giá tăng</option>
@@ -178,11 +276,8 @@ export default function ProductListing({
           </div>
         }
       >
-        <div className="grid gap-4 lg:grid-cols-[280px_1fr]">
-          <aside className="hidden lg:block">
-            <Panel>{filterPanel}</Panel>
-          </aside>
-          {filtersOpen ? <Panel className="lg:hidden">{filterPanel}</Panel> : null}
+        <div className="flex flex-col gap-4">
+          {filterPanel}
           <div>
             {loading ? (
               <ProductGridSkeleton count={pageSize} />
@@ -283,10 +378,9 @@ export default function ProductListing({
                       }}
                       className="h-8 text-xs py-0 w-24 border-slate-200"
                     >
-                      <option value="12">12 / trang</option>
-                      <option value="20">20 / trang</option>
-                      <option value="36">36 / trang</option>
-                      <option value="48">48 / trang</option>
+                      <option value="30">30 / trang</option>
+                      <option value="60">60 / trang</option>
+                      <option value="120">120 / trang</option>
                     </Select>
                   </div>
                 </div>
@@ -305,7 +399,7 @@ function ProductGrid({ products, variants, shops }: { products: Product[]; varia
   const store = useMarketplaceStore();
   const { showToast } = store;
   return (
-    <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">
+    <div className="grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-6">
       {products.map((product) => (
         <ProductCard
           key={product.id}

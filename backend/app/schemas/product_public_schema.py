@@ -5,9 +5,11 @@ from decimal import Decimal
 
 
 class SellerInfo(BaseModel):
+    id: int
     shop_name: str
     shop_slug: str
     shop_logo_url: Optional[str] = None
+    pickup_address: Optional[str] = None
     total_sold: int = 0
     shipping_fee: Decimal = Decimal("0.00")
 
@@ -90,6 +92,7 @@ class ProductListResponse(BaseModel):
     total: int
     page: int
     size: int
+    aggregations: Optional[dict] = None
 
     class Config:
         from_attributes = True

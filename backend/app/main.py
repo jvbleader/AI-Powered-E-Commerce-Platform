@@ -55,9 +55,9 @@ async def lifespan(app: FastAPI):
         async with AsyncSessionLocal() as db:
             products = await fetch_all_active_products_for_indexing(db)
             await search_svc.bulk_index_products(products)
-    except Exception:
-        logging.getLogger(__name__).warning(
-            "Elasticsearch init failed — search will fall back to MySQL"
+    except Exception as e:
+        logging.getLogger(__name__).exception(
+            f"Elasticsearch init failed — search will fall back to MySQL: {e}"
         )
     yield
     stop_scheduler()
@@ -90,7 +90,8 @@ from api.chat_ai_api import router as chat_ai_router
 from api.review_api import router as review_router
 from api.violation_report_api import router as violation_report_router
 from api.support_chat_api import router as support_chat_router
-from api.endpoints.notifications import router as notifications_router
+from api.seller_chat_api import router as seller_chat_router
+from api.notification_api import router as notifications_router
 from api.search_api import router as search_router
 
 app.include_router(auth_router)
@@ -108,6 +109,7 @@ app.include_router(chat_ai_router)
 app.include_router(review_router)
 app.include_router(violation_report_router)
 app.include_router(support_chat_router, prefix="/api/support-chat")
+app.include_router(seller_chat_router, prefix="/api/seller-chat")
 app.include_router(notifications_router, prefix="/notifications", tags=["notifications"])
 app.include_router(search_router)
 

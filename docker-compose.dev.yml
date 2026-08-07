@@ -35,6 +35,7 @@ services:
       - "${ES_DEV_PORT:-9200}:9200"
     volumes:
       - es_data_dev:/usr/share/elasticsearch/data
+      - ./backend/app/search/synonyms:/usr/share/elasticsearch/config/synonyms
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:9200/_cluster/health || exit 1"]
       interval: 10s

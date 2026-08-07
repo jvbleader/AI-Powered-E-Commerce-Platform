@@ -76,17 +76,27 @@ async def update_order_to_shipping_api(
         raise
     return result
 
+from fastapi import APIRouter, Depends, Query, BackgroundTasks
+from services.search_helpers import update_products_in_es
+
 @router.post("/{order_id}/cancel", response_model=OrderResponse)
 async def cancel_order_api(
     order_id: str,
     data: CancelOrderRequest,
     user: CurrentUser,
     db: DBSession,
+    background_tasks: BackgroundTasks
 ) -> OrderResponse:
     result = None
     try:
         result = await cancel_seller_order(user, order_id, data.reason, db)
         await db.commit()
+        
+        # Trigger ES sync
+        product_ids = {item.product_id for item in result.items if item.product_id}
+        if product_ids:
+            background_tasks.add_task(update_products_in_es, list(product_ids))
+            
     except Exception:
         await db.rollback()
         raise

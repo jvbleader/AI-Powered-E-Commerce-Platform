@@ -516,6 +516,26 @@ export default function ProductDetailPage() {
             <div className="flex flex-col sm:flex-row flex-wrap gap-3">
               <Button
                 variant={"outline" as any}
+                onClick={() => {
+                  window.dispatchEvent(new CustomEvent('open-chat-widget', {
+                    detail: {
+                      shopId: Number(activeShop.id) || activeShop.id,
+                      productDraft: {
+                         id: product.id,
+                         name: product.name,
+                         price: selectedVariant?.price || 0,
+                         promotional_price: selectedVariant?.salePrice,
+                         images: [{ image_url: activeImageSrc, is_primary: true }]
+                      }
+                    }
+                  }));
+                }}
+                className="flex-[0.7] rounded-xl border-emerald-600 text-emerald-600 hover:bg-emerald-50 py-3 text-sm font-extrabold shadow-sm transition-all"
+              >
+                Chat Ngay
+              </Button>
+              <Button
+                variant={"outline" as any}
                 disabled={
                   addingToCart ||
                   buyingNow ||

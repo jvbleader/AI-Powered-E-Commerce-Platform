@@ -86,6 +86,14 @@ export function MarketplaceHeader() {
   }, []);
 
   useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const q = params.get("q");
+      if (q) setQuery(q);
+    }
+  }, [pathname]);
+
+  useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     setHighlightIndex(-1);
 
@@ -398,7 +406,7 @@ export function MarketplaceHeader() {
                                 type="button"
                                 onMouseDown={(e) => e.preventDefault()}
                                 onClick={() => { clearSearchHistory(); setSearchHistory([]); }}
-                                className="text-[10px] font-semibold text-red-400 hover:text-red-600 transition-colors"
+                                className="text-[10px] font-bold text-red-600"
                               >
                                 Xóa tất cả
                               </button>
@@ -410,7 +418,7 @@ export function MarketplaceHeader() {
                                     type="button"
                                     onMouseDown={(e) => e.preventDefault()}
                                     onClick={() => performSearch(kw)}
-                                    className="flex items-center gap-2 text-xs font-medium text-slate-600 truncate"
+                                    className="flex flex-1 items-center gap-2 text-xs font-medium text-slate-600 truncate text-left"
                                   >
                                     <Clock className="h-3 w-3 text-slate-300 shrink-0" />
                                     {kw}

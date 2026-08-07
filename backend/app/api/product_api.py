@@ -50,13 +50,14 @@ async def get_products(
     ),
     min_price: Optional[float] = Query(None, description="Minimum price"),
     max_price: Optional[float] = Query(None, description="Maximum price"),
-    seller_id: Optional[int] = Query(None, description="Filter by seller ID"),
+    seller_id: Optional[str] = Query(None, description="Filter by seller ID or shop slug (comma separated)"),
     shop_slug: Optional[str] = Query(None, description="Filter by shop slug"),
     min_rating: Optional[float] = Query(None, description="Minimum average rating"),
+    location: Optional[str] = Query(None, description="Filter by pickup address location"),
     page: int = Query(1, ge=1),
     size: int = Query(20, ge=1, le=100),
 ):
-    return await product_public_service.get_public_product_list(
+    result = await product_public_service.get_public_product_list(
         db=db,
         keyword=keyword,
         category_slug=category,
@@ -66,6 +67,7 @@ async def get_products(
         seller_id=seller_id,
         shop_slug=shop_slug,
         min_rating=min_rating,
+        pickup_address=location,
         page=page,
         size=size,
     )

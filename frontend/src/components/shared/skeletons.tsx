@@ -51,9 +51,9 @@ export function ProductCardSkeleton({ className }: { className?: string }) {
   );
 }
 
-export function ProductGridSkeleton({ count = 20 }: { count?: number }) {
+export function ProductGridSkeleton({ count = 30 }: { count?: number }) {
   return (
-    <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">
+    <div className="grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-6">
       {Array.from({ length: count }).map((_, i) => (
         <ProductCardSkeleton key={`skeleton-${i}`} />
       ))}

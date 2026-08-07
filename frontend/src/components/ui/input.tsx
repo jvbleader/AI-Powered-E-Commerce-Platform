@@ -152,7 +152,7 @@ export function SearchField({
         onFocus={onFocus}
         onBlur={onBlur}
         onKeyDown={onKeyDown}
-        autoComplete="new-password"
+        autoComplete="off"
         name="search_query_fake_name_to_stop_autofill"
         placeholder={isScrolled ? "" : placeholder}
         className={cn(

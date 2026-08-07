@@ -66,7 +66,6 @@ export function RatingStars({ rating, count }: { rating: number; count?: number 
         })}
       </span>
       <span className="font-bold text-amber-600 ml-0.5">{rating.toFixed(1)}</span>
-      {typeof count === "number" ? <span className="text-slate-500">({count})</span> : null}
     </span>
   );
 }
