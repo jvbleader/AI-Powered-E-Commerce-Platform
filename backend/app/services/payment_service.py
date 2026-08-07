@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.base import utc_now
 from models.payment import Payment
-from models.payment_order import PaymentOrder
+from models.payment import PaymentOrder
 from models.user import User
 from schemas.payment_schema import MockPaymentCallbackRequest, PaymentCreateRequest
 from repositories import order_repository, payment_repository
@@ -103,7 +103,7 @@ async def process_mock_callback(data: MockPaymentCallbackRequest, db: AsyncSessi
                         order.order_status = "READY_TO_SHIP"
                         
                         # Log status change
-                        from models.order_status_log import OrderStatusLog
+                        from models.order import OrderStatusLog
                         log = OrderStatusLog(
                             order_id=order.id,
                             old_status=old_status,

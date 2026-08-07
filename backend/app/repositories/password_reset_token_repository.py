@@ -3,7 +3,7 @@ from datetime import datetime
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from models.password_reset_token import PasswordResetToken
+from models.user import PasswordResetToken
 
 
 async def delete_password_reset_token_by_user_id(user_id: int, db: AsyncSession):

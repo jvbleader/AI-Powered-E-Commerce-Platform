@@ -6,6 +6,7 @@ import {
   Bell,
   Bot,
   ChevronDown,
+  Clock,
   Compass,
   Grid,
   Heart,
@@ -28,13 +29,15 @@ import {
   X
 } from "lucide-react";
 
-import { searchSuggestions, formatDate } from "@/lib/helpers";
+import { formatDate } from "@/lib/helpers";
 import { useMarketplaceStore } from "@/store/use-marketplace-store";
 import { BRAND_NAME } from "@/lib/constants";
 import { SearchField } from "@/components/ui/input";
 import { Button, IconButton } from "@/components/ui/button";
 import { NotificationBell } from "@/components/NotificationBell";
 import { apiFetch } from "@/services/api";
+import { fetchAutocomplete, fetchHotKeywords, type SearchSuggestion } from "@/services/search-api";
+import { getSearchHistory, addSearchHistory, removeSearchHistory, clearSearchHistory } from "@/lib/search-history";
 
 const CATEGORY_ICONS: Record<string, string> = {
   "thoi-trang": "👕",
@@ -64,15 +67,86 @@ export function MarketplaceHeader() {
   const [chatUnreadCount, setChatUnreadCount] = useState(0);
 
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const searchContainerRef = useRef<HTMLDivElement>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
   const catMoreRef = useRef<HTMLDivElement>(null);
 
-  const suggestions = searchSuggestions(
-    query,
-    store.state.products,
-    store.state.shops,
-    store.state.categories
-  );
+  // Autocomplete state
+  const [suggestions, setSuggestions] = useState<SearchSuggestion[]>([]);
+  const [isSearchLoading, setIsSearchLoading] = useState(false);
+  const [highlightIndex, setHighlightIndex] = useState(-1);
+  const debounceRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Focus state data (loaded once)
+  const [hotKeywords, setHotKeywords] = useState<string[]>([]);
+  const [searchHistory, setSearchHistory] = useState<string[]>([]);
+
+  useEffect(() => {
+    fetchHotKeywords().then(setHotKeywords);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const q = params.get("q");
+      if (q) setQuery(q);
+    }
+  }, [pathname]);
+
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    setHighlightIndex(-1);
+
+    if (!query.trim()) {
+      setSuggestions([]);
+      setIsSearchLoading(false);
+      return;
+    }
+
+    setIsSearchLoading(true);
+    debounceRef.current = setTimeout(async () => {
+      const result = await fetchAutocomplete(query.trim());
+      setSuggestions(result.suggestions);
+      setIsSearchLoading(false);
+    }, 300);
+
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, [query]);
+
+  const handleSearchFocus = () => {
+    setIsSearchFocused(true);
+    setSearchHistory(getSearchHistory());
+  };
+
+  const performSearch = (keyword: string, isShop?: boolean, shopSlug?: string) => {
+    if (isShop && shopSlug) {
+      addSearchHistory(keyword);
+      window.location.href = `/shops/${shopSlug}`;
+    } else if (keyword.trim()) {
+      addSearchHistory(keyword.trim());
+      window.location.href = `/search?q=${encodeURIComponent(keyword.trim())}`;
+    }
+  };
+
+  const handleSearchKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setHighlightIndex((prev) => Math.min(prev + 1, suggestions.length - 1));
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setHighlightIndex((prev) => Math.max(prev - 1, -1));
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      if (highlightIndex >= 0 && suggestions[highlightIndex]) {
+        const s = suggestions[highlightIndex];
+        performSearch(s.keyword, s.type === "shop", s.shop_slug ?? undefined);
+      } else {
+        performSearch(query);
+      }
+    }
+  };
 
   const selectedCount = store.getCartRows().reduce((sum, row) => sum + row.item.quantity, 0);
   const currentUser = store.getCurrentUser();
@@ -94,6 +168,9 @@ export function MarketplaceHeader() {
   // Close dropdowns on outside click
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
+      if (searchContainerRef.current && !searchContainerRef.current.contains(event.target as Node)) {
+        setIsSearchFocused(false);
+      }
       if (userMenuRef.current && !userMenuRef.current.contains(event.target as Node)) {
         setUserMenuOpen(false);
       }
@@ -258,7 +335,7 @@ export function MarketplaceHeader() {
             </a>
 
             {/* SEARCH AREA (Morphing search field with fixed center position) */}
-            <div className="relative flex-1 flex items-center justify-center min-w-0 px-1 sm:px-2">
+            <div className="relative flex-1 flex items-center justify-center min-w-0 px-1 sm:px-2" ref={searchContainerRef}>
               <div
                 className={`w-full transition-all duration-500 cubic-bezier(0.16, 1, 0.3, 1) ${
                   isScrolled ? "max-w-xs sm:max-w-sm md:max-w-md" : "max-w-xl lg:max-w-2xl"
@@ -268,37 +345,44 @@ export function MarketplaceHeader() {
                   inputRef={searchInputRef}
                   value={query}
                   onChange={setQuery}
-                  onFocus={() => setIsSearchFocused(true)}
-                  onBlur={() => setTimeout(() => setIsSearchFocused(false), 200)}
+                  onFocus={handleSearchFocus}
+                  onBlur={() => {}}
                   isScrolled={isScrolled}
+                  onKeyDown={handleSearchKeyDown}
                 />
 
                 {/* SEARCH SUGGESTION DROPDOWN */}
-                {(isSearchFocused || query) && (
+                {isSearchFocused && (
                   <div className="absolute left-0 right-0 top-full mt-2 z-50 animate-scale-in rounded-2xl border border-slate-200 bg-white p-3 shadow-2xl max-h-[80vh] overflow-y-auto">
-                    {query ? (
-                      suggestions.length ? (
-                        <div className="space-y-1">
-                          <div className="px-3 py-1.5 text-[11px] font-extrabold uppercase tracking-wider text-slate-400 flex items-center justify-between">
-                            <span>Gợi ý tìm kiếm</span>
-                            <span className="text-emerald-600">{suggestions.length} kết quả</span>
-                          </div>
-                          {suggestions.map((item) => (
-                            <a
-                              key={`${item.type}-${item.href}`}
-                              href={item.href}
-                              className="flex items-center justify-between rounded-xl px-3 py-2.5 text-xs font-semibold text-slate-800 hover:bg-emerald-50 hover:text-emerald-700 transition-all duration-150 group"
+                    {query.trim() ? (
+                      /* === AUTOCOMPLETE RESULTS === */
+                      isSearchLoading ? (
+                        <div className="flex items-center justify-center p-4">
+                          <div className="h-5 w-5 animate-spin rounded-full border-2 border-emerald-500 border-t-transparent" />
+                        </div>
+                      ) : suggestions.length ? (
+                        <div className="space-y-0.5">
+                          {suggestions.map((item, index) => (
+                            <button
+                              key={`${item.type}-${item.keyword}-${index}`}
+                              type="button"
+                              onMouseDown={(e) => e.preventDefault()}
+                              onClick={() => performSearch(item.keyword, item.type === "shop", item.shop_slug ?? undefined)}
+                              className={`flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-sm transition-all ${
+                                index === highlightIndex
+                                  ? "bg-emerald-50 text-emerald-700"
+                                  : "text-slate-700 hover:bg-slate-50"
+                              }`}
                             >
-                              <div className="flex items-center gap-2.5 truncate">
-                                <Search className="h-3.5 w-3.5 text-slate-400 group-hover:text-emerald-600" />
-                                <span className="truncate font-bold text-slate-900 group-hover:text-emerald-700">
-                                  {item.label}
-                                </span>
-                              </div>
-                              <span className="shrink-0 rounded bg-slate-100 px-2 py-0.5 text-[10px] text-slate-500">
-                                {item.type}
+                              {item.type === "shop" ? (
+                                <Store className="h-4 w-4 shrink-0 text-emerald-600" />
+                              ) : (
+                                <Search className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+                              )}
+                              <span className={`truncate ${item.type === "shop" ? "font-bold text-emerald-700" : "font-medium"}`}>
+                                {item.keyword}
                               </span>
-                            </a>
+                            </button>
                           ))}
                         </div>
                       ) : (
@@ -308,25 +392,74 @@ export function MarketplaceHeader() {
                         </div>
                       )
                     ) : (
+                      /* === FOCUS STATE: HISTORY + HOT KEYWORDS === */
                       <div className="space-y-3 p-1">
+                        {/* Search History */}
+                        {searchHistory.length > 0 && (
+                          <div>
+                            <div className="px-2 py-1 text-[11px] font-extrabold uppercase tracking-wider text-slate-400 flex items-center justify-between">
+                              <span className="flex items-center gap-1.5">
+                                <Clock className="h-3 w-3 text-slate-400" />
+                                Lịch sử tìm kiếm
+                              </span>
+                              <button
+                                type="button"
+                                onMouseDown={(e) => e.preventDefault()}
+                                onClick={() => { clearSearchHistory(); setSearchHistory([]); }}
+                                className="text-[10px] font-bold text-red-600"
+                              >
+                                Xóa tất cả
+                              </button>
+                            </div>
+                            <div className="mt-1 space-y-0.5">
+                              {searchHistory.map((kw) => (
+                                <div key={kw} className="flex items-center justify-between rounded-xl px-3 py-2 hover:bg-slate-50 group">
+                                  <button
+                                    type="button"
+                                    onMouseDown={(e) => e.preventDefault()}
+                                    onClick={() => performSearch(kw)}
+                                    className="flex flex-1 items-center gap-2 text-xs font-medium text-slate-600 truncate text-left"
+                                  >
+                                    <Clock className="h-3 w-3 text-slate-300 shrink-0" />
+                                    {kw}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onMouseDown={(e) => e.preventDefault()}
+                                    onClick={() => {
+                                      removeSearchHistory(kw);
+                                      setSearchHistory(getSearchHistory());
+                                    }}
+                                    className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-red-500 transition-all p-0.5"
+                                  >
+                                    <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                    </svg>
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Hot Keywords */}
                         <div>
                           <div className="px-2 py-1 text-[11px] font-extrabold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
                             <Tag className="h-3 w-3 text-emerald-600" />
                             Từ khóa hot hôm nay
                           </div>
                           <div className="mt-2 flex flex-wrap gap-1.5">
-                            {["iPhone 15 Pro", "Tai nghe Bluetooth", "Áo Nam Basic", "Bàn Phím Cơ", "Mỹ Phẩm Korea"].map(
-                              (tag) => (
-                                <button
-                                  key={tag}
-                                  type="button"
-                                  onClick={() => setQuery(tag)}
-                                  className="rounded-xl border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-semibold text-slate-700 hover:border-emerald-500 hover:bg-emerald-55 hover:text-emerald-700 transition-all"
-                                >
-                                  {tag}
-                                </button>
-                              )
-                            )}
+                            {hotKeywords.map((tag) => (
+                              <button
+                                key={tag}
+                                type="button"
+                                onMouseDown={(e) => e.preventDefault()}
+                                onClick={() => performSearch(tag)}
+                                className="rounded-xl border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-semibold text-slate-700 hover:border-emerald-500 hover:bg-emerald-50 hover:text-emerald-700 transition-all"
+                              >
+                                {tag}
+                              </button>
+                            ))}
                           </div>
                         </div>
                       </div>

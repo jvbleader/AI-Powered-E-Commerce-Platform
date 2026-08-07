@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useSearchParams } from "next/navigation";
-import { ShieldCheck } from "lucide-react";
+import { ShieldCheck, Loader2, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Field, Input } from "@/components/ui/input";
 import { Panel } from "@/components/ui/containers";
@@ -27,11 +27,38 @@ export default function VerificationPage({ type }: { type: "email" | "phone" }) 
   const [submitting, setSubmitting] = useState(false);
   const [fieldError, setFieldError] = useState("");
 
+  const [autoVerifying, setAutoVerifying] = useState(type === "email" && !!token);
+  const [autoVerifySuccess, setAutoVerifySuccess] = useState(false);
+  const autoVerifyRef = useRef(false);
+
   useEffect(() => {
     if (type === "phone" && !phone && store.verificationContext?.phone) {
       setPhone(store.verificationContext.phone);
     }
   }, [phone, type, store.verificationContext?.phone]);
+
+  useEffect(() => {
+    if (type === "email" && token && !autoVerifyRef.current) {
+      autoVerifyRef.current = true;
+      const doVerify = async () => {
+        setAutoVerifying(true);
+        try {
+          const result = await store.verifyEmail(token);
+          if (result.ok) {
+            setAutoVerifySuccess(true);
+            showToast("Xác thực email thành công!", "success");
+          } else {
+            setFieldError(result.message || "Xác thực thất bại");
+          }
+        } catch (error) {
+          setFieldError("Có lỗi xảy ra khi xác thực");
+        } finally {
+          setAutoVerifying(false);
+        }
+      };
+      doVerify();
+    }
+  }, [type, token, store, showToast]);
 
   const submitVerification = async () => {
     setFieldError("");
@@ -83,36 +110,86 @@ export default function VerificationPage({ type }: { type: "email" | "phone" }) 
           {type === "email" ? store.verificationContext?.email ?? store.getCurrentUser()?.email : store.verificationContext?.phone ?? store.getCurrentUser()?.phone}
         </p>
         <div className="mt-4 grid gap-3">
-          {type === "phone" ? (
-            <Field label="Số điện thoại">
-              <Input
-                value={phone}
-                onChange={(event) => setPhone(event.target.value)}
-                placeholder="0901234567"
-                inputMode="tel"
-                autoComplete="tel"
-              />
-            </Field>
-          ) : null}
-          <Field label={type === "email" ? "Mã xác thực email" : "OTP điện thoại"}>
-            <Input
-              value={code}
-              onChange={(event) => setCode(event.target.value)}
-              placeholder={type === "email" ? "Nhập mã xác thực" : "Nhập 6 chữ số"}
-              inputMode={type === "phone" ? "numeric" : "text"}
-              autoComplete="one-time-code"
-              className={fieldError ? "border-coral" : undefined}
-            />
-          </Field>
-          {fieldError ? <p className="text-xs font-semibold text-coral">{fieldError}</p> : null}
-          <div className="flex flex-wrap gap-2">
-            <Button disabled={submitting} onClick={submitVerification}>
-              {submitting ? "Đang xác thực" : "Xác thực"}
-            </Button>
-            <Button type="button" variant="secondary" onClick={resendVerification}>
-              Gửi lại mã
-            </Button>
-          </div>
+          {type === "email" ? (
+            token ? (
+              <>
+                {autoVerifying ? (
+                  <div className="flex flex-col items-center justify-center p-6 text-center">
+                    <Loader2 className="h-8 w-8 animate-spin text-primary mb-4" />
+                    <p className="text-sm font-medium text-muted">Đang tự động xác thực email của bạn...</p>
+                  </div>
+                ) : autoVerifySuccess ? (
+                  <div className="flex flex-col items-center justify-center text-center gap-4 py-4">
+                    <div className="h-16 w-16 rounded-full bg-emerald-100 flex items-center justify-center mb-2">
+                      <Check className="h-8 w-8 text-emerald-600" />
+                    </div>
+                    <h2 className="text-xl font-bold text-ink">Xác thực thành công!</h2>
+                    <p className="text-sm text-muted">
+                      Email của bạn đã được xác thực thành công. Bạn có thể tiếp tục đăng nhập để trải nghiệm Shepoo.
+                    </p>
+                    <Button onClick={() => window.location.href = '/login'} className="w-full mt-2">
+                      Đến trang đăng nhập
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="flex flex-col text-center gap-4 py-4">
+                    <div className="rounded-md bg-coral/10 p-4 border border-coral/20">
+                      <p className="text-sm font-medium text-coral">
+                        {fieldError || "Xác thực thất bại hoặc link đã hết hạn."}
+                      </p>
+                    </div>
+                    <Button variant="secondary" onClick={() => window.location.href = '/login'} className="w-full">
+                      Quay lại đăng nhập
+                    </Button>
+                  </div>
+                )}
+              </>
+            ) : (
+              <>
+                <div className="rounded-md bg-emerald-50 p-4 border border-emerald-100">
+                  <p className="text-sm font-medium text-emerald-800">
+                    Chúng tôi đã gửi một email xác thực tới địa chỉ của bạn. Vui lòng kiểm tra hộp thư (bao gồm cả mục Spam) để xác thực email.
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Button type="button" variant="secondary" onClick={resendVerification} className="w-full">
+                    Gửi lại email xác thực
+                  </Button>
+                </div>
+              </>
+            )
+          ) : (
+            <>
+              <Field label="Số điện thoại">
+                <Input
+                  value={phone}
+                  onChange={(event) => setPhone(event.target.value)}
+                  placeholder="0901234567"
+                  inputMode="tel"
+                  autoComplete="tel"
+                />
+              </Field>
+              <Field label="OTP điện thoại">
+                <Input
+                  value={code}
+                  onChange={(event) => setCode(event.target.value)}
+                  placeholder="Nhập 6 chữ số"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  className={fieldError ? "border-coral" : undefined}
+                />
+              </Field>
+              {fieldError ? <p className="text-xs font-semibold text-coral">{fieldError}</p> : null}
+              <div className="flex flex-wrap gap-2">
+                <Button disabled={submitting} onClick={submitVerification}>
+                  {submitting ? "Đang xác thực" : "Xác thực"}
+                </Button>
+                <Button type="button" variant="secondary" onClick={resendVerification}>
+                  Gửi lại mã
+                </Button>
+              </div>
+            </>
+          )}
         </div>
       </Panel>
     </main>

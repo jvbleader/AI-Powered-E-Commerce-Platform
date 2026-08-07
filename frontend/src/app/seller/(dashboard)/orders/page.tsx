@@ -95,17 +95,21 @@ export default function SellerOrdersPage() {
 
     setIsProcessingBulk(true);
     let successCount = 0;
+    const successfulIds: string[] = [];
     
     for (const id of Array.from(selectedOrderIds)) {
       const res = await actionFn(id);
-      if (res.ok) successCount++;
+      if (res.ok) {
+        successCount++;
+        successfulIds.push(id);
+      }
     }
     
     setIsProcessingBulk(false);
     showToast(`Đã ${actionName} ${successCount}/${selectedOrderIds.size} đơn hàng.`, successCount > 0 ? "success" : "danger");
 
     if ((actionName === "giao hàng" || actionName === "in đơn") && successCount > 0) {
-      window.open(`/seller/print-orders?ids=${Array.from(selectedOrderIds).join(',')}`, '_blank');
+      window.open(`/seller/print-orders?ids=${successfulIds.join(',')}`, '_blank');
     }
 
     setSelectedOrderIds(new Set()); // clear selection
@@ -192,7 +196,7 @@ export default function SellerOrdersPage() {
               <Button 
                 variant="secondary"
                 disabled={isProcessingBulk} 
-                onClick={() => processBulkAction(store.incrementPrintCount, (o) => (o.printCount || 0) < 2, "in đơn")}
+                onClick={() => processBulkAction(store.incrementPrintCount, (o) => o.orderStatus === "SHIPPING" && (o.printCount || 0) < 2, "in đơn")}
                 className="h-9 text-sm flex items-center gap-1.5"
               >
                 <Printer className="h-4 w-4" />

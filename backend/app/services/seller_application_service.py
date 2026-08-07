@@ -7,7 +7,7 @@ from typing import Annotated
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.user import User
-from models.seller_profile import SellerProfile
+from models.seller import SellerProfile
 from dependencies.auth import get_current_user, get_current_admin, get_db
 from services.auth_service import user_to_response
 from schemas.seller_application_schema import (

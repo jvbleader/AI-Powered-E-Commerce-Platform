@@ -9,7 +9,7 @@ from sqlalchemy.orm import selectinload
 
 from dependencies.auth import get_current_user_optional, get_current_user
 from core.database import get_db
-from models.support_chat import SupportConversation, SupportMessage
+from models.chat import SupportConversation, SupportMessage
 from models.user import User
 from schemas.support_chat import SupportConversationResponse, SupportMessageResponse, SupportConversationListResponse
 from services.websocket_manager import manager
@@ -141,7 +141,7 @@ async def list_my_conversations(
     # Pre-fetch all unread chat notifications for this user
     unread_chat_notifs = set()
     if current_user:
-        from models.notification import Notification
+        from models.engagement import Notification
         notif_stmt = select(Notification.action_url).where(
             Notification.user_id == current_user.id,
             Notification.is_read == False,

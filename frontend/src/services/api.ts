@@ -1,19 +1,21 @@
 import axios, { AxiosError, AxiosRequestConfig, Method } from "axios";
 
+import { ENV } from "@/config/env";
+
 export function getApiBaseUrl(): string {
   if (typeof window !== "undefined") {
-    const envUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
+    const envUrl = ENV.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
     const hostname = window.location.hostname;
     if (hostname && hostname !== "localhost" && hostname !== "127.0.0.1") {
       return envUrl.replace(/localhost|127\.0\.0\.1/, hostname);
     }
     return envUrl;
   }
-  return process.env.INTERNAL_API_BASE_URL ?? process.env.BACKEND_INTERNAL_URL ?? "http://backend:8000";
+  return ENV.INTERNAL_API_BASE_URL || "http://backend:8000";
 }
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
-export const AUTH_BASE_PATH = process.env.NEXT_PUBLIC_AUTH_BASE_PATH ?? "/auth";
+const API_BASE_URL = ENV.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
+export const AUTH_BASE_PATH = ENV.NEXT_PUBLIC_AUTH_BASE_PATH;
 const REFRESH_PATH = `${AUTH_BASE_PATH}/refresh`;
 const SKIP_REFRESH_PATHS = new Set([
   `${AUTH_BASE_PATH}/login`,

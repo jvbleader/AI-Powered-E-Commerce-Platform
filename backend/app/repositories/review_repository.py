@@ -3,10 +3,10 @@ from sqlalchemy import select, func
 from sqlalchemy.orm import selectinload, joinedload
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from models.product_review import ProductReview
-from models.order_item import OrderItem
+from models.catalog import ProductReview
+from models.order import OrderItem
 from models.order import Order
-from models.product import Product
+from models.catalog import Product
 
 async def get_order_item_for_review(db: AsyncSession, order_item_id: int, user_id: int) -> Optional[OrderItem]:
     query = (
@@ -101,3 +101,25 @@ async def get_product_reviews(
 
     return items, total, avg_rating
 
+async def get_user_reviews(
+    db: AsyncSession,
+    user_id: int,
+    skip: int = 0,
+    limit: int = 20
+) -> Tuple[List[ProductReview], int]:
+    total_query = select(func.count(ProductReview.id)).where(ProductReview.user_id == user_id)
+    total_res = await db.execute(total_query)
+    total = total_res.scalar() or 0
+
+    query = (
+        select(ProductReview)
+        .options(selectinload(ProductReview.product).selectinload(Product.images))
+        .where(ProductReview.user_id == user_id)
+        .order_by(ProductReview.created_at.desc())
+        .offset(skip)
+        .limit(limit)
+    )
+    result = await db.execute(query)
+    items = list(result.scalars().all())
+
+    return items, total

@@ -19,13 +19,17 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    # Drop check constraint if present and drop view_count column from products table
-    try:
-        op.drop_constraint('ck_products_view_count', 'products', type_='check')
-    except Exception:
-        pass
-
-    op.drop_column('products', 'view_count')
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+    
+    if 'products' in inspector.get_table_names():
+        columns = [col['name'] for col in inspector.get_columns('products')]
+        if 'view_count' in columns:
+            try:
+                op.drop_constraint('ck_products_view_count', 'products', type_='check')
+            except Exception:
+                pass
+            op.drop_column('products', 'view_count')
 
 
 def downgrade() -> None:

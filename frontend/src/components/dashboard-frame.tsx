@@ -35,7 +35,25 @@ const kindLabel: Record<string, string> = {
   supporter: "Hỗ trợ"
 };
 
+import { useEffect } from "react";
+import { apiFetch } from "@/services/api";
 
+function GlobalSellerChatPoller() {
+  const pathname = usePathname();
+  
+  useEffect(() => {
+    // Nếu đang ở trang chat thì ChatDashboard đã tự poll rồi, ta bỏ qua để tránh duplicate
+    if (pathname === "/seller/chat") return;
+    
+    const interval = setInterval(() => {
+      apiFetch('/api/seller-chat/conversations/my?as_seller=true').catch(() => {});
+    }, 5000);
+    
+    return () => clearInterval(interval);
+  }, [pathname]);
+
+  return null;
+}
 
 export function DashboardFrame({
   kind,
@@ -56,6 +74,7 @@ export function DashboardFrame({
           ["/seller/products", "Sản phẩm", Package],
           ["/seller/inventory", "Tồn kho", Box],
           ["/seller/orders", "Đơn hàng", ShoppingBag],
+          ["/seller/chat", "Tin nhắn", MessageSquare],
           ["/seller/revenue", "Doanh thu", ChartNoAxesCombined],
           ["/seller/category-suggestions", "Đề xuất category", TicketPercent]
         ]
@@ -89,6 +108,7 @@ export function DashboardFrame({
 
   return (
     <div className="h-screen bg-canvas flex flex-col overflow-hidden">
+      {kind === "seller" && <GlobalSellerChatPoller />}
       <div className="border-b border-line bg-white shrink-0">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3">
           <div className="flex items-center gap-6">

@@ -1,0 +1,50 @@
+from typing import Optional
+
+from pydantic import field_validator
+from pydantic_settings import BaseSettings
+
+
+class Settings(BaseSettings):
+    # Safe to hardcode
+    APP_NAME: str = "Shepoo Ecommerce API"
+    APP_VERSION: str = "0.1.0"
+
+    # Required from environment
+    APP_ENV: str
+    LOG_LEVEL: str
+    DATABASE_URL: str
+    ACCESS_TOKEN_SECRET: str
+    CORS_ORIGINS: str
+    ELASTICSEARCH_URL: str
+    REDIS_URL: str
+    PHONE_OTP_MAX_ATTEMPTS: int
+    PHONE_OTP_TTL_MINUTES: int
+    ACCESS_TOKEN_TTL_MINUTES: int
+    REFRESH_TOKEN_TTL_DAYS: int
+    COOKIE_SECURE: bool
+    COOKIE_SAME_SITE: str
+
+    # Optional — only used when set
+    ASYNC_DATABASE_URL: Optional[str] = None
+    COOKIE_DOMAIN: Optional[str] = None
+
+    @field_validator("COOKIE_SECURE", mode="before")
+    @classmethod
+    def parse_cookie_secure(cls, v):
+        if v == "" or v is None:
+            return False
+        return v
+
+    @property
+    def get_async_database_url(self) -> str:
+        url = self.ASYNC_DATABASE_URL or self.DATABASE_URL
+        if url and url.startswith("mysql:asyncmy//"):
+            url = url.replace("mysql:asyncmy//", "mysql+asyncmy://", 1)
+        return url
+
+    class Config:
+        env_file = ".env"
+        extra = "ignore"
+
+
+settings = Settings()

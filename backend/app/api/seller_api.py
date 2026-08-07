@@ -1,6 +1,7 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status, BackgroundTasks
+from services.search_helpers import update_shop_in_es
 
 from pydantic import EmailStr
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -47,11 +48,17 @@ async def submit_application_api(
     user: CurrentUser,
     data: SellerApplicationRequest,
     db: DBSession,
+    background_tasks: BackgroundTasks
 ) -> SellerApplicationResponse:
     result = None
     try:
         result = await submit_seller_application(user, data, db)
         await db.commit()
+        
+        # Trigger ES sync for Shop
+        if result and result.id:
+            background_tasks.add_task(update_shop_in_es, result.id)
+            
     except Exception:
         await db.rollback()
         raise
@@ -74,17 +81,22 @@ async def get_my_application_api(
 
     return result
 
-
 @router.put(path="/application", response_model=SellerApplicationResponse)
 async def update_my_application_api(
     user: CurrentUser,
     data: SellerApplicationRequest,
     db: DBSession,
+    background_tasks: BackgroundTasks
 ):
     result = None
     try:
         result = await update_my_seller_application(user, data, db)
         await db.commit()
+        
+        # Trigger ES sync for Shop
+        if result and result.id:
+            background_tasks.add_task(update_shop_in_es, result.id)
+            
     except Exception:
         await db.rollback()
         raise

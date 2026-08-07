@@ -4,7 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 from models.payment import Payment
-from models.payment_order import PaymentOrder
+from models.payment import PaymentOrder
 
 
 async def create_payment(db: AsyncSession, payment: Payment) -> Payment:

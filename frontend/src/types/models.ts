@@ -19,6 +19,12 @@ export type PaymentStatus =
   | "REFUNDED"
   | "PARTIAL_REFUND_PENDING"
   | "PARTIALLY_REFUNDED";
+export enum PaymentMethodEnum {
+  MOCK = "MOCK",
+  BANK_TRANSFER = "BANK_TRANSFER",
+  MOMO = "MOMO",
+  CREDIT_CARD = "CREDIT_CARD"
+}
 export type PaymentMethod = "MOCK" | "BANK_TRANSFER" | "MOMO" | "CREDIT_CARD";
 export type AddressType = "HOME" | "OFFICE";
 

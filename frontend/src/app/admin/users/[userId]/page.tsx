@@ -6,6 +6,10 @@ import { EmptyState } from "@/components/ui/feedback";
 import { Panel, Section } from "@/components/ui/containers";
 import { useMarketplaceStore } from "@/store/use-marketplace-store";
 
+import { useEffect, useState } from "react";
+import { fetchAdminUsers, toggleAdminUserLock } from "@/services/admin-api";
+import { User } from "@/types/models";
+
 function InfoRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-panel border border-line bg-white p-3">
@@ -31,8 +35,38 @@ export default function AdminUserDetailPage() {
   const params = useParams();
   const userId = params.userId as string;
   const store = useMarketplaceStore();
-  const user = store.state.users.find((item) => item.id === userId);
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
 
+  useEffect(() => {
+    const loadUser = async () => {
+      try {
+        setLoading(true);
+        const users = await fetchAdminUsers();
+        const found = users.find((u) => u.id === userId);
+        setUser(found || null);
+      } catch (error) {
+        console.error(error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadUser();
+  }, [userId]);
+
+  const handleToggleLock = async () => {
+    if (!user) return;
+    try {
+      const updatedUser = await toggleAdminUserLock(user.id);
+      setUser({ ...user, status: updatedUser.status });
+      store.showToast(updatedUser.status === "LOCKED" ? "Đã khóa tài khoản thành công." : "Đã mở khóa tài khoản thành công.", "success");
+    } catch (error: any) {
+      console.error(error);
+      store.showToast(error.message ?? "Lỗi cập nhật trạng thái khóa.", "danger");
+    }
+  };
+
+  if (loading) return <div className="p-10 text-center text-slate-500">Đang tải...</div>;
   if (!user) return <NotFoundPage />;
 
   return (
@@ -48,7 +82,7 @@ export default function AdminUserDetailPage() {
         <Button
           className="mt-4"
           variant={user.status === "LOCKED" ? "secondary" : "danger"}
-          onClick={() => store.toggleUserLock(user.id)}
+          onClick={handleToggleLock}
         >
           {user.status === "LOCKED" ? "Unlock user" : "Lock user"}
         </Button>

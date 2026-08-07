@@ -28,16 +28,19 @@ export type FetchProductsParams = {
   seller_id?: string;
   shop_slug?: string;
   min_rating?: number;
+  location?: string;
 };
 
 
 // Define matching interfaces for the backend models
 type SellerInfo = {
+  id: number;
   shop_name: string;
   shop_slug: string;
   shop_logo_url: string | null;
   total_sold: number;
   shipping_fee: number;
+  pickup_address?: string | null;
 };
 
 type ImagePublicResponse = {
@@ -89,15 +92,15 @@ type ProductListResponse = {
   total: number;
   page: number;
   size: number;
+  aggregations?: any;
 };
 
 // Normalize backend product into our frontend models
 export const normalizeProduct = (
   backendProduct: ProductPublicResponse
 ): { product: Product; variants: ProductVariant[]; shop?: Shop } => {
-  const sellerId = backendProduct.seller?.shop_slug ?? "unknown";
-  // NOTE: sellerId uses shop_slug as the unique identifier for public products.
-  // This is consistent with shop.id being set to shop_slug in normalizeProduct.
+  const sellerId = backendProduct.seller?.id?.toString() ?? backendProduct.seller?.shop_slug ?? "unknown";
+  // NOTE: sellerId uses the real integer ID if available, falling back to shop_slug.
   const product: Product = {
     id: backendProduct.public_id,
     sellerId,
@@ -149,7 +152,7 @@ export const normalizeProduct = (
       description: "",
       phone: "",
       email: "",
-      pickupAddress: "",
+      pickupAddress: backendProduct.seller.pickup_address ?? "",
       shippingFee: Number(backendProduct.seller.shipping_fee ?? 0),
       shippingProviderName: "",
       status: "APPROVED",
@@ -191,6 +194,7 @@ export async function fetchPublicProducts(params: FetchProductsParams) {
     if (params.seller_id) query.set("seller_id", params.seller_id);
     if (params.shop_slug) query.set("shop_slug", params.shop_slug);
     if (params.min_rating !== undefined) query.set("min_rating", params.min_rating.toString());
+    if (params.location) query.set("location", params.location);
 
     const response = await apiFetch<ProductListResponse>(`${PUBLIC_PRODUCT_ROUTES.list}?${query.toString()}`);
     
@@ -207,7 +211,7 @@ export async function fetchPublicProducts(params: FetchProductsParams) {
       }
     });
 
-    return { ok: true, products, variants, shops, total: response.total, page: response.page };
+    return { ok: true, products, variants, shops, total: response.total, page: response.page, aggregations: response.aggregations };
   } catch (error) {
     return { ok: false, message: error instanceof ApiError ? error.message : "Không thể tải danh sách sản phẩm." };
   }
@@ -217,7 +221,7 @@ export async function fetchPublicShop(shopSlug: string) {
   try {
     const response = await apiFetch<any>(`/shops/${shopSlug}`);
     const shop: Shop = {
-      id: response.shop_slug,
+      id: response.id?.toString() || response.shop_slug,
       userId: "",
       shopName: response.shop_name,
       shopSlug: response.shop_slug,

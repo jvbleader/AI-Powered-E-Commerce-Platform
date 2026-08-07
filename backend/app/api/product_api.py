@@ -1,10 +1,11 @@
 from typing import List, Optional
-from fastapi import APIRouter, Depends, Query, HTTPException
+from fastapi import APIRouter, Depends, Query, HTTPException, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel
 from core.database import DBSession
 import services.product_public_service as product_public_service
 import repositories.seller_profile_repository as seller_profile_repo
+import services.search_log_service as search_log_svc
 from schemas.product_public_schema import (
     ProductPublicResponse,
     ProductDetailPublicResponse,
@@ -39,6 +40,8 @@ class ShopPublicDetailResponse(BaseModel):
 @router.get("/products", response_model=ProductListResponse)
 async def get_products(
     db: DBSession,
+    background_tasks: BackgroundTasks,
+    current_user: CurrentUserOptional,
     keyword: Optional[str] = Query(None, description="Search by name or description"),
     category: Optional[str] = Query(None, description="Filter by category slug"),
     sort_by: Optional[str] = Query(
@@ -47,13 +50,14 @@ async def get_products(
     ),
     min_price: Optional[float] = Query(None, description="Minimum price"),
     max_price: Optional[float] = Query(None, description="Maximum price"),
-    seller_id: Optional[int] = Query(None, description="Filter by seller ID"),
+    seller_id: Optional[str] = Query(None, description="Filter by seller ID or shop slug (comma separated)"),
     shop_slug: Optional[str] = Query(None, description="Filter by shop slug"),
     min_rating: Optional[float] = Query(None, description="Minimum average rating"),
+    location: Optional[str] = Query(None, description="Filter by pickup address location"),
     page: int = Query(1, ge=1),
     size: int = Query(20, ge=1, le=100),
 ):
-    return await product_public_service.get_public_product_list(
+    result = await product_public_service.get_public_product_list(
         db=db,
         keyword=keyword,
         category_slug=category,
@@ -63,9 +67,23 @@ async def get_products(
         seller_id=seller_id,
         shop_slug=shop_slug,
         min_rating=min_rating,
+        pickup_address=location,
         page=page,
         size=size,
     )
+
+    # Log search keyword to SearchLog (background, non-blocking)
+    if keyword and keyword.strip():
+        user_id = current_user.id if current_user else None
+        background_tasks.add_task(
+            search_log_svc.log_search,
+            db=db,
+            keyword=keyword.strip(),
+            user_id=user_id,
+            result_count=result.total,
+        )
+
+    return result
 
 
 @router.get("/products/recommendations", response_model=List[ProductPublicResponse])

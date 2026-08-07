@@ -3,7 +3,7 @@ from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.user import User
-from models.user_address import UserAddress
+from models.user import UserAddress
 from schemas.user_address_schema import UserAddressCreate, UserAddressUpdate
 from repositories import user_address_repository
 

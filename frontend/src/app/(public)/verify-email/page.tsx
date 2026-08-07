@@ -1,7 +1,12 @@
 "use client";
 
 import VerificationPage from "@/components/auth/verification-form";
+import { Suspense } from "react";
 
 export default function VerifyEmailPage() {
-  return <VerificationPage type="email" />;
+  return (
+    <Suspense fallback={<div>Đang tải...</div>}>
+      <VerificationPage type="email" />
+    </Suspense>
+  );
 }

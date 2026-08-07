@@ -3,9 +3,9 @@ from sqlalchemy import select, update, delete
 from sqlalchemy.orm import selectinload
 
 from models.cart import Cart
-from models.cart_item import CartItem
-from models.product_variant import ProductVariant
-from models.product import Product
+from models.cart import CartItem
+from models.catalog import ProductVariant
+from models.catalog import Product
 
 
 async def get_cart_by_user_id(db: AsyncSession, user_id: int) -> Cart | None:
@@ -85,7 +85,7 @@ async def select_all_cart_items(
 async def get_cart_items_for_checkout(
     db: AsyncSession, user_id: int, cart_item_ids: list[int]
 ) -> list[CartItem]:
-    from models.product_variant import ProductVariant
+    from models.catalog import ProductVariant
 
     stmt = (
         select(CartItem)

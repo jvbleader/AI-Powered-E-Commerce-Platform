@@ -4,8 +4,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from models.chat_message import ChatMessage
-from models.chat_session import ChatSession
+from models.chat import ChatMessage
+from models.chat import ChatSession
 
 
 async def get_session_by_id(session_id: str, db: AsyncSession) -> ChatSession | None:

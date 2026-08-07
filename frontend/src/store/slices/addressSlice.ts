@@ -41,7 +41,8 @@ export const createAddressSlice: StateCreator<MarketplaceStore, [], [], any> = (
             isDefault: item.is_default
           }))
         }));
-      } catch (error) {
+      } catch (error: any) {
+        if (error?.status === 401 || error?.message?.includes("đăng nhập")) return;
         console.error("Failed to fetch addresses", error);
       }
     },

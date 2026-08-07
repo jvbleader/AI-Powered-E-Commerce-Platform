@@ -176,28 +176,7 @@ export const filterProducts = (
 };
 
 
-export const searchSuggestions = (
-  keyword: string,
-  products: Product[],
-  shops: Shop[],
-  categories: Category[]
-) => {
-  const normalized = keyword.trim().toLowerCase();
-  if (!normalized) return [];
-  const productHits = products
-    .filter((product) => product.name.toLowerCase().includes(normalized))
-    .slice(0, 4)
-    .map((product) => ({ label: product.name, href: `/shops/${getShop(shops, product.sellerId)?.shopSlug || "shop"}/products/${product.slug}`, type: "Sản phẩm" }));
-  const shopHits = shops
-    .filter((shop) => shop.shopName.toLowerCase().includes(normalized))
-    .slice(0, 3)
-    .map((shop) => ({ label: shop.shopName, href: `/shops/${shop.shopSlug}`, type: "Shop" }));
-  const categoryHits = categories
-    .filter((category) => category.name.toLowerCase().includes(normalized))
-    .slice(0, 3)
-    .map((category) => ({ label: category.name, href: `/categories/${category.slug}`, type: "Danh mục" }));
-  return [...productHits, ...shopHits, ...categoryHits].slice(0, 8);
-};
+
 
 export const getCartRows = (
   cartItems: CartItem[],

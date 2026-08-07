@@ -26,12 +26,10 @@ load_dotenv(backend_dir.parent / ".env")
 config = context.config
 
 # 3. Dynamic SQLAlchemy URL assignment
-database_url = os.getenv("ASYNC_DATABASE_URL") or os.getenv("DATABASE_URL")
+from core.config import settings
+
+database_url = settings.get_async_database_url
 if database_url:
-    # Standardize connection string schema if there's a typo like "mysql:asyncmy//"
-    if database_url.startswith("mysql:asyncmy//"):
-        database_url = database_url.replace("mysql:asyncmy//", "mysql+asyncmy://", 1)
-    
     # Escape percent sign for ini file configparser interpolation
     config.set_main_option("sqlalchemy.url", database_url.replace("%", "%%"))
 

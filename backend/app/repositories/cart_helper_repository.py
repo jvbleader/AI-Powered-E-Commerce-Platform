@@ -1,7 +1,7 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, or_
-from models.product_variant import ProductVariant
-from models.product import Product
+from models.catalog import ProductVariant
+from models.catalog import Product
 
 from sqlalchemy.orm import selectinload
 

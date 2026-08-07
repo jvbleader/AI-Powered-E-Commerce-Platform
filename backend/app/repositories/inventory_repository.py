@@ -3,7 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 from models.inventory import Inventory
-from models.inventory_transaction import InventoryTransaction
+from models.inventory import InventoryTransaction
 
 
 async def get_inventories_for_update(

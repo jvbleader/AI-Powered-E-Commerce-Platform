@@ -17,7 +17,7 @@ from schemas.seller_product_schema import (
     ProductResponse,
 )
 from models.user import User
-from models.product import Product
+from models.catalog import Product
 
 
 async def _get_active_seller_profile(user: User, db: AsyncSession):

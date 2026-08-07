@@ -584,7 +584,7 @@ function CustomerSupportChat({
         onConversationUpdated();
       }
     } catch (error) {
-      showToast("Lỗi kết nối máy chủ", "error");
+      showToast("Lỗi kết nối máy chủ", "danger");
     } finally {
       setIsCreating(false);
     }

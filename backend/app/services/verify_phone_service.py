@@ -18,9 +18,10 @@ from utils.hash_and_verify import hash_password, verify_password
 logger = logging.getLogger(__name__)
 
 
-load_dotenv()
-PHONE_OTP_MAX_ATTEMPTS = int(os.getenv("PHONE_OTP_MAX_ATTEMPTS") or 5)
-PHONE_OTP_TTL_MINUTES = int(os.getenv("PHONE_OTP_TTL_MINUTES") or 5)
+from core.config import settings
+
+PHONE_OTP_MAX_ATTEMPTS = settings.PHONE_OTP_MAX_ATTEMPTS
+PHONE_OTP_TTL_MINUTES = settings.PHONE_OTP_TTL_MINUTES
 
 
 def generate_otp(length: int = 6) -> str:

@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft, Bell, CreditCard, LogOut, Plus, Store, Star, Copy, Check, ExternalLink, RotateCcw, Truck, MapPin, MessageSquare, ShieldCheck, FileText, HelpCircle, Loader2, Package, Headset, LayoutDashboard, User as UserIcon, Mail, Smartphone } from "lucide-react";
-import { createReviewApi } from "@/services/review-api";
+import { createReviewApi, fetchMyReviewsApi, type UserReviewResponse } from "@/services/review-api";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Select, Textarea } from "@/components/ui/input";
 import { Panel, Section } from "@/components/ui/containers";
@@ -147,9 +147,16 @@ export default function AccountPage() {
             <div className="absolute -right-4 -top-4 h-20 w-20 rounded-full bg-amber-500/5 transition-transform duration-500 group-hover:scale-150"></div>
             <Mail className="h-7 w-7 text-amber-500 mb-4 relative z-10 drop-shadow-sm" />
             <p className="text-sm font-bold text-muted relative z-10">Email</p>
-            <p className={cn("mt-2 text-[11px] font-bold px-2 py-1 rounded bg-opacity-10 inline-block relative z-10 uppercase tracking-wider", store.getCurrentUser()?.emailVerified ? "bg-emerald-500 text-emerald-700" : "bg-coral text-coral")}>
-              {store.getCurrentUser()?.emailVerified ? "Đã xác thực" : "Chưa xác thực"}
-            </p>
+            <div className="mt-2 flex flex-wrap items-center gap-2 relative z-10">
+              <p className={cn("text-[11px] font-bold px-2 py-1 rounded bg-opacity-10 inline-block uppercase tracking-wider", store.getCurrentUser()?.emailVerified ? "bg-emerald-500 text-emerald-700" : "bg-coral text-coral")}>
+                {store.getCurrentUser()?.emailVerified ? "Đã xác thực" : "Chưa xác thực"}
+              </p>
+              {!store.getCurrentUser()?.emailVerified && (
+                <a href="/verify-email" className="text-[11px] font-bold text-white bg-coral hover:bg-coral/90 px-3 py-1 rounded shadow-sm transition-colors uppercase tracking-wider">
+                  Xác thực ngay
+                </a>
+              )}
+            </div>
           </div>
           <div className="group rounded-2xl border border-line bg-white p-5 shadow-sm transition-all hover:-translate-y-1 hover:shadow-md hover:border-line relative overflow-hidden">
             <Smartphone className="h-7 w-7 text-ink mb-4 relative z-10 drop-shadow-sm" />
@@ -1047,15 +1054,135 @@ function NotificationsPage() {
   );
 }
 
-function ReviewsModule({ product }: { product?: Product }) {
+function ReviewsModule() {
+  const store = useMarketplaceStore();
+  const [reviews, setReviews] = useState<UserReviewResponse[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [total, setTotal] = useState(0);
+  const ITEMS_PER_PAGE = 20;
+
+  useEffect(() => {
+    let isMounted = true;
+    const fetchReviews = async () => {
+      setLoading(true);
+      try {
+        const res = await fetchMyReviewsApi(page, ITEMS_PER_PAGE);
+        if (isMounted && res) {
+          setReviews(res.items || []);
+          setTotal(res.total || 0);
+          setTotalPages(Math.ceil((res.total || 0) / ITEMS_PER_PAGE) || 1);
+        }
+      } catch (err: any) {
+        store.showToast(err?.message || "Lỗi tải đánh giá.", "danger");
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    };
+    fetchReviews();
+    return () => { isMounted = false; };
+  }, [page]);
+
   return (
     <Section title="Đánh giá của tôi">
-      <Panel className="rounded-2xl border border-line shadow-sm p-12 flex flex-col items-center justify-center text-center bg-canvas/30">
-        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary/10 mb-4 text-primary">
-          <Star className="h-8 w-8" />
-        </div>
-        <h3 className="text-lg font-bold text-ink">Tính năng đang cập nhật</h3>
-        <p className="text-sm text-muted mt-2 max-w-sm">Lịch sử đánh giá sản phẩm sẽ được hiển thị tại đây khi hệ thống review được tích hợp.</p>
+      <Panel className="rounded-2xl border border-line shadow-sm overflow-hidden flex flex-col bg-white">
+        {loading ? (
+          <div className="flex justify-center p-12">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          </div>
+        ) : reviews.length === 0 ? (
+          <div className="p-12 flex flex-col items-center justify-center text-center">
+            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary/10 mb-4 text-primary">
+              <Star className="h-8 w-8" />
+            </div>
+            <h3 className="text-lg font-bold text-ink">Chưa có đánh giá nào</h3>
+            <p className="text-sm text-muted mt-2 max-w-sm">Bạn chưa viết đánh giá nào. Hãy mua hàng và để lại đánh giá để giúp những người mua khác nhé.</p>
+          </div>
+        ) : (
+          <>
+            <div className="divide-y divide-line">
+              {reviews.map((review) => (
+                <div key={review.id} className="p-6">
+                  <div className="flex flex-col sm:flex-row gap-4">
+                    {review.product && (
+                      <a href={`/products/${review.product.slug}`} className="block shrink-0 overflow-hidden rounded-xl border border-line bg-canvas/50">
+                        <img 
+                          src={review.product.image_url || "/placeholder-image.webp"} 
+                          alt={review.product.name} 
+                          className="h-20 w-20 sm:h-24 sm:w-24 rounded-xl object-cover transition-transform hover:scale-105" 
+                        />
+                      </a>
+                    )}
+                    <div className="min-w-0 flex-1">
+                      {review.product && (
+                        <a href={`/products/${review.product.slug}`} className="font-bold text-ink text-base hover:text-primary transition-colors line-clamp-2 mb-2">
+                          {review.product.name}
+                        </a>
+                      )}
+                      
+                      <div className="flex items-center gap-1 mb-3">
+                        {Array.from({ length: 5 }).map((_, i) => (
+                          <Star 
+                            key={i} 
+                            className={cn("h-4 w-4", i < review.rating ? "fill-[#facc15] text-[#facc15]" : "fill-line/30 text-line/50")} 
+                          />
+                        ))}
+                        <span className="text-xs text-muted font-medium ml-2">{formatDate(review.created_at)}</span>
+                      </div>
+                      
+                      <p className="text-sm text-ink whitespace-pre-line bg-canvas/30 p-3 rounded-xl border border-line/50">
+                        {review.comment || "Không có bình luận"}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between border-t border-line px-6 py-4 bg-white mt-auto">
+                <span className="text-sm text-muted font-medium">
+                  Hiển thị {((page - 1) * ITEMS_PER_PAGE) + 1} - {Math.min(page * ITEMS_PER_PAGE, total)} trên tổng số {total} đánh giá
+                </span>
+                <div className="flex items-center gap-2">
+                  <Button 
+                    variant="secondary" 
+                    disabled={page === 1} 
+                    onClick={() => setPage(p => Math.max(1, p - 1))}
+                    className="h-9 px-3 rounded-xl border-line hover:bg-line/30 text-ink font-bold disabled:opacity-50"
+                  >
+                    Trước
+                  </Button>
+                  <div className="flex items-center gap-1 hidden sm:flex">
+                    {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
+                      <button
+                        key={p}
+                        onClick={() => setPage(p)}
+                        className={cn(
+                          "h-9 w-9 rounded-xl text-sm font-bold transition-colors flex items-center justify-center",
+                          page === p 
+                            ? "bg-primary text-white shadow-sm" 
+                            : "text-ink hover:bg-canvas"
+                        )}
+                      >
+                        {p}
+                      </button>
+                    ))}
+                  </div>
+                  <Button 
+                    variant="secondary" 
+                    disabled={page === totalPages} 
+                    onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                    className="h-9 px-3 rounded-xl border-line hover:bg-line/30 text-ink font-bold disabled:opacity-50"
+                  >
+                    Sau
+                  </Button>
+                </div>
+              </div>
+            )}
+          </>
+        )}
       </Panel>
     </Section>
   );

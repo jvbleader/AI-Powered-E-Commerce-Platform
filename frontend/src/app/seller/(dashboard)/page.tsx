@@ -141,14 +141,7 @@ export default function SellerDashboardPage() {
   const displayProducts = summary ? summary.total_products : store.state.products.filter((product) => product.sellerId === shop?.id).length;
 
   return (
-    <Section
-      title="Tổng quan"
-      description={
-        summary?.updated_at
-          ? `Dữ liệu tính từ CSDL lúc ${formatGmt7(summary.updated_at)}`
-          : "Thống kê hoạt động kinh doanh"
-      }
-    >
+    <Section title="Tổng quan">
       <div className="mb-4 flex items-center justify-between">
         <span className="text-xs text-muted">
           {summary?.updated_at

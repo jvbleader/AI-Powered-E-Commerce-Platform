@@ -14,13 +14,13 @@ from schemas.seller_order_schema import OrderListResponse, OrderResponse
 from schemas.seller_application_schema import SellerDashboardSummaryResponse
 from models.user import User
 from models.order import Order
-from models.order_item import OrderItem
-from models.product import Product
-from models.seller_statistics import SellerStatistics
+from models.order import OrderItem
+from models.catalog import Product
+from models.seller import SellerStatistics
 from models.base import utc_now
-from models.order_status_log import OrderStatusLog
-from models.order_cancellation import OrderCancellation
-from models.inventory_transaction import InventoryTransaction
+from models.order import OrderStatusLog
+from models.order import OrderCancellation
+from models.inventory import InventoryTransaction
 from repositories import inventory_repository, order_repository
 from services.notification import send_notification
 

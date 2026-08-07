@@ -4,7 +4,7 @@ from sqlalchemy import and_, or_, select
 from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from models.user_session import UserSession
+from models.user import UserSession
 
 
 async def create_session(payload: dict, db: AsyncSession):

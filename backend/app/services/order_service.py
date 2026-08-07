@@ -7,11 +7,11 @@ from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.base import utc_now
-from models.inventory_transaction import InventoryTransaction
+from models.inventory import InventoryTransaction
 from models.order import Order
-from models.order_cancellation import OrderCancellation
-from models.order_item import OrderItem
-from models.order_status_log import OrderStatusLog
+from models.order import OrderCancellation
+from models.order import OrderItem
+from models.order import OrderStatusLog
 from models.user import User
 from schemas.order_schema import CheckoutCartRequest, CheckoutDirectRequest
 from repositories import (
@@ -159,7 +159,7 @@ async def _process_checkout(
         )
 
         # Thêm thông tin Shipment
-        from models.shipment import Shipment
+        from models.order import Shipment
 
         shipment = Shipment(
             receiver_name=address.receiver_name,
@@ -323,13 +323,13 @@ async def confirm_receipt(user: User, order_code: str, db: AsyncSession):
 
         # Update product sold_count
         if item.product_id:
-            from models.product import Product
+            from models.catalog import Product
             prod = await db.get(Product, item.product_id)
             if prod:
                 prod.sold_count += item.quantity
 
     # Update seller statistics (total_sold & total_revenue)
-    from models.seller_statistics import SellerStatistics
+    from models.seller import SellerStatistics
     from sqlalchemy import select
     seller_stats_res = await db.execute(select(SellerStatistics).where(SellerStatistics.seller_id == order.seller_id))
     stats = seller_stats_res.scalar_one_or_none()

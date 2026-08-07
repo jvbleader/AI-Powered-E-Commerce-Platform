@@ -43,7 +43,7 @@ export default function SupporterChatDetailPage() {
       {/* Header */}
       <div className="flex items-center gap-4 p-4 border-b bg-slate-50">
         <Link href="/supporter/conversations">
-          <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-500 hover:text-indigo-600">
+          <Button variant="ghost" className="h-8 w-8 p-0 text-slate-500 hover:text-indigo-600">
             <ArrowLeft className="h-5 w-5" />
           </Button>
         </Link>

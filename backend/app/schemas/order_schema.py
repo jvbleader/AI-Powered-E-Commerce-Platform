@@ -64,6 +64,7 @@ class OrderItemResponse(BaseModel):
 
 
 class ShopInfo(BaseModel):
+    id: int
     public_id: str
     shop_name: str
     shop_slug: Optional[str] = None

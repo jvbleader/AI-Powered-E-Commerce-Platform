@@ -4,7 +4,7 @@ from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.user import User
-from models.user_role import UserRole
+from models.user import UserRole
 
 
 async def get_user_by_email(email: str, db: AsyncSession) -> User:

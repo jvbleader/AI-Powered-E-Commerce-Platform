@@ -1,7 +1,7 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete
 
-from models.seller_profile import SellerProfile
+from models.seller import SellerProfile
 
 
 async def get_seller_profile_by_user_id(
@@ -113,10 +113,10 @@ async def get_sellers_by_ids(
 
 async def get_shop_stats(seller_id: int, db: AsyncSession) -> dict:
     from sqlalchemy import func
-    from models.product import Product
-    from models.product_review import ProductReview
+    from models.catalog import Product
+    from models.catalog import ProductReview
     from models.order import Order
-    from models.order_item import OrderItem
+    from models.order import OrderItem
 
     # 1. Total sold
     sold_query = (

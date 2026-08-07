@@ -4,6 +4,7 @@ sqlalchemy>=2.0
 alembic
 asyncmy
 pydantic-settings
+python-dotenv
 python-jose[cryptography]
 PyJWT
 argon2-cffi
@@ -14,4 +15,4 @@ pytest-asyncio
 langchain
 langchain-openai
 redis
-websockets
+elasticsearch[async]>=8.0.0,<9.0.0

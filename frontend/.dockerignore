@@ -1,6 +1,10 @@
 node_modules
 .next
 out
-npm-debug.log
-.env.local
+npm-debug.log*
 .env
+.env.*
+.git
+.gitignore
+*.md
+README*

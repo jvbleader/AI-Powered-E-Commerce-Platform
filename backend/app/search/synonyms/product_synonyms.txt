@@ -1,0 +1,5 @@
+laptop, máy tính xách tay
+usb, usb flash, flash drive
+tv, television, tivi
+tai nghe, headphone, earphone
+điện thoại, dien thoai, smartphone

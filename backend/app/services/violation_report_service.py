@@ -5,9 +5,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from models.violation_report import ViolationReport
-from models.violation_report_image import ViolationReportImage
-from models.product import Product
+from models.moderation import ViolationReport
+from models.moderation import ViolationReportImage
+from models.catalog import Product
 from models.user import User
 from schemas.violation_report_schema import CreateViolationReportRequest, ViolationReportResponse
 
