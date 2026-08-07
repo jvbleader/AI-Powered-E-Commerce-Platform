@@ -196,7 +196,7 @@ export function DashboardFrame({
               </nav>
             </aside>
           )}
-          <main className="min-w-0 h-full overflow-hidden flex flex-col">{children}</main>
+          <main className="min-w-0 h-full overflow-y-auto flex flex-col [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">{children}</main>
         </div>
       )}
     </div>

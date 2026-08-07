@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
+import { cn } from "@/lib/utils";
 import {
   ShoppingCart,
   ShieldCheck,
@@ -11,7 +12,8 @@ import {
   ChevronRight,
   Check,
   Info,
-  Tag
+  Tag,
+  MessageSquare
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Select, Textarea } from "@/components/ui/input";
@@ -780,6 +782,10 @@ function ReviewsModule({ product }: { product?: Product }) {
   const [reviews, setReviews] = useState<ProductReview[]>([]);
   const [loadingReviews, setLoadingReviews] = useState(true);
 
+  const [activeFilter, setActiveFilter] = useState<"ALL" | "WITH_IMAGE" | "RATING" | "VARIANT">("ALL");
+  const [selectedRating, setSelectedRating] = useState<number | null>(null);
+  const [selectedVariants, setSelectedVariants] = useState<Record<number, string>>({});
+
   useEffect(() => {
     if (!product?.id) {
       setLoadingReviews(false);
@@ -788,7 +794,20 @@ function ReviewsModule({ product }: { product?: Product }) {
 
     let isMounted = true;
     setLoadingReviews(true);
-    fetchProductReviewsApi(product.id)
+
+    let variantNameQuery = undefined;
+    if (activeFilter === "VARIANT" && Object.keys(selectedVariants).length > 0) {
+      variantNameQuery = Object.values(selectedVariants).join(", ");
+    }
+
+    fetchProductReviewsApi(
+      product.id,
+      1,
+      20,
+      activeFilter === "RATING" && selectedRating ? selectedRating : undefined,
+      activeFilter === "WITH_IMAGE" ? true : undefined,
+      variantNameQuery
+    )
       .then((res) => {
         if (isMounted && res?.items) {
           setReviews(res.items);
@@ -798,50 +817,178 @@ function ReviewsModule({ product }: { product?: Product }) {
       .finally(() => {
         if (isMounted) setLoadingReviews(false);
       });
-    return () => { isMounted = false; };
-  }, [product?.id]);
-
-  if (loadingReviews) {
-    return (
-      <div className="py-8 text-center text-xs font-semibold text-slate-400">
-        Đang tải danh sách đánh giá...
-      </div>
-    );
-  }
-
-  if (!reviews.length) {
-    return (
-      <EmptyState
-        title="Chưa có đánh giá nào"
-        description="Sản phẩm này chưa có đánh giá nào từ người mua hàng."
-      />
-    );
-  }
+    return () => {
+      isMounted = false;
+    };
+  }, [product?.id, activeFilter, selectedRating, selectedVariants]);
 
   return (
-    <div className="space-y-4">
-      {reviews.map((rev) => (
-        <div key={rev.id} className="rounded-2xl border border-slate-100 bg-slate-50/60 p-4 space-y-2">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-emerald-600 font-bold text-white text-xs shadow-xs">
-                {rev.user?.full_name?.charAt(0)?.toUpperCase() || "U"}
-              </div>
-              <div>
-                <p className="text-xs font-extrabold text-slate-900">{rev.user?.full_name || "Khách hàng"}</p>
-                <p className="text-[11px] font-medium text-slate-400">{formatDate(rev.created_at)}</p>
-              </div>
-            </div>
-            <RatingStars rating={rev.rating} />
-          </div>
+    <div className="space-y-6">
+      {/* Filters */}
+      <div className="flex flex-wrap items-center gap-3">
+        <button
+          onClick={() => setActiveFilter("ALL")}
+          className={cn(
+            "px-4 py-2 text-xs font-semibold rounded-full border transition-colors",
+            activeFilter === "ALL"
+              ? "bg-rose-500 text-white border-rose-500"
+              : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
+          )}
+        >
+          Tất cả
+        </button>
 
-          {rev.comment && (
-            <p className="text-xs text-slate-700 leading-relaxed pl-12">
-              {rev.comment}
-            </p>
+        <button
+          onClick={() => setActiveFilter("WITH_IMAGE")}
+          className={cn(
+            "px-4 py-2 text-xs font-semibold rounded-full border transition-colors",
+            activeFilter === "WITH_IMAGE"
+              ? "bg-rose-500 text-white border-rose-500"
+              : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
+          )}
+        >
+          Có hình ảnh
+        </button>
+
+        <div className="relative group">
+          <button
+            onClick={() => {
+              setActiveFilter("RATING");
+              if (!selectedRating) setSelectedRating(5);
+            }}
+            className={cn(
+              "px-4 py-2 text-xs font-semibold rounded-full border transition-colors flex items-center gap-1",
+              activeFilter === "RATING"
+                ? "bg-rose-500 text-white border-rose-500"
+                : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
+            )}
+          >
+            Sao <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
+            {activeFilter === "RATING" && selectedRating && ` (${selectedRating})`}
+          </button>
+          {activeFilter === "RATING" && (
+            <div className="absolute top-full mt-2 left-0 w-32 bg-white rounded-xl shadow-lg border border-slate-100 p-2 z-10 grid gap-1 hidden group-hover:grid">
+              {[5, 4, 3, 2, 1].map((star) => (
+                <button
+                  key={star}
+                  onClick={() => setSelectedRating(star)}
+                  className={cn(
+                    "flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors hover:bg-slate-50",
+                    selectedRating === star ? "text-rose-600 bg-rose-50" : "text-slate-700"
+                  )}
+                >
+                  {star} Sao
+                </button>
+              ))}
+            </div>
           )}
         </div>
-      ))}
+
+        {product?.variantOptions && product.variantOptions.length > 0 && (
+          <div className="relative group">
+            <button
+              onClick={() => setActiveFilter("VARIANT")}
+              className={cn(
+                "px-4 py-2 text-xs font-semibold rounded-full border transition-colors flex items-center gap-1",
+                activeFilter === "VARIANT"
+                  ? "bg-rose-500 text-white border-rose-500"
+                  : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
+              )}
+            >
+              Phân loại
+            </button>
+            {activeFilter === "VARIANT" && (
+              <div className="absolute top-full mt-2 left-0 w-64 bg-white rounded-xl shadow-lg border border-slate-100 p-4 z-10 hidden group-hover:block">
+                <div className="space-y-4">
+                  {product.variantOptions.map((optGroup: any, gIndex: number) => (
+                    <div key={gIndex}>
+                      <p className="text-xs font-semibold text-slate-900 mb-2">{optGroup.name}</p>
+                      <div className="flex flex-wrap gap-2">
+                        {optGroup.options.map((opt: string) => {
+                          const isSelected = selectedVariants[gIndex] === opt;
+                          return (
+                            <button
+                              key={opt}
+                              onClick={() => {
+                                setSelectedVariants(prev => {
+                                  const newObj = { ...prev };
+                                  if (isSelected) delete newObj[gIndex];
+                                  else newObj[gIndex] = opt;
+                                  return newObj;
+                                });
+                              }}
+                              className={cn(
+                                "px-3 py-1 rounded-lg text-xs font-medium border transition-colors",
+                                isSelected ? "border-rose-500 text-rose-600 bg-rose-50" : "border-slate-200 text-slate-600 hover:border-slate-300"
+                              )}
+                            >
+                              {opt}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Loading & Empty State */}
+      {loadingReviews ? (
+        <div className="py-8 text-center text-xs font-semibold text-slate-400">
+          Đang tải danh sách đánh giá...
+        </div>
+      ) : reviews.length === 0 ? (
+        <div className="py-12 flex flex-col items-center justify-center border border-dashed border-slate-200 rounded-3xl bg-slate-50">
+          <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center shadow-sm mb-4">
+            <MessageSquare className="h-6 w-6 text-slate-300" />
+          </div>
+          <h3 className="text-sm font-bold text-slate-700">Không tìm thấy đánh giá</h3>
+          <p className="text-xs text-slate-500 mt-1 max-w-xs text-center">
+            Không có đánh giá nào phù hợp với bộ lọc bạn đã chọn.
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {reviews.map((rev) => (
+            <div key={rev.id} className="rounded-2xl border border-slate-100 bg-slate-50/60 p-4 space-y-3">
+              <div className="flex items-start justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-full bg-emerald-600 font-bold text-white text-xs shadow-xs">
+                    {rev.user?.full_name?.charAt(0)?.toUpperCase() || "U"}
+                  </div>
+                  <div>
+                    <p className="text-xs font-extrabold text-slate-900">{rev.user?.full_name || "Khách hàng"}</p>
+                    <p className="text-[11px] font-medium text-slate-400 mt-0.5">{formatDate(rev.created_at)}</p>
+                  </div>
+                </div>
+                <RatingStars rating={rev.rating} />
+              </div>
+
+              {rev.variant_name && (
+                <p className="text-[11px] text-slate-500 pl-12 font-medium">Phân loại: {rev.variant_name}</p>
+              )}
+
+              {rev.comment && (
+                <p className="text-xs text-slate-700 leading-relaxed pl-12">
+                  {rev.comment}
+                </p>
+              )}
+
+              {rev.images && rev.images.length > 0 && (
+                <div className="pl-12 flex gap-2 overflow-x-auto pb-2">
+                  {rev.images.map((img, i) => (
+                    <img key={i} src={img} alt="Review image" className="h-16 w-16 object-cover rounded-lg border border-slate-200" />
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

@@ -27,6 +27,10 @@ class Settings(BaseSettings):
     # Optional — only used when set
     ASYNC_DATABASE_URL: Optional[str] = None
     COOKIE_DOMAIN: Optional[str] = None
+    
+    # Azure Blob Storage
+    AZURE_STORAGE_CONNECTION_STRING: Optional[str] = None
+    AZURE_CONTAINER_NAME: str = None
 
     @field_validator("COOKIE_SECURE", mode="before")
     @classmethod

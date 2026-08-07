@@ -4,9 +4,12 @@ import { useEffect, useState } from "react";
 import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox, Field, Input, Select, Textarea } from "@/components/ui/input";
+import { MultiSelect } from "@/components/ui/multi-select";
+import { ImageUpload } from "@/components/ui/image-upload";
 import { Panel, Section } from "@/components/ui/containers";
 import { StatusBadge } from "@/components/ui/badge";
 import { useMarketplaceStore } from "@/store/use-marketplace-store";
+import { fetchCategories } from "@/services/product-api";
 import type { Product, ProductVariant } from "@/types/models";
 import Unauthorized from "@/components/shared/unauthorized-page";
 
@@ -30,12 +33,27 @@ function InfoRow({ label, value }: { label: string; value: string }) {
 }
 
 export default function ProductForm({ productId }: { productId?: string }) {
-  const store = useMarketplaceStore();
-  const shop = store.getCurrentShop();
-  const { showToast } = store;
+  const shop = useMarketplaceStore((s) => s.getCurrentShop());
+  const showToast = useMarketplaceStore((s) => s.showToast);
+  const currentUser = useMarketplaceStore((s) => s.getCurrentUser());
+  const updateSellerProduct = useMarketplaceStore((s) => s.updateSellerProduct);
+  const createSellerProduct = useMarketplaceStore((s) => s.createSellerProduct);
+  
+  const editing = useMarketplaceStore((s) => s.state.products.find((product) => product.id === productId));
+  const variants = useMarketplaceStore((s) => s.state.variants);
+  const editingVariants = editing ? variants.filter((v) => v.productId === editing.id) : [];
+  const categories = useMarketplaceStore((s) => s.state.categories);
+  const setCategories = useMarketplaceStore((s) => s.setCategories);
 
-  const editing = store.state.products.find((product) => product.id === productId);
-  const editingVariants = editing ? store.state.variants.filter((v) => v.productId === editing.id) : [];
+  useEffect(() => {
+    if (categories.length === 0) {
+      fetchCategories().then(res => {
+        if (res.ok && res.categories) {
+          setCategories(res.categories);
+        }
+      });
+    }
+  }, [categories.length, setCategories]);
 
   const [name, setName] = useState(editing?.name ?? "");
   const [shortDescription, setShortDescription] = useState(editing?.shortDescription ?? "");
@@ -43,7 +61,6 @@ export default function ProductForm({ productId }: { productId?: string }) {
   const [brand, setBrand] = useState(editing?.brand ?? "");
   const [origin, setOrigin] = useState(editing?.origin ?? "Việt Nam");
   const [warranty, setWarranty] = useState(editing?.warranty ?? "");
-  const [status, setStatus] = useState<Product["status"]>(editing?.status ?? "ACTIVE");
   const [categoryIds, setCategoryIds] = useState<string[]>(editing?.categoryIds ?? []);
   const [imageUrl, setImageUrl] = useState(editing?.thumbnailUrl || "https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=900&q=80");
   const slug = slugify(name || "san-pham-moi");
@@ -108,7 +125,7 @@ export default function ProductForm({ productId }: { productId?: string }) {
           setVariantMatrix(newMatrix);
       }
     }
-  }, [editing, store.state.variants]);
+  }, [editing, variants]);
 
   // Generate Cartesian Product of options
   useEffect(() => {
@@ -155,11 +172,11 @@ export default function ProductForm({ productId }: { productId?: string }) {
   };
 
   const handleAddOption = () => {
-      if (options.length >= 2) return;
+      if (options.length >= 3) return;
       setOptions([...options, { name: `Nhóm phân loại ${options.length + 1}`, values: [] }]);
   };
 
-  if (!store.getCurrentUser()) {
+  if (!currentUser) {
     return <Unauthorized title="Cần đăng nhập" description="Bạn cần đăng nhập trước khi quản lý sản phẩm." />;
   }
 
@@ -168,7 +185,15 @@ export default function ProductForm({ productId }: { productId?: string }) {
       <Panel>
         <div className="grid gap-4 lg:grid-cols-[1fr_400px]">
           <div className="grid gap-4">
-            <Field label="Tên sản phẩm"><Input value={name} onChange={(event) => setName(event.target.value)} /></Field>
+            <Field label="Tên sản phẩm">
+              <Input 
+                value={name} 
+                onChange={(event) => setName(event.target.value)} 
+                autoComplete="off" 
+                autoCapitalize="none" 
+                spellCheck="false" 
+              />
+            </Field>
             <InfoRow label="Slug preview" value={slug} />
             <Field label="Mô tả ngắn"><Textarea value={shortDescription} onChange={(e) => setShortDescription(e.target.value)} /></Field>
             <Field label="Mô tả dài"><Textarea value={description} onChange={(e) => setDescription(e.target.value)} /></Field>
@@ -177,38 +202,16 @@ export default function ProductForm({ productId }: { productId?: string }) {
               <Field label="Xuất xứ"><Input value={origin} onChange={(e) => setOrigin(e.target.value)} /></Field>
               <Field label="Bảo hành"><Input value={warranty} onChange={(e) => setWarranty(e.target.value)} /></Field>
             </div>
-            <Field label="URL ảnh sản phẩm chính">
-              <div className="flex gap-2">
-                <Input type="text" value={imageUrl} onChange={(e) => setImageUrl(e.target.value)} placeholder="Nhập URL ảnh" />
-                <Button 
-                  type="button" 
-                  variant="secondary" 
-                  onClick={() => {
-                    // Mock upload to Cloudinary/S3
-                    store.showToast("Đang tải ảnh lên...", "info");
-                    setTimeout(() => {
-                      setImageUrl("https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=900&q=80");
-                      store.showToast("Tải ảnh thành công (Mock)!", "success");
-                    }, 1000);
-                  }}
-                >
-                  Upload
-                </Button>
-              </div>
+            <Field label="Ảnh sản phẩm chính">
+              <ImageUpload value={imageUrl} onChange={setImageUrl} />
             </Field>
             <Field label="Danh mục sản phẩm">
-              <div className="grid gap-2 sm:grid-cols-2">
-                {store.state.categories.map((category) => (
-                  <Checkbox
-                    key={category.id}
-                    label={category.name}
-                    checked={categoryIds.includes(category.id)}
-                    onChange={(event) => {
-                      setCategoryIds((prev) => event.target.checked ? [...prev, category.id] : prev.filter((id) => id !== category.id));
-                    }}
-                  />
-                ))}
-              </div>
+              <MultiSelect
+                options={categories.map(cat => ({ label: cat.name, value: String(cat.id) }))}
+                value={categoryIds.map(String)}
+                onChange={(newValues) => setCategoryIds(newValues.map(String))}
+                placeholder="Chọn danh mục..."
+              />
             </Field>
           </div>
           
@@ -232,7 +235,7 @@ export default function ProductForm({ productId }: { productId?: string }) {
               {hasVariants && (
                   <div className="space-y-4">
                       {options.map((opt, oIdx) => (
-                          <div key={oIdx} className="bg-slate-50 dark:bg-slate-800 p-3 rounded border space-y-2">
+                          <div key={oIdx} className="bg-slate-50 p-3 rounded border border-slate-200 space-y-2">
                               <div className="flex justify-between items-center">
                                   <Input value={opt.name} onChange={e => {
                                       const newOpts = [...options];
@@ -258,7 +261,7 @@ export default function ProductForm({ productId }: { productId?: string }) {
                               </div>
                           </div>
                       ))}
-                      {options.length < 2 && (
+                      {options.length < 3 && (
                           <Button variant="secondary" onClick={handleAddOption} className="w-full text-sm">
                               + Thêm nhóm phân loại
                           </Button>
@@ -267,21 +270,13 @@ export default function ProductForm({ productId }: { productId?: string }) {
               )}
             </Panel>
             
-            <Field label="Status">
-              <Select value={status} onChange={(event) => setStatus(event.target.value as Product["status"])}>
-                <option value="ACTIVE">ACTIVE</option>
-                <option value="HIDDEN">HIDDEN</option>
-                <option value="OUT_OF_STOCK">OUT_OF_STOCK</option>
-                <option value="DELETED">DELETED</option>
-              </Select>
-            </Field>
           </div>
         </div>
 
         <div className="mt-8 border-t pt-8">
           <h3 className="font-bold text-lg mb-4">Ma trận phân loại hàng</h3>
           {hasVariants && (
-              <div className="flex items-center gap-3 mb-4 bg-slate-50 dark:bg-slate-800 p-4 rounded border">
+              <div className="flex items-center gap-3 mb-4 bg-slate-50 p-4 rounded border border-slate-200">
                   <span className="font-semibold text-sm">Áp dụng cho tất cả:</span>
                   <Input placeholder="Giá bán..." value={bulkPrice} onChange={e => setBulkPrice(e.target.value)} type="number" className="w-32" />
                   <Input placeholder="Tồn kho..." value={bulkQuantity} onChange={e => setBulkQuantity(e.target.value)} type="number" className="w-32" />
@@ -291,18 +286,18 @@ export default function ProductForm({ productId }: { productId?: string }) {
           <div className="overflow-x-auto">
             <table className="w-full border-collapse">
               <thead>
-                  <tr className="bg-slate-100 dark:bg-slate-800 border-b">
+                  <tr className="bg-slate-100 border-b border-slate-200">
                       {hasVariants && options.map((o, i) => (
-                          <th key={i} className="p-3 text-left font-medium">{o.name}</th>
+                          <th key={i} className="p-3 text-left font-medium text-ink">{o.name}</th>
                       ))}
-                      <th className="p-3 text-left font-medium">Giá bán *</th>
-                      <th className="p-3 text-left font-medium">Tồn kho *</th>
-                      <th className="p-3 text-left font-medium">SKU</th>
+                      <th className="p-3 text-left font-medium text-ink">Giá bán *</th>
+                      <th className="p-3 text-left font-medium text-ink">Tồn kho *</th>
+                      <th className="p-3 text-left font-medium text-ink">SKU</th>
                   </tr>
               </thead>
               <tbody>
                   {variantMatrix.map((row, rIdx) => (
-                      <tr key={rIdx} className="border-b hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                      <tr key={rIdx} className="border-b border-slate-200 hover:bg-slate-50">
                           {hasVariants && row.tierIndex.map((optIdx, i) => (
                               <td key={i} className="p-3">{options[i]?.values[optIdx]}</td>
                           ))}
@@ -370,9 +365,9 @@ export default function ProductForm({ productId }: { productId?: string }) {
 
                 let res;
                 if (editing) {
-                  res = await store.updateSellerProduct(editing.id, payload);
+                  res = await updateSellerProduct(editing.id, payload);
                 } else {
-                  res = await store.createSellerProduct(payload);
+                  res = await createSellerProduct(payload);
                 }
 
                 if (res.ok) {

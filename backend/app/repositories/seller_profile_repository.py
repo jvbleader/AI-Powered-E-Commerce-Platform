@@ -4,6 +4,15 @@ from sqlalchemy import select, delete
 from models.seller import SellerProfile
 
 
+async def get_seller_profile_by_id(
+    seller_id: int, db: AsyncSession
+) -> SellerProfile:
+    result = await db.execute(
+        select(SellerProfile).where(SellerProfile.id == seller_id)
+    )
+    return result.scalar_one_or_none()
+
+
 async def get_seller_profile_by_user_id(
     user_id: int, db: AsyncSession
 ) -> SellerProfile:

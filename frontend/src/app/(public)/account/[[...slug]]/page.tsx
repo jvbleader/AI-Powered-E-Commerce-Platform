@@ -2,9 +2,11 @@
 
 import { useEffect, useState, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, Bell, CreditCard, LogOut, Plus, Store, Star, Copy, Check, ExternalLink, RotateCcw, Truck, MapPin, MessageSquare, ShieldCheck, FileText, HelpCircle, Loader2, Package, Headset, LayoutDashboard, User as UserIcon, Mail, Smartphone } from "lucide-react";
+import { ArrowLeft, Bell, CreditCard, LogOut, Plus, Store, Star, Copy, Check, ExternalLink, RotateCcw, Truck, MapPin, MessageSquare, ShieldCheck, FileText, HelpCircle, Loader2, Package, Headset, LayoutDashboard, User as UserIcon, Mail, Smartphone, X, Upload } from "lucide-react";
 import { createReviewApi, fetchMyReviewsApi, type UserReviewResponse } from "@/services/review-api";
 import { Button } from "@/components/ui/button";
+import { ImageUpload } from "@/components/ui/image-upload";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from "@/components/ui/dialog";
 import { Field, Input, Select, Textarea } from "@/components/ui/input";
 import { Panel, Section } from "@/components/ui/containers";
 import { StatusBadge } from "@/components/ui/badge";
@@ -437,6 +439,8 @@ export default function AccountPage() {
     const [comment, setComment] = useState("");
     const [reviewedItemIds, setReviewedItemIds] = useState<Record<string, boolean>>({});
     const [submittingReview, setSubmittingReview] = useState(false);
+    const [images, setImages] = useState<string[]>([]);
+    const [uploadingImage, setUploadingImage] = useState(false);
     
     useEffect(() => {
       const needsFetch = !order || !order.shipment || order.shipment.receiverName === "-";
@@ -498,12 +502,16 @@ export default function AccountPage() {
         await createReviewApi({
           order_item_id: Number(reviewingItem.id),
           rating,
-          comment: comment.trim() || undefined
+          comment: comment.trim() || undefined,
+          images: images
         });
         showToast("Đã gửi đánh giá thành công!", "success");
         reviewingItem.isReviewed = true;
         setReviewedItemIds((prev) => ({ ...prev, [reviewingItem.id]: true }));
         setReviewingItem(null);
+        setRating(5);
+        setComment("");
+        setImages([]);
       } catch (err: any) {
         showToast(err?.message || "Lỗi khi gửi đánh giá.", "danger");
       } finally {
@@ -865,6 +873,63 @@ export default function AccountPage() {
                   onChange={(e) => setComment(e.target.value)}
                   className="min-h-[110px] text-xs"
                 />
+              </div>
+
+              <div className="mt-4">
+                <p className="text-xs font-semibold text-slate-700 mb-2">Thêm hình ảnh (Tối đa 4 ảnh)</p>
+                <div className="flex flex-wrap gap-2">
+                  {images.map((img, i) => (
+                    <div key={i} className="relative h-16 w-16 rounded-md border border-slate-200 overflow-hidden">
+                      <img src={img} alt="review image" className="h-full w-full object-cover" />
+                      <button
+                        type="button"
+                        onClick={() => setImages(images.filter((_, idx) => idx !== i))}
+                        className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-white hover:bg-red-600"
+                        title="Xóa ảnh"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </div>
+                  ))}
+                  
+                  {images.length < 4 && (
+                    <div className="relative h-16 w-16 border border-dashed border-slate-300 rounded-md flex items-center justify-center text-slate-400 hover:border-slate-400 hover:text-slate-600 transition-colors bg-slate-50 cursor-pointer group" title="Tải ảnh lên">
+                       {uploadingImage ? <Loader2 className="h-5 w-5 animate-spin" /> : <Upload className="h-5 w-5" />}
+                       <input 
+                         type="file" 
+                         accept="image/*" 
+                         className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                         disabled={uploadingImage}
+                         onChange={async (e) => {
+                           const file = e.target.files?.[0];
+                           if (!file) return;
+                           setUploadingImage(true);
+                           const formData = new FormData();
+                           formData.append("file", file);
+                           try {
+                             const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+                             const res = await fetch(`${baseUrl}/api/upload/image`, {
+                               method: "POST",
+                               body: formData,
+                               credentials: "include"
+                             });
+                             if (res.ok) {
+                               const data = await res.json();
+                               if (data.url) setImages(prev => [...prev, data.url]);
+                             } else {
+                               throw new Error("Lỗi tải ảnh");
+                             }
+                           } catch (err) {
+                             console.error(err);
+                           } finally {
+                             setUploadingImage(false);
+                             e.target.value = "";
+                           }
+                         }}
+                       />
+                    </div>
+                  )}
+                </div>
               </div>
 
               <div className="mt-6 flex justify-end gap-2">

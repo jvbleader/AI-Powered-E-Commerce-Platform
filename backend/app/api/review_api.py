@@ -39,8 +39,19 @@ async def get_product_reviews(
     db: DBSession,
     page: int = Query(1, ge=1),
     size: int = Query(20, ge=1, le=100),
+    rating: int = Query(None, ge=1, le=5),
+    has_image: bool = Query(None),
+    variant_name: str = Query(None)
 ):
-    return await review_service.get_product_reviews(db=db, product_id=product_id, page=page, size=size)
+    return await review_service.get_product_reviews(
+        db=db, 
+        product_id=product_id, 
+        page=page, 
+        size=size,
+        rating=rating,
+        has_image=has_image,
+        variant_name=variant_name
+    )
 
 @router.get("/reviews/me", response_model=UserReviewListResponse)
 async def get_my_reviews(

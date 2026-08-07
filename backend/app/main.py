@@ -94,6 +94,8 @@ from api.seller_chat_api import router as seller_chat_router
 from api.notification_api import router as notifications_router
 from api.search_api import router as search_router
 
+from api.upload_api import router as upload_router
+
 app.include_router(auth_router)
 app.include_router(seller_router)
 app.include_router(seller_product_router)
@@ -112,6 +114,7 @@ app.include_router(support_chat_router, prefix="/api/support-chat")
 app.include_router(seller_chat_router, prefix="/api/seller-chat")
 app.include_router(notifications_router, prefix="/notifications", tags=["notifications"])
 app.include_router(search_router)
+app.include_router(upload_router, prefix="/api")
 
 
 

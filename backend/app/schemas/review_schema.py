@@ -14,6 +14,7 @@ class ReviewCreate(BaseModel):
     order_item_id: int
     rating: int = Field(..., ge=1, le=5, description="Rating from 1 to 5")
     comment: Optional[str] = Field(None, max_length=2000)
+    images: Optional[List[str]] = Field(None, max_items=4, description="List of image URLs (up to 4)")
 
 class ReviewResponse(BaseModel):
     id: int
@@ -24,6 +25,8 @@ class ReviewResponse(BaseModel):
     comment: Optional[str]
     created_at: datetime
     user: Optional[UserReviewInfo] = None
+    images: List[str] = []
+    variant_name: Optional[str] = None
 
     class Config:
         from_attributes = True

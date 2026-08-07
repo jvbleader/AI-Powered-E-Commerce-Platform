@@ -20,6 +20,7 @@ interface MultiSelectProps {
 
 export function MultiSelect({ options, value, onChange, placeholder = "Select...", className }: MultiSelectProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [search, setSearch] = useState("");
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -52,46 +53,62 @@ export function MultiSelect({ options, value, onChange, placeholder = "Select...
     ? (selectedLabels.length <= 2 ? selectedLabels.join(", ") : `${selectedLabels.length} đã chọn`) 
     : placeholder;
 
+  const filteredOptions = options.filter(opt => 
+    opt.label.toLowerCase().includes(search.toLowerCase())
+  );
+
   return (
     <div className={cn("relative", className)} ref={containerRef}>
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="flex h-9 w-full items-center justify-between rounded-panel border border-line bg-white px-3 text-sm text-ink transition hover:border-primary focus:border-primary focus:outline-none"
+        className="flex h-10 w-full items-center justify-between rounded-panel border border-line bg-white px-3 text-sm text-ink transition hover:border-primary focus:border-primary focus:outline-none"
       >
         <span className="truncate">{displayValue}</span>
         <ChevronDown className={cn("h-4 w-4 text-muted transition-transform", isOpen && "rotate-180")} />
       </button>
 
       {isOpen && (
-        <div className="absolute z-50 mt-1 max-h-60 w-full min-w-[200px] overflow-auto rounded-md border border-line bg-white py-1 shadow-lg">
-          {options.length === 0 ? (
-            <div className="px-3 py-2 text-sm text-muted">Không có lựa chọn</div>
-          ) : (
-            options.map((option) => {
-              const isSelected = value.includes(option.value);
-              return (
-                <div
-                  key={option.value}
-                  onClick={(e) => handleToggleOption(e, option.value)}
-                  className="flex cursor-pointer items-center justify-between px-3 py-2 text-sm hover:bg-slate-50"
-                >
-                  <div className="flex items-center gap-2">
-                    <div className={cn(
-                      "flex h-4 w-4 items-center justify-center rounded border transition-colors",
-                      isSelected ? "border-primary bg-primary text-white" : "border-line bg-white"
-                    )}>
-                      {isSelected && <Check className="h-3 w-3" />}
+        <div className="absolute z-50 mt-1 max-h-60 w-full min-w-[200px] overflow-hidden rounded-md border border-line bg-white shadow-lg flex flex-col">
+          <div className="p-2 border-b border-line shrink-0">
+            <input 
+              type="text" 
+              placeholder="Tìm kiếm..." 
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full text-sm px-2 py-1.5 border border-line rounded-md focus:outline-none focus:border-primary"
+              autoFocus
+            />
+          </div>
+          <div className="overflow-y-auto flex-1 py-1">
+            {filteredOptions.length === 0 ? (
+              <div className="px-3 py-2 text-sm text-muted">Không có lựa chọn</div>
+            ) : (
+              filteredOptions.map((option) => {
+                const isSelected = value.includes(option.value);
+                return (
+                  <div
+                    key={option.value}
+                    onClick={(e) => handleToggleOption(e, option.value)}
+                    className="flex cursor-pointer items-center justify-between px-3 py-2 text-sm hover:bg-slate-50"
+                  >
+                    <div className="flex items-center gap-2">
+                      <div className={cn(
+                        "flex h-4 w-4 items-center justify-center rounded border transition-colors",
+                        isSelected ? "border-primary bg-primary text-white" : "border-line bg-white"
+                      )}>
+                        {isSelected && <Check className="h-3 w-3" />}
+                      </div>
+                      <span className="text-ink">{option.label}</span>
                     </div>
-                    <span className="text-ink">{option.label}</span>
+                    {option.count !== undefined && (
+                      <span className="text-xs text-muted">{option.count}</span>
+                    )}
                   </div>
-                  {option.count !== undefined && (
-                    <span className="text-xs text-muted">{option.count}</span>
-                  )}
-                </div>
-              );
-            })
-          )}
+                );
+              })
+            )}
+          </div>
         </div>
       )}
     </div>

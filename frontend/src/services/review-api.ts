@@ -15,6 +15,8 @@ export interface ProductReview {
   comment?: string;
   created_at: string;
   user?: ReviewUser;
+  images?: string[];
+  variant_name?: string;
 }
 
 export interface ReviewListResponse {
@@ -29,6 +31,7 @@ export interface CreateReviewPayload {
   order_item_id: number;
   rating: number;
   comment?: string;
+  images?: string[];
 }
 
 export async function createReviewApi(payload: CreateReviewPayload): Promise<ProductReview> {
@@ -41,9 +44,16 @@ export async function createReviewApi(payload: CreateReviewPayload): Promise<Pro
 export async function fetchProductReviewsApi(
   productId: string | number,
   page: number = 1,
-  size: number = 20
+  size: number = 20,
+  rating?: number,
+  hasImage?: boolean,
+  variantName?: string
 ): Promise<ReviewListResponse> {
-  return apiFetch<ReviewListResponse>(`/products/${productId}/reviews?page=${page}&size=${size}`);
+  let url = `/products/${productId}/reviews?page=${page}&size=${size}`;
+  if (rating) url += `&rating=${rating}`;
+  if (hasImage) url += `&has_image=true`;
+  if (variantName) url += `&variant_name=${encodeURIComponent(variantName)}`;
+  return apiFetch<ReviewListResponse>(url);
 }
 
 export interface ProductReviewInfo {

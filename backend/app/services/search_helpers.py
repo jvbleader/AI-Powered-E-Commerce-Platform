@@ -105,7 +105,7 @@ async def sync_product_to_es(product_public_id: str) -> None:
             .where(Product.public_id == product_public_id)
             .options(
                 selectinload(Product.images),
-                selectinload(Product.variants).selectinload("inventory"),
+                selectinload(Product.variants).selectinload(ProductVariant.inventory),
                 selectinload(Product.seller),
                 selectinload(Product.categories),
             )
@@ -154,7 +154,7 @@ async def update_products_in_es(product_ids: list[int]) -> None:
             .where(Product.id.in_(product_ids))
             .options(
                 selectinload(Product.images),
-                selectinload(Product.variants).selectinload("inventory"),
+                selectinload(Product.variants).selectinload(ProductVariant.inventory),
                 selectinload(Product.seller),
                 selectinload(Product.categories),
             )

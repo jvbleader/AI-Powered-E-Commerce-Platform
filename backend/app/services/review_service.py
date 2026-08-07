@@ -39,7 +39,8 @@ async def create_product_review(
         product_id=order_item.product_id,
         order_item_id=data.order_item_id,
         rating=data.rating,
-        comment=data.comment
+        comment=data.comment,
+        images=data.images
     )
 
     return ReviewResponse.model_validate(review)
@@ -48,14 +49,20 @@ async def get_product_reviews(
     db: AsyncSession,
     product_id: str,
     page: int = 1,
-    size: int = 20
+    size: int = 20,
+    rating: Optional[int] = None,
+    has_image: Optional[bool] = None,
+    variant_name: Optional[str] = None
 ) -> ReviewListResponse:
     skip = (page - 1) * size
     items, total, avg_rating = await review_repo.get_product_reviews(
         db=db,
         product_identifier=product_id,
         skip=skip,
-        limit=size
+        limit=size,
+        rating=rating,
+        has_image=has_image,
+        variant_name=variant_name
     )
 
     review_responses = []
@@ -67,6 +74,9 @@ async def get_product_reviews(
                 full_name=item.user.full_name or "Người dùng",
                 avatar_url=item.user.avatar_url
             )
+        
+        resp.images = [img.image_url for img in sorted(item.images, key=lambda x: x.sort_order)] if item.images else []
+        resp.variant_name = item.order_item.variant_name_snapshot if item.order_item else None
         review_responses.append(resp)
 
     return ReviewListResponse(
