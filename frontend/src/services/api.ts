@@ -119,7 +119,22 @@ function toApiError(error: unknown): unknown {
 
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,
-  withCredentials: true
+  withCredentials: true,
+  transformResponse: [
+    (data) => {
+      if (data === null || data === undefined) return null;
+      if (typeof data === "string") {
+        const trimmed = data.trim();
+        if (!trimmed) return null;
+        try {
+          return JSON.parse(trimmed);
+        } catch {
+          return data;
+        }
+      }
+      return data;
+    },
+  ],
 });
 
 apiClient.interceptors.request.use((config) => {

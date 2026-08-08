@@ -1080,7 +1080,7 @@ function NotificationsPage() {
           <div className="py-12 flex justify-center"><span className="loading loading-spinner text-primary"></span></div>
         ) : notifications.length > 0 ? (
           notifications.map((notif) => {
-            const notifType = notif.action_url?.startsWith('/chat') ? 'support' : notif.type?.toLowerCase();
+            const notifType = (notif.action_url?.startsWith('/support') || notif.action_url?.startsWith('/chat')) ? 'support' : notif.type?.toLowerCase();
             return (
             <Panel key={notif.id} className={cn("rounded-2xl border border-line shadow-sm p-5 transition-all hover:-translate-y-0.5 hover:shadow-md hover:border-primary/30", notif.is_read ? "bg-primary/5 border-primary/20" : "bg-white")}>
               <div className="flex items-start gap-4">

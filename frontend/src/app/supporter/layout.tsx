@@ -7,6 +7,7 @@ import { useMarketplaceStore } from "@/store/use-marketplace-store";
 import Unauthorized from "@/components/shared/unauthorized-page";
 
 import { Skeleton } from "@/components/ui/skeleton";
+import { SupporterSupportInboxProvider } from "@/components/support/SupporterSupportInboxProvider";
 
 export default function SupporterLayout({
   children
@@ -73,5 +74,9 @@ export default function SupporterLayout({
     );
   }
 
-  return <DashboardFrame kind="supporter">{children}</DashboardFrame>;
+  return (
+    <SupporterSupportInboxProvider>
+      <DashboardFrame kind="supporter">{children}</DashboardFrame>
+    </SupporterSupportInboxProvider>
+  );
 }

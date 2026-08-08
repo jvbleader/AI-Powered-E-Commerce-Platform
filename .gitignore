@@ -69,3 +69,5 @@ redis_data/
 /backend/database
 
 docker-compose.tunnel.yml
+
+/scripts

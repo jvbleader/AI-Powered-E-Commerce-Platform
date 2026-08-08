@@ -459,6 +459,35 @@ async def get_public_products(
     return items, total
 
 
+async def get_primary_variants_by_product_public_ids(
+    db: AsyncSession, product_public_ids: list[str]
+) -> dict[str, ProductVariant]:
+    """Return the preferred primary variant for each product public_id."""
+    if not product_public_ids:
+        return {}
+
+    stmt = (
+        select(ProductVariant, Product.public_id)
+        .join(Product, ProductVariant.product_id == Product.id)
+        .options(selectinload(ProductVariant.inventory))
+        .where(Product.public_id.in_(product_public_ids))
+        .where(ProductVariant.status != "DELETED")
+        .order_by(Product.public_id, ProductVariant.id)
+    )
+    result = await db.execute(stmt)
+
+    mapping: dict[str, ProductVariant] = {}
+    for variant, product_public_id in result.all():
+        current = mapping.get(product_public_id)
+        if current is None:
+            mapping[product_public_id] = variant
+            continue
+        if current.status != "ACTIVE" and variant.status == "ACTIVE":
+            mapping[product_public_id] = variant
+
+    return mapping
+
+
 async def get_public_product_detail(
     db: AsyncSession, shop_slug: str, product_slug: str
 ) -> Optional[Product]:

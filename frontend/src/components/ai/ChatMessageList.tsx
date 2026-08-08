@@ -1,6 +1,5 @@
 "use client";
 
-import { useEffect, useRef } from "react";
 import { Sparkles } from "lucide-react";
 import { AIChatMessage } from "@/services/aiChatService";
 import { ChatMessageItem } from "./ChatMessageItem";
@@ -14,25 +13,8 @@ export function ChatMessageList({
   isStreaming?: boolean;
   currentStatus?: string | null;
 }) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const bottomRef = useRef<HTMLDivElement>(null);
-
-  const scrollToBottomInstant = () => {
-    if (containerRef.current) {
-      containerRef.current.scrollTop = containerRef.current.scrollHeight;
-    } else if (bottomRef.current) {
-      bottomRef.current.scrollIntoView({ behavior: "auto" });
-    }
-  };
-
-  useEffect(() => {
-    scrollToBottomInstant();
-    const frameId = requestAnimationFrame(scrollToBottomInstant);
-    return () => cancelAnimationFrame(frameId);
-  }, [messages, currentStatus]);
-
   return (
-    <div ref={containerRef} className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4 no-scrollbar">
+    <div className="space-y-4">
       {messages.map((msg, idx) => (
         <ChatMessageItem
           key={msg.id || idx}
@@ -47,8 +29,6 @@ export function ChatMessageList({
           <span className="font-medium">{currentStatus}</span>
         </div>
       )}
-
-      <div ref={bottomRef} />
     </div>
   );
 }

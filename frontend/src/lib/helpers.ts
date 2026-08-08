@@ -22,19 +22,32 @@ export const formatVnd = (value: number) =>
     maximumFractionDigits: 0
   }).format(value);
 
-export const formatDate = (value?: string | Date) => {
-  if (!value) return "Chưa có";
-  let dateObj: Date;
-  if (typeof value === "string") {
-    let s = value.trim();
-    if (/^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(\.\d+)?$/.test(s)) {
-      s = s.replace(" ", "T") + "Z";
-    }
-    dateObj = new Date(s);
-  } else {
-    dateObj = value;
+/** API datetimes are UTC but often serialized without a timezone suffix. */
+export function parseApiDateTime(value?: string | Date): Date | null {
+  if (!value) return null;
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? null : value;
   }
-  if (isNaN(dateObj.getTime())) return "Chưa có";
+
+  let s = value.trim();
+  if (!s) return null;
+
+  if (/[zZ]$/.test(s) || /[+-]\d{2}:\d{2}$/.test(s)) {
+    const dateObj = new Date(s);
+    return Number.isNaN(dateObj.getTime()) ? null : dateObj;
+  }
+
+  if (/^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(\.\d+)?$/.test(s)) {
+    s = s.replace(" ", "T") + "Z";
+  }
+
+  const dateObj = new Date(s);
+  return Number.isNaN(dateObj.getTime()) ? null : dateObj;
+}
+
+export const formatDate = (value?: string | Date) => {
+  const dateObj = parseApiDateTime(value);
+  if (!dateObj) return "Chưa có";
   return new Intl.DateTimeFormat("vi-VN", {
     timeZone: "Asia/Ho_Chi_Minh",
     day: "2-digit",

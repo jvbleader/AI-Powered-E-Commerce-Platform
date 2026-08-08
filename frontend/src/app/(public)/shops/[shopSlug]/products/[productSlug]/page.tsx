@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { cn } from "@/lib/utils";
 import {
@@ -10,10 +10,13 @@ import {
   Star,
   Flag,
   ChevronRight,
+  ChevronDown,
+  ChevronLeft,
   Check,
   Info,
   Tag,
-  MessageSquare
+  MessageSquare,
+  X
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Select, Textarea } from "@/components/ui/input";
@@ -522,12 +525,25 @@ export default function ProductDetailPage() {
                   window.dispatchEvent(new CustomEvent('open-chat-widget', {
                     detail: {
                       shopId: Number(activeShop.id) || activeShop.id,
+                      fromProductPage: true,
+                      shopInfo: {
+                        id: Number(activeShop.id) || activeShop.id,
+                        name: activeShop.shopName,
+                        avatar: activeShop.logoUrl || null,
+                      },
                       productDraft: {
                          id: product.id,
+                         public_id: product.id,
                          name: product.name,
+                         slug: product.slug,
+                         shop_slug: activeShop.shopSlug,
                          price: selectedVariant?.price || 0,
                          promotional_price: selectedVariant?.salePrice,
-                         images: [{ image_url: activeImageSrc, is_primary: true }]
+                         images: [{ image_url: activeImageSrc, is_thumbnail: true }],
+                         variants: [{
+                           price: selectedVariant?.price || 0,
+                           sale_price: selectedVariant?.salePrice ?? null
+                         }]
                       }
                     }
                   }));
@@ -656,7 +672,7 @@ export default function ProductDetailPage() {
       <div className="rounded-3xl border border-slate-200/80 bg-white p-6 sm:p-8 shadow-sm space-y-5">
         <h2 className="font-heading text-lg font-black text-slate-900 flex items-center gap-2 border-b border-slate-100 pb-3">
           <Star className="h-5 w-5 fill-yellow-400 text-yellow-400" />
-          <span>Đánh Giá Khách Hàng</span>
+          <span>Đánh giá sản phẩm</span>
         </h2>
         <ReviewsModule product={product} />
       </div>
@@ -779,12 +795,84 @@ function ReportProductPanel({ product, onClose }: { product: Product; onClose: (
 }
 
 function ReviewsModule({ product }: { product?: Product }) {
+  const REVIEWS_PER_PAGE = 10;
   const [reviews, setReviews] = useState<ProductReview[]>([]);
   const [loadingReviews, setLoadingReviews] = useState(true);
+  const [page, setPage] = useState(1);
+  const [totalReviews, setTotalReviews] = useState(0);
 
   const [activeFilter, setActiveFilter] = useState<"ALL" | "WITH_IMAGE" | "RATING" | "VARIANT">("ALL");
   const [selectedRating, setSelectedRating] = useState<number | null>(null);
   const [selectedVariants, setSelectedVariants] = useState<Record<number, string>>({});
+  const [openDropdown, setOpenDropdown] = useState<"RATING" | "VARIANT" | null>(null);
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const [previewImages, setPreviewImages] = useState<string[]>([]);
+  const [previewIndex, setPreviewIndex] = useState(0);
+
+  const ratingDropdownRef = useRef<HTMLDivElement>(null);
+  const variantDropdownRef = useRef<HTMLDivElement>(null);
+
+  const variantOptions = (product?.variantOptions ?? [])
+    .map((optGroup: { name?: string; values?: string[]; options?: string[] }) => ({
+      name: optGroup.name ?? "",
+      values: (optGroup.values ?? optGroup.options ?? []).filter(Boolean)
+    }))
+    .filter((g) => g.name && g.values.length > 0);
+
+  const selectedVariantLabel = Object.keys(selectedVariants)
+    .sort((a, b) => Number(a) - Number(b))
+    .map((key) => selectedVariants[Number(key)])
+    .join(" - ");
+
+  useEffect(() => {
+    const handleOutsideClick = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (
+        ratingDropdownRef.current?.contains(target) ||
+        variantDropdownRef.current?.contains(target)
+      ) {
+        return;
+      }
+      setOpenDropdown(null);
+    };
+
+    document.addEventListener("mousedown", handleOutsideClick);
+    return () => document.removeEventListener("mousedown", handleOutsideClick);
+  }, []);
+
+  useEffect(() => {
+    if (!previewImage) return;
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setPreviewImage(null);
+        return;
+      }
+      if (previewImages.length <= 1) return;
+      if (event.key === "ArrowRight") {
+        setPreviewIndex((prev) => {
+          const next = (prev + 1) % previewImages.length;
+          setPreviewImage(previewImages[next]);
+          return next;
+        });
+      }
+      if (event.key === "ArrowLeft") {
+        setPreviewIndex((prev) => {
+          const next = (prev - 1 + previewImages.length) % previewImages.length;
+          setPreviewImage(previewImages[next]);
+          return next;
+        });
+      }
+    };
+
+    document.addEventListener("keydown", onKeyDown);
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [previewImage, previewImages]);
 
   useEffect(() => {
     if (!product?.id) {
@@ -796,14 +884,14 @@ function ReviewsModule({ product }: { product?: Product }) {
     setLoadingReviews(true);
 
     let variantNameQuery = undefined;
-    if (activeFilter === "VARIANT" && Object.keys(selectedVariants).length > 0) {
-      variantNameQuery = Object.values(selectedVariants).join(", ");
+    if (activeFilter === "VARIANT" && selectedVariantLabel) {
+      variantNameQuery = selectedVariantLabel;
     }
 
     fetchProductReviewsApi(
       product.id,
-      1,
-      20,
+      page,
+      REVIEWS_PER_PAGE,
       activeFilter === "RATING" && selectedRating ? selectedRating : undefined,
       activeFilter === "WITH_IMAGE" ? true : undefined,
       variantNameQuery
@@ -811,115 +899,201 @@ function ReviewsModule({ product }: { product?: Product }) {
       .then((res) => {
         if (isMounted && res?.items) {
           setReviews(res.items);
+          setTotalReviews(res.total ?? 0);
         }
       })
-      .catch(() => {})
+      .catch(() => {
+        if (isMounted) {
+          setReviews([]);
+          setTotalReviews(0);
+        }
+      })
       .finally(() => {
         if (isMounted) setLoadingReviews(false);
       });
     return () => {
       isMounted = false;
     };
-  }, [product?.id, activeFilter, selectedRating, selectedVariants]);
+  }, [product?.id, activeFilter, selectedRating, selectedVariantLabel, page]);
+
+  const totalPages = Math.max(1, Math.ceil(totalReviews / REVIEWS_PER_PAGE));
+
+  const getPageNumbers = (): Array<number | "ellipsis"> => {
+    if (totalPages <= 5) {
+      return Array.from({ length: totalPages }, (_, i) => i + 1);
+    }
+    if (page <= 3) return [1, 2, 3, 4, "ellipsis", totalPages];
+    if (page >= totalPages - 2) {
+      return [1, "ellipsis", totalPages - 3, totalPages - 2, totalPages - 1, totalPages];
+    }
+    return [1, "ellipsis", page - 1, page, page + 1, "ellipsis", totalPages];
+  };
+
+  const goToPage = (nextPage: number) => {
+    setPage(Math.min(Math.max(1, nextPage), totalPages));
+  };
+
+  const resetToFirstPage = () => setPage(1);
+
+  const filterChipClass = (active: boolean) =>
+    cn(
+      "px-4 py-2 text-xs font-semibold rounded-full border transition-colors inline-flex items-center gap-1.5",
+      active
+        ? "bg-rose-500 text-white border-rose-500"
+        : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
+    );
 
   return (
     <div className="space-y-6">
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-3">
         <button
-          onClick={() => setActiveFilter("ALL")}
-          className={cn(
-            "px-4 py-2 text-xs font-semibold rounded-full border transition-colors",
-            activeFilter === "ALL"
-              ? "bg-rose-500 text-white border-rose-500"
-              : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
-          )}
+          type="button"
+          onClick={() => {
+            setActiveFilter("ALL");
+            setOpenDropdown(null);
+            setSelectedRating(null);
+            setSelectedVariants({});
+            resetToFirstPage();
+          }}
+          className={filterChipClass(activeFilter === "ALL")}
         >
           Tất cả
         </button>
 
         <button
-          onClick={() => setActiveFilter("WITH_IMAGE")}
-          className={cn(
-            "px-4 py-2 text-xs font-semibold rounded-full border transition-colors",
-            activeFilter === "WITH_IMAGE"
-              ? "bg-rose-500 text-white border-rose-500"
-              : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
-          )}
+          type="button"
+          onClick={() => {
+            setActiveFilter("WITH_IMAGE");
+            setOpenDropdown(null);
+            resetToFirstPage();
+          }}
+          className={filterChipClass(activeFilter === "WITH_IMAGE")}
         >
           Có hình ảnh
         </button>
 
-        <div className="relative group">
+        <div className="relative" ref={ratingDropdownRef}>
           <button
+            type="button"
             onClick={() => {
-              setActiveFilter("RATING");
-              if (!selectedRating) setSelectedRating(5);
+              setOpenDropdown((prev) => (prev === "RATING" ? null : "RATING"));
             }}
-            className={cn(
-              "px-4 py-2 text-xs font-semibold rounded-full border transition-colors flex items-center gap-1",
-              activeFilter === "RATING"
-                ? "bg-rose-500 text-white border-rose-500"
-                : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
-            )}
+            className={filterChipClass(activeFilter === "RATING" && selectedRating != null)}
+            aria-haspopup="listbox"
+            aria-expanded={openDropdown === "RATING"}
           >
-            Sao <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
-            {activeFilter === "RATING" && selectedRating && ` (${selectedRating})`}
+            <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
+            <span>
+              Sao
+              {activeFilter === "RATING" && selectedRating ? ` (${selectedRating})` : ""}
+            </span>
+            <ChevronDown
+              className={cn(
+                "h-3.5 w-3.5 transition-transform",
+                openDropdown === "RATING" && "rotate-180",
+                activeFilter === "RATING" && selectedRating != null
+                  ? "text-white/90"
+                  : "text-slate-400"
+              )}
+            />
           </button>
-          {activeFilter === "RATING" && (
-            <div className="absolute top-full mt-2 left-0 w-32 bg-white rounded-xl shadow-lg border border-slate-100 p-2 z-10 grid gap-1 hidden group-hover:grid">
+          {openDropdown === "RATING" && (
+            <div
+              role="listbox"
+              className="absolute top-full mt-2 left-0 min-w-[9.5rem] bg-white rounded-xl shadow-lg border border-slate-200 p-1.5 z-20"
+            >
               {[5, 4, 3, 2, 1].map((star) => (
                 <button
                   key={star}
-                  onClick={() => setSelectedRating(star)}
+                  type="button"
+                  role="option"
+                  aria-selected={selectedRating === star}
+                  onClick={() => {
+                    setSelectedRating(star);
+                    setActiveFilter("RATING");
+                    setOpenDropdown(null);
+                    resetToFirstPage();
+                  }}
                   className={cn(
-                    "flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors hover:bg-slate-50",
-                    selectedRating === star ? "text-rose-600 bg-rose-50" : "text-slate-700"
+                    "flex w-full items-center justify-between gap-3 px-3 py-2 rounded-lg text-xs font-medium transition-colors",
+                    selectedRating === star
+                      ? "text-rose-600 bg-rose-50"
+                      : "text-slate-700 hover:bg-slate-50"
                   )}
                 >
-                  {star} Sao
+                  <span className="inline-flex items-center gap-1">
+                    {Array.from({ length: star }).map((_, i) => (
+                      <Star key={i} className="h-3 w-3 fill-yellow-400 text-yellow-400" />
+                    ))}
+                  </span>
+                  <span>{star} Sao</span>
                 </button>
               ))}
             </div>
           )}
         </div>
 
-        {product?.variantOptions && product.variantOptions.length > 0 && (
-          <div className="relative group">
+        {variantOptions.length > 0 && (
+          <div className="relative" ref={variantDropdownRef}>
             <button
-              onClick={() => setActiveFilter("VARIANT")}
-              className={cn(
-                "px-4 py-2 text-xs font-semibold rounded-full border transition-colors flex items-center gap-1",
-                activeFilter === "VARIANT"
-                  ? "bg-rose-500 text-white border-rose-500"
-                  : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
-              )}
+              type="button"
+              onClick={() => {
+                setOpenDropdown((prev) => (prev === "VARIANT" ? null : "VARIANT"));
+              }}
+              className={filterChipClass(activeFilter === "VARIANT" && !!selectedVariantLabel)}
+              aria-haspopup="listbox"
+              aria-expanded={openDropdown === "VARIANT"}
             >
-              Phân loại
+              <span className="max-w-[12rem] truncate">
+                Phân loại
+                {activeFilter === "VARIANT" && selectedVariantLabel
+                  ? `: ${selectedVariantLabel}`
+                  : ""}
+              </span>
+              <ChevronDown
+                className={cn(
+                  "h-3.5 w-3.5 shrink-0 transition-transform",
+                  openDropdown === "VARIANT" && "rotate-180",
+                  activeFilter === "VARIANT" && selectedVariantLabel
+                    ? "text-white/90"
+                    : "text-slate-400"
+                )}
+              />
             </button>
-            {activeFilter === "VARIANT" && (
-              <div className="absolute top-full mt-2 left-0 w-64 bg-white rounded-xl shadow-lg border border-slate-100 p-4 z-10 hidden group-hover:block">
-                <div className="space-y-4">
-                  {product.variantOptions.map((optGroup: any, gIndex: number) => (
-                    <div key={gIndex}>
-                      <p className="text-xs font-semibold text-slate-900 mb-2">{optGroup.name}</p>
-                      <div className="flex flex-wrap gap-2">
-                        {optGroup.options.map((opt: string) => {
+            {openDropdown === "VARIANT" && (
+              <div className="absolute top-full mt-2 left-0 w-72 max-w-[min(18rem,calc(100vw-2rem))] bg-white rounded-xl shadow-lg border border-slate-200 p-3 z-20">
+                <div className="space-y-3">
+                  {variantOptions.map((optGroup, gIndex) => (
+                    <div key={`${optGroup.name}-${gIndex}`}>
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 mb-2">
+                        {optGroup.name}
+                      </p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {optGroup.values.map((opt) => {
                           const isSelected = selectedVariants[gIndex] === opt;
                           return (
                             <button
                               key={opt}
+                              type="button"
                               onClick={() => {
-                                setSelectedVariants(prev => {
-                                  const newObj = { ...prev };
-                                  if (isSelected) delete newObj[gIndex];
-                                  else newObj[gIndex] = opt;
-                                  return newObj;
-                                });
+                                const next = { ...selectedVariants };
+                                if (isSelected) delete next[gIndex];
+                                else next[gIndex] = opt;
+
+                                setSelectedVariants(next);
+                                if (Object.keys(next).length > 0) {
+                                  setActiveFilter("VARIANT");
+                                } else if (activeFilter === "VARIANT") {
+                                  setActiveFilter("ALL");
+                                }
+                                resetToFirstPage();
                               }}
                               className={cn(
-                                "px-3 py-1 rounded-lg text-xs font-medium border transition-colors",
-                                isSelected ? "border-rose-500 text-rose-600 bg-rose-50" : "border-slate-200 text-slate-600 hover:border-slate-300"
+                                "px-2.5 py-1.5 rounded-lg text-xs font-medium border transition-colors",
+                                isSelected
+                                  ? "border-rose-500 text-rose-600 bg-rose-50"
+                                  : "border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-slate-50"
                               )}
                             >
                               {opt}
@@ -930,6 +1104,19 @@ function ReviewsModule({ product }: { product?: Product }) {
                     </div>
                   ))}
                 </div>
+                {Object.keys(selectedVariants).length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedVariants({});
+                      setActiveFilter("ALL");
+                      resetToFirstPage();
+                    }}
+                    className="mt-3 w-full rounded-lg border border-slate-200 px-3 py-1.5 text-[11px] font-semibold text-slate-500 hover:bg-slate-50"
+                  >
+                    Xóa lựa chọn phân loại
+                  </button>
+                )}
               </div>
             )}
           </div>
@@ -961,19 +1148,23 @@ function ReviewsModule({ product }: { product?: Product }) {
                     {rev.user?.full_name?.charAt(0)?.toUpperCase() || "U"}
                   </div>
                   <div>
-                    <p className="text-xs font-extrabold text-slate-900">{rev.user?.full_name || "Khách hàng"}</p>
-                    <p className="text-[11px] font-medium text-slate-400 mt-0.5">{formatDate(rev.created_at)}</p>
+                    <p className="text-sm font-extrabold text-slate-900">{rev.user?.full_name || "Khách hàng"}</p>
+                    <p className="text-[11px] font-medium text-slate-400 mt-0.5">
+                      {formatDate(rev.created_at)}
+                      {rev.variant_name ? (
+                        <>
+                          <span className="mx-1.5 text-slate-300">|</span>
+                          <span>Phân loại: {rev.variant_name}</span>
+                        </>
+                      ) : null}
+                    </p>
                   </div>
                 </div>
                 <RatingStars rating={rev.rating} />
               </div>
 
-              {rev.variant_name && (
-                <p className="text-[11px] text-slate-500 pl-12 font-medium">Phân loại: {rev.variant_name}</p>
-              )}
-
               {rev.comment && (
-                <p className="text-xs text-slate-700 leading-relaxed pl-12">
+                <p className="text-sm text-slate-700 leading-relaxed pl-12">
                   {rev.comment}
                 </p>
               )}
@@ -981,12 +1172,139 @@ function ReviewsModule({ product }: { product?: Product }) {
               {rev.images && rev.images.length > 0 && (
                 <div className="pl-12 flex gap-2 overflow-x-auto pb-2">
                   {rev.images.map((img, i) => (
-                    <img key={i} src={img} alt="Review image" className="h-16 w-16 object-cover rounded-lg border border-slate-200" />
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => {
+                        setPreviewImages(rev.images || []);
+                        setPreviewIndex(i);
+                        setPreviewImage(img);
+                      }}
+                      className="shrink-0 rounded-lg border border-slate-200 overflow-hidden focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-400"
+                    >
+                      <img
+                        src={img}
+                        alt={`Ảnh đánh giá ${i + 1}`}
+                        className="h-16 w-16 object-cover transition hover:opacity-90 cursor-zoom-in"
+                      />
+                    </button>
                   ))}
                 </div>
               )}
             </div>
           ))}
+
+          {totalReviews > REVIEWS_PER_PAGE && (
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-t border-slate-100 pt-4">
+              <p className="text-xs font-medium text-slate-500">
+                Hiển thị {(page - 1) * REVIEWS_PER_PAGE + 1}
+                {" - "}
+                {Math.min(page * REVIEWS_PER_PAGE, totalReviews)} / {totalReviews} đánh giá
+              </p>
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  disabled={page === 1 || loadingReviews}
+                  onClick={() => goToPage(page - 1)}
+                  className="h-9 px-3 rounded-xl border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:pointer-events-none"
+                >
+                  Trước
+                </button>
+                <div className="hidden sm:flex items-center gap-1">
+                  {getPageNumbers().map((p, idx) =>
+                    p === "ellipsis" ? (
+                      <span key={`ellipsis-${idx}`} className="px-1 text-xs text-slate-400">
+                        …
+                      </span>
+                    ) : (
+                      <button
+                        key={p}
+                        type="button"
+                        disabled={loadingReviews}
+                        onClick={() => goToPage(p)}
+                        className={cn(
+                          "h-9 w-9 rounded-xl text-xs font-bold transition-colors",
+                          page === p
+                            ? "bg-rose-500 text-white"
+                            : "text-slate-700 hover:bg-slate-50 border border-slate-200"
+                        )}
+                      >
+                        {p}
+                      </button>
+                    )
+                  )}
+                </div>
+                <span className="sm:hidden text-xs font-semibold text-slate-600 px-2">
+                  {page}/{totalPages}
+                </span>
+                <button
+                  type="button"
+                  disabled={page === totalPages || loadingReviews}
+                  onClick={() => goToPage(page + 1)}
+                  className="h-9 px-3 rounded-xl border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:pointer-events-none"
+                >
+                  Sau
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {previewImage && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 p-4"
+          onClick={() => setPreviewImage(null)}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Xem ảnh đánh giá"
+        >
+          <button
+            type="button"
+            onClick={() => setPreviewImage(null)}
+            className="absolute right-4 top-4 rounded-full bg-white/10 p-2 text-white hover:bg-white/20"
+            aria-label="Đóng"
+          >
+            <X className="h-5 w-5" />
+          </button>
+
+          {previewImages.length > 1 && (
+            <>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const next = (previewIndex - 1 + previewImages.length) % previewImages.length;
+                  setPreviewIndex(next);
+                  setPreviewImage(previewImages[next]);
+                }}
+                className="absolute left-3 md:left-6 rounded-full bg-white/10 p-2 text-white hover:bg-white/20"
+                aria-label="Ảnh trước"
+              >
+                <ChevronLeft className="h-5 w-5" />
+              </button>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const next = (previewIndex + 1) % previewImages.length;
+                  setPreviewIndex(next);
+                  setPreviewImage(previewImages[next]);
+                }}
+                className="absolute right-3 md:right-6 rounded-full bg-white/10 p-2 text-white hover:bg-white/20"
+                aria-label="Ảnh sau"
+              >
+                <ChevronRight className="h-5 w-5" />
+              </button>
+            </>
+          )}
+
+          <img
+            src={previewImage}
+            alt="Ảnh đánh giá phóng to"
+            className="max-h-[90vh] max-w-[min(96vw,56rem)] rounded-lg object-contain shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          />
         </div>
       )}
     </div>

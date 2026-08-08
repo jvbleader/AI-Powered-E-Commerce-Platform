@@ -12,10 +12,19 @@ class SupportMessageCreate(SupportMessageBase):
     sender_type: str
 
 
+class SupportMessageSendRequest(BaseModel):
+    content: str = ""
+    attachment_type: Optional[str] = None
+    attachment_id: Optional[str] = None
+    attachments: Optional[list] = None
+
+
 class SupportMessageResponse(SupportMessageBase):
     id: int
     conversation_id: str
     sender_type: str
+    attachment_type: Optional[str] = None
+    attachment_id: Optional[str] = None
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)

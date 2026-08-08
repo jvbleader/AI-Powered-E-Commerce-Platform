@@ -1,15 +1,20 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { apiFetch, getApiBaseUrl } from "@/services/api";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { apiFetch } from "@/services/api";
+import {
+  useOptionalSellerChatRealtimeApi,
+  useOptionalSellerChatRealtimeState,
+} from "@/contexts/SellerChatRealtimeProvider";
+import { EMPTY_CHAT_MESSAGES } from "@/lib/chat-messages";
 
 export type SellerMessage = {
   id: number;
   conversation_id: string;
-  sender_type: 'CUSTOMER' | 'SELLER' | 'SYSTEM';
+  sender_type: "CUSTOMER" | "SELLER" | "SYSTEM";
   content: string;
-  attachment_type?: 'PRODUCT' | 'ORDER' | 'IMAGE' | 'VIDEO' | null;
+  attachment_type?: "PRODUCT" | "ORDER" | "IMAGE" | "VIDEO" | null;
   attachment_id?: string | null;
   reply_to_id?: number | null;
-  status: 'SENT' | 'DELIVERED' | 'READ';
+  status: "SENT" | "DELIVERED" | "READ";
   created_at: string;
 };
 
@@ -22,27 +27,88 @@ export type SellerConversation = {
   updated_at: string;
 };
 
-export function useSellerChat(shopId?: number | null, conversationId?: string | null, senderType: 'CUSTOMER' | 'SELLER' = 'CUSTOMER') {
-  const [messages, setMessages] = useState<SellerMessage[]>([]);
-  const [conversation, setConversation] = useState<SellerConversation | null>(null);
-  const [isConnected, setIsConnected] = useState(false);
-  const [activeConversationId, setActiveConversationId] = useState<string | null>(conversationId || null);
-  const ws = useRef<WebSocket | null>(null);
+type UseSellerChatOptions = {
+  deferCreate?: boolean;
+  onConversationCreated?: (conversation: SellerConversation) => void;
+};
 
-  // Initialize or fetch conversation based on shopId
+/**
+ * Conversation adapter over the shared seller-chat multiplex websocket.
+ * Does not open its own socket — requires SellerChatRealtimeProvider ancestor.
+ */
+export function useSellerChat(
+  shopId?: number | null,
+  conversationId?: string | null,
+  senderType: "CUSTOMER" | "SELLER" = "CUSTOMER",
+  options: UseSellerChatOptions = {}
+) {
+  const { deferCreate = false, onConversationCreated } = options;
+  const realtimeApi = useOptionalSellerChatRealtimeApi();
+  const realtimeState = useOptionalSellerChatRealtimeState();
+
+  const [conversation, setConversation] = useState<SellerConversation | null>(null);
+  const [activeConversationId, setActiveConversationId] = useState<string | null>(
+    conversationId || null
+  );
+  const creatingConversation = useRef<Promise<string | null> | null>(null);
+  const senderTypeRef = useRef(senderType);
+  senderTypeRef.current = senderType;
+
+  useEffect(() => {
+    setConversation(null);
+    setActiveConversationId(conversationId || null);
+  }, [shopId, conversationId]);
+
+  useEffect(() => {
+    if (!deferCreate || conversationId || !shopId) return;
+    setActiveConversationId(null);
+    setConversation(null);
+  }, [deferCreate, conversationId, shopId]);
+
+  const ensureConversation = useCallback(async (): Promise<string | null> => {
+    if (activeConversationId) return activeConversationId;
+    if (!shopId) return null;
+    if (creatingConversation.current) return creatingConversation.current;
+
+    creatingConversation.current = (async () => {
+      try {
+        const data = await apiFetch<SellerConversation>(
+          `/api/seller-chat/conversations?shop_id=${shopId}`,
+          { method: "POST" }
+        );
+        if (data) {
+          setConversation(data);
+          setActiveConversationId(data.id);
+          onConversationCreated?.(data);
+          return data.id;
+        }
+        return null;
+      } catch (error) {
+        console.error("Failed to create seller conversation", error);
+        return null;
+      } finally {
+        creatingConversation.current = null;
+      }
+    })();
+
+    return creatingConversation.current;
+  }, [activeConversationId, shopId, onConversationCreated]);
+
   useEffect(() => {
     if (conversationId) {
       setActiveConversationId(conversationId);
       return;
     }
-    
-    if (!shopId) return;
+
+    if (!shopId || deferCreate) return;
+    if (activeConversationId) return;
 
     const initConversation = async () => {
       try {
-        const data = await apiFetch<SellerConversation>(`/api/seller-chat/conversations?shop_id=${shopId}`, {
-          method: 'POST'
-        });
+        const data = await apiFetch<SellerConversation>(
+          `/api/seller-chat/conversations?shop_id=${shopId}`,
+          { method: "POST" }
+        );
         if (data) {
           setConversation(data);
           setActiveConversationId(data.id);
@@ -53,97 +119,83 @@ export function useSellerChat(shopId?: number | null, conversationId?: string | 
     };
 
     initConversation();
-  }, [shopId, conversationId]);
+  }, [shopId, conversationId, deferCreate, activeConversationId]);
 
-  // Load messages
   useEffect(() => {
-    if (!activeConversationId) return;
-    
-    const fetchMessages = async () => {
-      try {
-        const data = await apiFetch<SellerMessage[]>(`/api/seller-chat/conversations/${activeConversationId}/messages`);
-        if (data) {
-          setMessages(data);
-        }
-      } catch (error) {
-        console.error("Failed to fetch seller messages:", error);
-      }
-    };
-    
-    fetchMessages();
-  }, [activeConversationId]);
+    if (!realtimeApi) return;
 
-  // Connect WebSocket
-  useEffect(() => {
-    if (!activeConversationId) return;
+    if (!activeConversationId) {
+      realtimeApi.unsubscribeConversation();
+      return;
+    }
 
-    let wsUrl = getApiBaseUrl().replace(/^http/, 'ws');
-    
-    const socket = new WebSocket(`${wsUrl}/api/seller-chat/ws/${activeConversationId}`);
-    
-    socket.onopen = () => {
-      setIsConnected(true);
-      socket.send(JSON.stringify({ action: 'MARK_READ', sender_type: senderType }));
-    };
-    socket.onclose = () => setIsConnected(false);
-    
-    socket.onmessage = (event) => {
-      try {
-        const message = JSON.parse(event.data);
-        
-        if (message.type === 'STATUS_UPDATE') {
-          setMessages(prev => prev.map(m => 
-            message.message_ids.includes(m.id) ? { ...m, status: message.status } : m
-          ));
-          return;
-        }
-
-        setMessages(prev => {
-          if (prev.some(m => m.id === message.id)) return prev;
-          return [...prev, message];
-        });
-      } catch (e) {
-        console.error("Invalid message format", e);
-      }
-    };
-
-    ws.current = socket;
+    realtimeApi.subscribeConversation(activeConversationId, senderTypeRef.current);
 
     return () => {
-      socket.close();
-      ws.current = null;
+      realtimeApi.unsubscribeConversation(activeConversationId);
     };
-  }, [activeConversationId]);
+  }, [realtimeApi, activeConversationId, senderType]);
 
-  const sendMessage = useCallback((content: string, attachmentType?: string, attachmentId?: string, replyToId?: number) => {
-    if (ws.current && isConnected && (content.trim() || attachmentType)) {
-      ws.current.send(JSON.stringify({
-        content: content || ' ', // ensure content is not empty if there's an attachment
-        sender_type: senderType,
+  const messagesByConversation = realtimeState?.messagesByConversation;
+  const messages = useMemo<SellerMessage[]>(() => {
+    if (!activeConversationId || !messagesByConversation) return EMPTY_CHAT_MESSAGES;
+    return messagesByConversation[activeConversationId] ?? EMPTY_CHAT_MESSAGES;
+  }, [activeConversationId, messagesByConversation]);
+
+  const isConnected = Boolean(
+    realtimeState?.isRealtimeConnected &&
+      activeConversationId &&
+      realtimeState.subscribedConversationId === activeConversationId
+  );
+
+  const sendMessage = useCallback(
+    async (
+      content: string,
+      attachmentType?: string,
+      attachmentId?: string,
+      replyToId?: number
+    ) => {
+      if (!realtimeApi) return;
+      if (!content.trim() && !attachmentType) return;
+
+      const convId =
+        activeConversationId || conversationId || (await ensureConversation());
+      if (!convId) return;
+
+      if (convId !== activeConversationId) {
+        setActiveConversationId(convId);
+        realtimeApi.subscribeConversation(convId, senderTypeRef.current);
+      }
+
+      realtimeApi.sendConversationMessage(convId, {
+        content: content || " ",
+        sender_type: senderTypeRef.current,
         attachment_type: attachmentType,
         attachment_id: attachmentId,
-        reply_to_id: replyToId
-      }));
-    }
-  }, [isConnected, senderType]);
+        reply_to_id: replyToId,
+      });
+    },
+    [activeConversationId, conversationId, ensureConversation, realtimeApi]
+  );
 
   const markAsRead = useCallback(() => {
-    if (ws.current && isConnected) {
-      ws.current.send(JSON.stringify({
-        action: 'MARK_READ',
-        sender_type: senderType
-      }));
-    }
-  }, [isConnected, senderType]);
+    if (!realtimeApi || !activeConversationId) return;
+    realtimeApi.markConversationRead(activeConversationId, senderTypeRef.current);
+  }, [activeConversationId, realtimeApi]);
 
   const markAsDelivered = useCallback(() => {
-    if (ws.current && isConnected) {
-      ws.current.send(JSON.stringify({
-        action: 'MARK_DELIVERED',
-        sender_type: senderType
-      }));
-    }
-  }, [isConnected, senderType]);
+    if (!realtimeApi || !activeConversationId) return;
+    realtimeApi.markConversationDelivered(activeConversationId, senderTypeRef.current);
+  }, [activeConversationId, realtimeApi]);
 
-  return { messages, conversation, isConnected, sendMessage, markAsRead, markAsDelivered, activeConversationId };
+  return {
+    messages,
+    conversation,
+    isConnected,
+    sendMessage,
+    markAsRead,
+    markAsDelivered,
+    activeConversationId,
+    ensureConversation,
+  };
 }

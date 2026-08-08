@@ -49,6 +49,11 @@ async def get_public_product_list(
     
     # 100% Elasticsearch Search Architecture
     es_response = await search_svc.search_products(req)
+
+    product_public_ids = [doc.public_id for doc in es_response.items]
+    primary_variants = await product_repo.get_primary_variants_by_product_public_ids(
+        db, product_public_ids
+    )
     
     # Map ES documents to ProductPublicResponse to satisfy API contract
     items = []
@@ -64,22 +69,44 @@ async def get_public_product_list(
             images.append(ImagePublicResponse(image_url=doc.thumbnail, is_thumbnail=True, sort_order=0))
             
         variants = []
-        # Frontend relies on variants to show price. 
-        # We provide a dummy variant with min_price to satisfy the UI.
-        variants.append(
-            VariantPublicResponse(
-                public_id="es-dummy",
-                sku="es-dummy",
-                variant_name="Default",
-                price=doc.min_price,
-                sale_price=None,
-                sale_start_at=None,
-                sale_end_at=None,
-                image_url=None,
-                status="ACTIVE",
-                inventory=InventoryPublicResponse(quantity=doc.total_stock, reserved_quantity=0) if doc.total_stock is not None else None
+        primary_variant = primary_variants.get(doc.public_id)
+        if primary_variant:
+            inventory = None
+            if primary_variant.inventory:
+                inventory = InventoryPublicResponse(
+                    quantity=primary_variant.inventory.quantity,
+                    reserved_quantity=primary_variant.inventory.reserved_quantity,
+                )
+            variants.append(
+                VariantPublicResponse(
+                    public_id=primary_variant.public_id,
+                    sku=primary_variant.sku,
+                    variant_name=primary_variant.variant_name,
+                    price=primary_variant.price,
+                    sale_price=primary_variant.sale_price,
+                    sale_start_at=primary_variant.sale_start_at,
+                    sale_end_at=primary_variant.sale_end_at,
+                    image_url=primary_variant.image_url,
+                    status=primary_variant.status,
+                    inventory=inventory,
+                )
             )
-        )
+        else:
+            # Fallback when variant data is unavailable; use product public_id so cart can resolve it.
+            variants.append(
+                VariantPublicResponse(
+                    public_id=doc.public_id,
+                    sku="default",
+                    variant_name="Default",
+                    price=doc.min_price,
+                    sale_price=None,
+                    sale_start_at=None,
+                    sale_end_at=None,
+                    image_url=None,
+                    status="ACTIVE",
+                    inventory=InventoryPublicResponse(quantity=doc.total_stock, reserved_quantity=0) if doc.total_stock is not None else None
+                )
+            )
         
         categories = []
         for i in range(len(doc.category_ids)):

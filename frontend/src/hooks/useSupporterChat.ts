@@ -1,122 +1,130 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { apiFetch, getApiBaseUrl } from "@/services/api";
+import { useCallback, useEffect, useMemo } from "react";
+import {
+  useOptionalSupportChatRealtimeApi,
+  useOptionalSupportChatRealtimeState,
+} from "@/contexts/SupportChatRealtimeProvider";
+import { EMPTY_CHAT_MESSAGES } from "@/lib/chat-messages";
+import { apiFetch } from "@/services/api";
+import type {
+  SupportAttachment,
+  SupportConversation,
+  SupportMessage,
+} from "@/types/support-chat";
 
-export type Message = {
-  id: number;
-  conversation_id: string;
-  sender_type: 'CUSTOMER' | 'SUPPORTER' | 'SYSTEM';
-  content: string;
-  created_at: string;
-};
+export type { SupportAttachment, SupportMessage as Message, SupportConversation as Conversation } from "@/types/support-chat";
 
-export type Conversation = {
-  id: string;
-  status: string;
-  supporter_id: number | null;
-  supporter: { id: number; public_id: string; full_name: string; avatar_url: string | null } | null;
-  customer_id?: number | null;
-  customer?: { id: number; public_id: string; full_name: string; avatar_url: string | null } | null;
-  guest_id?: string | null;
-  created_at: string;
-};
+function resolveGuestIdForSend(propGuestId?: string | null): string | null {
+  if (propGuestId) return propGuestId;
+  if (typeof window === "undefined") return null;
+  return localStorage.getItem("guest_id");
+}
 
-export function useSupporterChat(conversationId: string | null, senderType: 'CUSTOMER' | 'SUPPORTER') {
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [conversation, setConversation] = useState<Conversation | null>(null);
-  const [isConnected, setIsConnected] = useState(false);
-  const ws = useRef<WebSocket | null>(null);
+function buildSendMessagesQuery(guestId?: string | null) {
+  const effectiveGuestId = resolveGuestIdForSend(guestId);
+  return effectiveGuestId ? `?guest_id=${encodeURIComponent(effectiveGuestId)}` : "";
+}
 
-  // Load conversation details and old messages
+/**
+ * Conversation adapter over the shared support-chat multiplex websocket.
+ * Does not open its own socket — requires SupportChatRealtimeProvider ancestor.
+ */
+export function useSupporterChat(
+  conversationId: string | null,
+  _senderType: "CUSTOMER" | "SUPPORTER",
+  guestId?: string | null
+) {
+  const realtimeApi = useOptionalSupportChatRealtimeApi();
+  const realtimeState = useOptionalSupportChatRealtimeState();
+
   useEffect(() => {
-    if (!conversationId) return;
+    if (!realtimeApi) return;
 
-    const fetchDetails = async () => {
-      try {
-        const convData = await apiFetch<Conversation>(`/api/support-chat/conversations/${conversationId}`);
-        if (convData) {
-          setConversation(convData);
-        }
-      } catch (error) {
-        console.error("Failed to fetch conversation details:", error);
-      }
-    };
+    if (!conversationId) {
+      realtimeApi.unsubscribeConversation();
+      return;
+    }
 
-    const fetchMessages = async () => {
-      try {
-        const data = await apiFetch<Message[]>(`/api/support-chat/conversations/${conversationId}/messages`);
-        if (data) {
-          setMessages(data);
-        }
-      } catch (error) {
-        console.error("Failed to fetch messages:", error);
-      }
-    };
-    
-    fetchDetails();
-    fetchMessages();
-  }, [conversationId]);
-
-  // Connect WebSocket
-  useEffect(() => {
-    if (!conversationId) return;
-
-    let wsUrl = getApiBaseUrl().replace(/^http/, 'ws');
-    
-    const socket = new WebSocket(`${wsUrl}/api/support-chat/ws/${conversationId}`);
-    
-    socket.onopen = () => setIsConnected(true);
-    socket.onclose = () => setIsConnected(false);
-    
-    socket.onmessage = (event) => {
-      try {
-        const message = JSON.parse(event.data);
-        
-        // If it's a SYSTEM message, it might mean the supporter joined or left.
-        // We can refetch conversation details to get the new supporter_id
-        if (message.sender_type === 'SYSTEM') {
-          apiFetch<Conversation>(`/api/support-chat/conversations/${conversationId}`).then(convData => {
-            if (convData) setConversation(convData);
-          });
-        }
-        
-        setMessages(prev => {
-          // Prevent duplicates
-          if (prev.some(m => m.id === message.id)) return prev;
-          return [...prev, message];
-        });
-      } catch (e) {
-        console.error("Invalid message format", e);
-      }
-    };
-
-    ws.current = socket;
+    realtimeApi.subscribeConversation(conversationId);
+    void realtimeApi.refetchConversationDetails(conversationId);
 
     return () => {
-      socket.close();
-      ws.current = null;
+      realtimeApi.unsubscribeConversation(conversationId);
     };
-  }, [conversationId]);
+  }, [realtimeApi, conversationId]);
 
-  const sendMessage = useCallback((content: string) => {
-    if (ws.current && isConnected && content.trim()) {
-      ws.current.send(JSON.stringify({
-        content,
-        sender_type: senderType
-      }));
-    }
-  }, [isConnected, senderType]);
+  const messagesByConversation = realtimeState?.messagesByConversation;
+  const messages = useMemo<SupportMessage[]>(() => {
+    if (!conversationId || !messagesByConversation) return EMPTY_CHAT_MESSAGES;
+    return messagesByConversation[conversationId] ?? EMPTY_CHAT_MESSAGES;
+  }, [conversationId, messagesByConversation]);
+
+  const conversation = useMemo<SupportConversation | null>(() => {
+    if (!conversationId || !realtimeState?.conversationsById) return null;
+    return realtimeState.conversationsById[conversationId] ?? null;
+  }, [conversationId, realtimeState?.conversationsById]);
+
+  const isConnected = Boolean(
+    realtimeState?.isRealtimeConnected &&
+      conversationId &&
+      realtimeState.subscribedConversationId === conversationId
+  );
+
+  const sendMessage = useCallback(
+    async (
+      content: string,
+      attachmentType?: string,
+      attachmentId?: string,
+      attachments?: SupportAttachment[],
+      targetConversationId?: string | null
+    ) => {
+      const convId = targetConversationId ?? conversationId;
+      if (!realtimeApi || !convId) return;
+
+      const trimmed = content.trim();
+      const hasSingle = Boolean(attachmentType && attachmentId);
+      const hasMulti = Boolean(attachments?.length);
+      if (!trimmed && !hasSingle && !hasMulti) return;
+
+      realtimeApi.subscribeConversation(convId);
+
+      const payload = {
+        content: trimmed || content,
+        attachment_type: attachmentType,
+        attachment_id: attachmentId,
+        attachments,
+      };
+
+      try {
+        const message = await apiFetch<SupportMessage>(
+          `/api/support-chat/conversations/${convId}/messages${buildSendMessagesQuery(guestId)}`,
+          {
+            method: "POST",
+            body: JSON.stringify(payload),
+          }
+        );
+        if (message) {
+          realtimeApi.receiveConversationMessage(message);
+        }
+      } catch (error) {
+        console.error("Support chat HTTP send failed, falling back to websocket", error);
+        realtimeApi.sendConversationMessage(convId, payload);
+      }
+    },
+    [conversationId, guestId, realtimeApi]
+  );
+
+  const prepareConversation = useCallback(
+    (targetConversationId: string) => {
+      if (!realtimeApi) return;
+      realtimeApi.subscribeConversation(targetConversationId);
+    },
+    [realtimeApi]
+  );
 
   const refetchConversation = useCallback(async () => {
-    if (!conversationId) return;
-    try {
-      const convData = await apiFetch<Conversation>(`/api/support-chat/conversations/${conversationId}`);
-      if (convData) {
-        setConversation(convData);
-      }
-    } catch (error) {
-      console.error("Failed to fetch conversation details:", error);
-    }
-  }, [conversationId]);
+    if (!realtimeApi || !conversationId) return;
+    await realtimeApi.refetchConversationDetails(conversationId);
+  }, [conversationId, realtimeApi]);
 
-  return { messages, conversation, isConnected, sendMessage, refetchConversation };
+  return { messages, conversation, isConnected, sendMessage, prepareConversation, refetchConversation };
 }

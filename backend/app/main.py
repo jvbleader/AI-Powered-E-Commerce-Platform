@@ -44,6 +44,7 @@ from core.elasticsearch import close_es_client
 import services.search_service as search_svc
 from services.search_helpers import fetch_all_active_products_for_indexing
 from core.database import AsyncSessionLocal
+from services.websocket_manager import manager
 
 
 @asynccontextmanager
@@ -61,6 +62,7 @@ async def lifespan(app: FastAPI):
         )
     yield
     stop_scheduler()
+    await manager.shutdown()
     await close_es_client()
 
 

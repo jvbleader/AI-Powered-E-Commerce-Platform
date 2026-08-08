@@ -97,6 +97,18 @@ class SupportMessage(Base):
         Text,
         nullable=False,
     )
+    attachment_type: Mapped[str | None] = mapped_column(
+        Enum("IMAGE", "VIDEO", "FILE"),
+        nullable=True,
+    )
+    attachment_id: Mapped[str | None] = mapped_column(
+        String(512),
+        nullable=True,
+    )
+    attachments: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime,
         nullable=False,

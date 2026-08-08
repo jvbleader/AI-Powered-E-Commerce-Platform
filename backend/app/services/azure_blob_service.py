@@ -8,6 +8,18 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+MAX_IMAGE_BYTES = 2 * 1024 * 1024
+MAX_VIDEO_BYTES = 30 * 1024 * 1024
+MAX_FILE_BYTES = 10 * 1024 * 1024
+
+ALLOWED_FILE_CONTENT_TYPES = {
+    "application/pdf",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "text/plain",
+}
+ALLOWED_FILE_EXTENSIONS = {".pdf", ".docx", ".txt"}
+
+
 class AzureBlobService:
     def __init__(self):
         if not settings.AZURE_STORAGE_CONNECTION_STRING:
@@ -27,40 +39,108 @@ class AzureBlobService:
             await container_client.get_container_properties()
         except ResourceNotFoundError:
             try:
-                # Try to create if it doesn't exist (with blob public access)
                 await container_client.create_container(public_access="blob")
             except ResourceExistsError:
                 pass
         return container_client
 
-    async def upload_image(self, file: UploadFile) -> str:
-        """
-        Uploads an image to Azure Blob Storage and returns the public URL.
-        """
-        if not file.content_type.startswith("image/"):
-            raise HTTPException(status_code=400, detail="File must be an image.")
+    async def _upload_blob(
+        self,
+        file: UploadFile,
+        *,
+        allowed_prefix: str,
+        max_bytes: int,
+        folder: str,
+    ) -> str:
+        if not file.content_type or not file.content_type.startswith(allowed_prefix):
+            raise HTTPException(
+                status_code=400,
+                detail=f"File must be a {allowed_prefix.rstrip('/')} file.",
+            )
 
-        # Generate a unique filename
-        file_extension = mimetypes.guess_extension(file.content_type) or ".jpg"
-        blob_name = f"{uuid.uuid4()}{file_extension}"
-        
+        content = await file.read()
+        if not content:
+            raise HTTPException(status_code=400, detail="File is empty.")
+        if len(content) > max_bytes:
+            max_mb = max_bytes / (1024 * 1024)
+            raise HTTPException(
+                status_code=400,
+                detail=f"File size exceeds the {max_mb:g}MB limit.",
+            )
+
+        file_extension = mimetypes.guess_extension(file.content_type) or ""
+        blob_name = f"{folder}/{uuid.uuid4()}{file_extension}"
+
         container_client = await self.get_container_client()
         blob_client = container_client.get_blob_client(blob_name)
-        
+
         try:
-            # Upload the file
-            content = await file.read()
-            # Set content_settings so browser displays instead of downloads
             from azure.storage.blob import ContentSettings
             content_settings = ContentSettings(content_type=file.content_type)
-            
+
             await blob_client.upload_blob(content, overwrite=True, content_settings=content_settings)
-            
-            # Construct the public URL
-            blob_url = blob_client.url
-            return blob_url
+            return blob_client.url
         except Exception as e:
-            logger.error(f"Failed to upload image to Azure: {e}")
-            raise HTTPException(status_code=500, detail="Failed to upload image.")
+            logger.error(f"Failed to upload blob to Azure: {e}")
+            raise HTTPException(status_code=500, detail="Failed to upload file.")
+
+    async def upload_image(self, file: UploadFile) -> str:
+        """Uploads an image to Azure Blob Storage and returns the public URL."""
+        return await self._upload_blob(
+            file,
+            allowed_prefix="image/",
+            max_bytes=MAX_IMAGE_BYTES,
+            folder="chat/images",
+        )
+
+    async def upload_video(self, file: UploadFile) -> str:
+        """Uploads a video to Azure Blob Storage and returns the public URL."""
+        return await self._upload_blob(
+            file,
+            allowed_prefix="video/",
+            max_bytes=MAX_VIDEO_BYTES,
+            folder="chat/videos",
+        )
+
+    async def upload_document(self, file: UploadFile) -> str:
+        """Uploads a document (pdf, docx, txt) to Azure Blob Storage."""
+        content_type = file.content_type or ""
+        filename = (file.filename or "").lower()
+        extension = ""
+        for ext in ALLOWED_FILE_EXTENSIONS:
+            if filename.endswith(ext):
+                extension = ext
+                break
+
+        if content_type not in ALLOWED_FILE_CONTENT_TYPES and extension not in ALLOWED_FILE_EXTENSIONS:
+            raise HTTPException(
+                status_code=400,
+                detail="File must be PDF, DOCX, or TXT.",
+            )
+
+        content = await file.read()
+        if not content:
+            raise HTTPException(status_code=400, detail="File is empty.")
+        if len(content) > MAX_FILE_BYTES:
+            raise HTTPException(status_code=400, detail="File size exceeds the 10MB limit.")
+
+        if not extension:
+            extension = mimetypes.guess_extension(content_type) or ".bin"
+
+        blob_name = f"chat/files/{uuid.uuid4()}{extension}"
+        container_client = await self.get_container_client()
+        blob_client = container_client.get_blob_client(blob_name)
+
+        try:
+            from azure.storage.blob import ContentSettings
+
+            resolved_content_type = content_type or mimetypes.guess_type(filename)[0] or "application/octet-stream"
+            content_settings = ContentSettings(content_type=resolved_content_type)
+            await blob_client.upload_blob(content, overwrite=True, content_settings=content_settings)
+            return blob_client.url
+        except Exception as e:
+            logger.error(f"Failed to upload document to Azure: {e}")
+            raise HTTPException(status_code=500, detail="Failed to upload file.")
+
 
 azure_blob_service = AzureBlobService()

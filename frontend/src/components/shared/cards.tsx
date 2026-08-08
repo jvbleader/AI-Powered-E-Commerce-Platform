@@ -142,7 +142,10 @@ export function ProductCard({
             className="w-full"
             variant="secondary"
             disabled={isOutOfStock || product.status !== "ACTIVE" || primaryVariant.status !== "ACTIVE"}
-            onClick={() => onAdd(primaryVariant.id)}
+            onClick={() => {
+              const variantId = primaryVariant.id === "es-dummy" ? product.id : primaryVariant.id;
+              onAdd(variantId);
+            }}
           >
             {isOutOfStock ? "Hết hàng" : "Thêm giỏ"}
           </Button>

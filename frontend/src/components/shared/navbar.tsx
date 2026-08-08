@@ -4,7 +4,6 @@ import { useEffect, useState, useRef, useCallback } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import {
   Bell,
-  Bot,
   ChevronDown,
   Clock,
   Compass,
@@ -14,7 +13,6 @@ import {
   LayoutDashboard,
   LogOut,
   Menu,
-  MessageSquare,
   Package,
   Phone,
   Search,
@@ -35,7 +33,6 @@ import { BRAND_NAME } from "@/lib/constants";
 import { SearchField } from "@/components/ui/input";
 import { Button, IconButton } from "@/components/ui/button";
 import { NotificationBell } from "@/components/NotificationBell";
-import { apiFetch } from "@/services/api";
 import { fetchAutocomplete, fetchHotKeywords, type SearchSuggestion } from "@/services/search-api";
 import { getSearchHistory, addSearchHistory, removeSearchHistory, clearSearchHistory } from "@/lib/search-history";
 
@@ -64,8 +61,6 @@ export function MarketplaceHeader() {
   const [cartOpen, setCartOpen] = useState(false);
   const [catMoreOpen, setCatMoreOpen] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState("");
-  const [chatUnreadCount, setChatUnreadCount] = useState(0);
-
   const searchInputRef = useRef<HTMLInputElement>(null);
   const searchContainerRef = useRef<HTMLDivElement>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
@@ -182,36 +177,6 @@ export function MarketplaceHeader() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Fetch and sync chat unread count
-  useEffect(() => {
-    if (!currentUser) return;
-    const fetchChatCount = async () => {
-      try {
-        const data = await apiFetch<{ chat_unread_count?: number }>('/notifications/unread-count');
-        if (data?.chat_unread_count !== undefined) {
-           setChatUnreadCount(data.chat_unread_count);
-        }
-      } catch (e) {}
-    }
-    fetchChatCount();
-
-    const handleIncrement = () => setChatUnreadCount(prev => prev + 1);
-    const handleDecrement = () => setChatUnreadCount(prev => Math.max(0, prev - 1));
-    const handleClear = () => setChatUnreadCount(0);
-    
-    window.addEventListener('chat-unread-increment', handleIncrement);
-    window.addEventListener('chat-unread-decrement', handleDecrement);
-    window.addEventListener('chat-unread-clear', handleClear);
-    window.addEventListener('chat-unread-refresh', fetchChatCount);
-    
-    return () => {
-       window.removeEventListener('chat-unread-increment', handleIncrement);
-       window.removeEventListener('chat-unread-decrement', handleDecrement);
-       window.removeEventListener('chat-unread-clear', handleClear);
-       window.removeEventListener('chat-unread-refresh', fetchChatCount);
-    }
-  }, [currentUser]);
-
   const [isScrolled, setIsScrolled] = useState(false);
 
   // Close mobile nav on route change
@@ -278,8 +243,8 @@ export function MarketplaceHeader() {
               <span>Hotline: 1900 6868</span>
             </a>
             <span className="text-slate-800">|</span>
-            <a href="/chat" className="hover:text-emerald-400 transition-colors flex items-center gap-1">
-              <Bot className="h-3 w-3" /> Hỗ trợ AI
+            <a href="/support" className="hover:text-emerald-400 transition-colors flex items-center gap-1">
+              <HelpCircle className="h-3 w-3" /> Hỗ trợ
             </a>
             <span className="text-slate-800">|</span>
             <span className="text-slate-300 font-semibold">🇻🇳 VN / VND</span>
@@ -471,25 +436,6 @@ export function MarketplaceHeader() {
 
             {/* ACTION NAV LINKS */}
             <div className="hidden items-center gap-1 lg:flex shrink-0">
-              <a
-                href="/chat"
-                className={`inline-flex items-center gap-1.5 rounded-xl text-xs font-bold transition-all duration-300 ${
-                  isScrolled ? "px-2.5 py-1.5" : "px-3 py-2"
-                } ${
-                  pathname.startsWith("/chat")
-                    ? "bg-emerald-50 text-emerald-700"
-                    : "text-slate-700 hover:bg-emerald-50 hover:text-emerald-700"
-                }`}
-              >
-                <MessageSquare className="h-4 w-4" aria-hidden="true" />
-                <span>Chat</span>
-                {chatUnreadCount > 0 && (
-                  <span className="animate-bounce-subtle rounded-full bg-emerald-600 px-2 py-0.5 text-[10px] font-black text-white shadow-sm">
-                    {chatUnreadCount > 99 ? '99+' : chatUnreadCount}
-                  </span>
-                )}
-              </a>
-
               {/* NOTIFICATION BELL */}
               <NotificationBell isScrolled={isScrolled} />
 

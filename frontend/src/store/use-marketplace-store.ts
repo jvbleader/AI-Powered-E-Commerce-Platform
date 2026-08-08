@@ -43,8 +43,12 @@ export const useMarketplaceStore = create<MarketplaceStore>()((set, get, store) 
     LEGACY_STORAGE_KEYS.forEach((key: string) => window.localStorage.removeItem(key));
     const saved = window.localStorage.getItem(STORAGE_KEY);
     if (saved) {
-      const parsed = JSON.parse(saved) as AppState;
-      set((prev) => ({ state: hydrateSavedState(parsed) }));
+      try {
+        const parsed = JSON.parse(saved) as AppState;
+        set((prev) => ({ state: hydrateSavedState(parsed) }));
+      } catch {
+        window.localStorage.removeItem(STORAGE_KEY);
+      }
     }
     set({ verificationContext: readVerificationContext(), ready: true });
 

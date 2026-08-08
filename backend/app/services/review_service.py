@@ -1,9 +1,52 @@
-from typing import Optional
+from typing import Optional, List
 from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 import repositories.review_repository as review_repo
-from schemas.review_schema import ReviewCreate, ReviewResponse, ReviewListResponse, UserReviewInfo, UserReviewListResponse, UserReviewResponse, ProductReviewInfo
+from models.catalog import ProductReview
+from schemas.review_schema import (
+    ReviewCreate,
+    ReviewResponse,
+    ReviewListResponse,
+    UserReviewInfo,
+    UserReviewListResponse,
+    UserReviewResponse,
+    ProductReviewInfo,
+)
+
+
+def _review_image_urls(review: ProductReview) -> List[str]:
+    images = review.images or []
+    return [
+        img.image_url
+        for img in sorted(images, key=lambda x: (x.created_at or x.id, x.id))
+    ]
+
+
+def _to_review_response(review: ProductReview) -> ReviewResponse:
+    user = None
+    if review.user:
+        user = UserReviewInfo(
+            id=review.user.id,
+            full_name=review.user.full_name or "Người dùng",
+            avatar_url=review.user.avatar_url,
+        )
+
+    return ReviewResponse(
+        id=review.id,
+        user_id=review.user_id,
+        product_id=review.product_id,
+        order_item_id=review.order_item_id,
+        rating=review.rating,
+        comment=review.comment,
+        created_at=review.created_at,
+        user=user,
+        images=_review_image_urls(review),
+        variant_name=(
+            review.order_item.variant_name_snapshot if review.order_item else None
+        ),
+    )
+
 
 async def create_product_review(
     db: AsyncSession,
@@ -43,7 +86,8 @@ async def create_product_review(
         images=data.images
     )
 
-    return ReviewResponse.model_validate(review)
+    return _to_review_response(review)
+
 
 async def get_product_reviews(
     db: AsyncSession,
@@ -65,27 +109,14 @@ async def get_product_reviews(
         variant_name=variant_name
     )
 
-    review_responses = []
-    for item in items:
-        resp = ReviewResponse.model_validate(item)
-        if item.user:
-            resp.user = UserReviewInfo(
-                id=item.user.id,
-                full_name=item.user.full_name or "Người dùng",
-                avatar_url=item.user.avatar_url
-            )
-        
-        resp.images = [img.image_url for img in sorted(item.images, key=lambda x: x.sort_order)] if item.images else []
-        resp.variant_name = item.order_item.variant_name_snapshot if item.order_item else None
-        review_responses.append(resp)
-
     return ReviewListResponse(
-        items=review_responses,
+        items=[_to_review_response(item) for item in items],
         total=total,
         page=page,
         size=size,
         average_rating=avg_rating
     )
+
 
 async def get_user_reviews(
     db: AsyncSession,
@@ -103,21 +134,23 @@ async def get_user_reviews(
 
     review_responses = []
     for item in items:
-        resp = UserReviewResponse.model_validate(item)
-        
+        base = _to_review_response(item)
+        product_info = None
         if item.product:
             image_url = None
             if item.product.images and len(item.product.images) > 0:
                 image_url = item.product.images[0].image_url
-                
-            resp.product = ProductReviewInfo(
+
+            product_info = ProductReviewInfo(
                 id=item.product.id,
                 name=item.product.name,
                 slug=item.product.slug,
                 image_url=image_url
             )
-            
-        review_responses.append(resp)
+
+        review_responses.append(
+            UserReviewResponse(**base.model_dump(), product=product_info)
+        )
 
     return UserReviewListResponse(
         items=review_responses,

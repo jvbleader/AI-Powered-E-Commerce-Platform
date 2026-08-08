@@ -1,18 +1,42 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
-import { Bot, Sparkles, X, Plus, Send, Loader2, MessageSquareText, Store, Image as ImageIcon, Video, Package, ShoppingBag, ArrowLeft, Smile, ClipboardList, MoreHorizontal, Reply, Check, CheckCheck } from "lucide-react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
+import { Bot, Sparkles, X, Plus, Send, Loader2, MessageSquareText, Store, Image as ImageIcon, Video, ShoppingBag, ArrowLeft, ClipboardList, MoreHorizontal, Reply, Check, CheckCheck, ChevronDown } from "lucide-react";
 import { useAIChatStream } from "@/hooks/useAIChatStream";
 import { ChatMessageList } from "./ChatMessageList";
 import { ProductAttachment } from "./ProductAttachment";
 import { ReplyPreviewContent } from "./ReplyPreviewContent";
 import { cn } from "@/lib/utils";
+import { ChatScrollArea } from "./ChatScrollArea";
 import TextareaAutosize from 'react-textarea-autosize';
-import { useSellerChatSessions } from "@/hooks/useSellerChatSessions";
-import { useSellerChat } from "@/hooks/useSellerChat";
+import { useCustomerChatInbox } from "@/components/ai/CustomerChatInboxProvider";
+import { useSellerChat, type SellerConversation } from "@/hooks/useSellerChat";
 import { ProductSelectPopup } from "./ProductSelectPopup";
 import { OrderSelectPopup } from "./OrderSelectPopup";
 import { OrderAttachment } from "./OrderAttachment";
+import { ChatMediaMessage, isStandaloneChatAttachment } from "./ChatMediaMessage";
+import { ChatMediaDraftPreview, ChatMediaHiddenInputs, ChatMediaUploadStatus } from "./ChatMediaDraftPreview";
+import { useChatMediaDraft } from "@/hooks/useChatMediaDraft";
+import {
+  formatChatTime,
+  getChatBubbleTailClass,
+  getChatMessageGroupInfo,
+  getChatMessageSpacingClass,
+  CHAT_BUBBLE_BODY_CLASS,
+  CHAT_BUBBLE_WRAPPER_CLASS,
+} from "@/lib/chat-message-layout";
+import { ChatDateSeparator } from "@/components/chat/ChatDateSeparator";
+import { ChatMessageMeta } from "@/components/chat/ChatMessageMeta";
+import { useMarketplaceStore } from "@/store/use-marketplace-store";
+import { apiFetch } from "@/services/api";
+import { SellerChatListItem } from "./SellerChatListItem";
+import type { SellerSessionSummary } from "@/types/chat";
+
+type PendingShopInfo = {
+  id: number;
+  name: string;
+  avatar: string | null;
+};
 
 const SUGGESTIONS = [
   "Tư vấn son màu đỏ gạch dưới 200k",
@@ -21,19 +45,87 @@ const SUGGESTIONS = [
   "Đề xuất đồ gia dụng bán chạy"
 ];
 
+const SCROLL_BOTTOM_THRESHOLD = 64;
+
+function isNearBottom(container: HTMLElement, threshold = SCROLL_BOTTOM_THRESHOLD) {
+  return container.scrollHeight - container.scrollTop - container.clientHeight <= threshold;
+}
+
 export function ChatWidget() {
   const [isOpen, setIsOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'AI' | 'SELLER'>('AI');
   const [activeShopId, setActiveShopId] = useState<number | null>(null);
+  const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
+  const [deferCreate, setDeferCreate] = useState(false);
+  const [pendingShopInfo, setPendingShopInfo] = useState<PendingShopInfo | null>(null);
+  const [draftTextsByShopId, setDraftTextsByShopId] = useState<Record<number, string>>({});
+  const [showScrollDown, setShowScrollDown] = useState(false);
 
   // AI Chat
   const [aiInput, setAiInput] = useState("");
   const { messages: aiMessages, isStreaming, currentStatus, sendMessage: sendAiMessage, clearChat: clearAiChat } = useAIChatStream();
 
-  // Seller Chat
-  const { sessions: sellerSessions, loadSessions } = useSellerChatSessions();
-  const { messages: sellerMessages, sendMessage: sendSellerMessage, conversation: sellerConversation, markAsRead: markSellerAsRead, markAsDelivered: markSellerAsDelivered } = useSellerChat(activeShopId);
+  // Seller Chat inbox — WS nền khi user đăng nhập (DELIVERED + badge)
+  const {
+    sessions: sellerSessions,
+    unreadCount: sellerUnreadCount,
+    markSessionReadLocally,
+    conversationAction,
+    loadSessions: reloadSellerSessions,
+  } = useCustomerChatInbox();
+
+  const handleConversationCreated = useCallback((conversation: SellerConversation) => {
+    setActiveConversationId(conversation.id);
+    setDeferCreate(false);
+    setPendingShopInfo(null);
+    reloadSellerSessions(true);
+  }, [reloadSellerSessions]);
+
+  // Chỉ giữ WS khi widget đang mở — đóng widget thì presence tắt để shop nhắn sẽ có thông báo
+  const {
+    messages: sellerMessages,
+    sendMessage: sendSellerMessage,
+    conversation: sellerConversation,
+    activeConversationId: sellerActiveConversationId,
+    markAsRead: markSellerAsRead,
+    isConnected: isSellerChatConnected,
+  } = useSellerChat(
+    isOpen && activeTab === 'SELLER' ? activeShopId : null,
+    isOpen && activeTab === 'SELLER' ? activeConversationId : null,
+    'CUSTOMER',
+    {
+      deferCreate: deferCreate,
+      onConversationCreated: handleConversationCreated,
+    }
+  );
   const [sellerInput, setSellerInput] = useState("");
+  const draftTextsRef = useRef(draftTextsByShopId);
+  draftTextsRef.current = draftTextsByShopId;
+
+  const syncSellerDraft = useCallback((shopId: number | null, value: string) => {
+    if (!shopId) return;
+    setDraftTextsByShopId((prev) => {
+      const trimmed = value.trim();
+      if (trimmed) {
+        if (prev[shopId] === value) return prev;
+        return { ...prev, [shopId]: value };
+      }
+      if (!(shopId in prev)) return prev;
+      const next = { ...prev };
+      delete next[shopId];
+      return next;
+    });
+  }, []);
+
+  const updateSellerInput = useCallback((value: string) => {
+    setSellerInput(value);
+    syncSellerDraft(activeShopId, value);
+  }, [activeShopId, syncSellerDraft]);
+
+  const clearSellerInput = useCallback(() => {
+    setSellerInput("");
+    syncSellerDraft(activeShopId, "");
+  }, [activeShopId, syncSellerDraft]);
   
   // Popups
   const [showProductPopup, setShowProductPopup] = useState(false);
@@ -43,53 +135,254 @@ export function ChatWidget() {
   const [productDraft, setProductDraft] = useState<any>(null);
   const [orderDraft, setOrderDraft] = useState<any>(null);
   const [replyingToMessage, setReplyingToMessage] = useState<any>(null);
+  const { showToast } = useMarketplaceStore();
+
+  const {
+    draftItems: mediaDraftItems,
+    hasDraft: hasMediaDraft,
+    imageInputRef,
+    videoInputRef,
+    addInputRef,
+    uploading: mediaUploading,
+    uploadProgress,
+    openImagePicker,
+    openVideoPicker,
+    openAddPicker,
+    handleImageChange,
+    handleVideoChange,
+    handleAddChange,
+    removeItem: removeMediaDraftItem,
+    clearDraft: clearMediaDraft,
+    sendDraft: sendMediaDraft,
+    canAddMore: canAddMoreMedia,
+    maxFiles: maxMediaFiles,
+  } = useChatMediaDraft({
+    sendMessage: sendSellerMessage,
+    replyToId: replyingToMessage?.id,
+    onError: (message) => showToast(message, "danger"),
+    onComplete: (count) => {
+      showToast(`Đã gửi ${count} file thành công.`, "success");
+      setReplyingToMessage(null);
+    },
+  });
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const aiScrollRef = useRef<HTMLDivElement>(null);
+  const sellerScrollRef = useRef<HTMLDivElement>(null);
+  // Chỉ đánh dấu thông báo đã đọc khi user chủ động mở đúng đoạn chat (không phải chỉ mở widget)
+  const pendingMarkShopNotifications = useRef<number | null>(null);
+
+  const scrollToLatest = useCallback((force = false) => {
+    const container =
+      activeTab === "AI" ? aiScrollRef.current : sellerScrollRef.current;
+
+    const scroll = () => {
+      if (!force && container && !isNearBottom(container)) {
+        setShowScrollDown((prev) => (prev ? prev : true));
+        return;
+      }
+
+      if (container) {
+        container.scrollTop = container.scrollHeight - container.clientHeight;
+      }
+
+      messagesEndRef.current?.scrollIntoView({ behavior: "auto", block: "end" });
+      setShowScrollDown((prev) => (prev ? false : prev));
+    };
+
+    scroll();
+    requestAnimationFrame(scroll);
+    requestAnimationFrame(() => requestAnimationFrame(scroll));
+    [0, 50, 150, 300, 600].forEach((delay) => setTimeout(scroll, delay));
+  }, [activeTab]);
+
+  const handleMessagesScroll = useCallback(() => {
+    const container =
+      activeTab === "AI" ? aiScrollRef.current : sellerScrollRef.current;
+    if (!container) return;
+    const nearBottom = isNearBottom(container);
+    setShowScrollDown((prev) => (prev === !nearBottom ? prev : !nearBottom));
+  }, [activeTab]);
 
   useEffect(() => {
-    if (isOpen) {
-      // Small delay to allow render
-      setTimeout(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-      }, 100);
+    if (!isOpen || activeTab !== "AI") return;
+    scrollToLatest(true);
+  }, [isOpen, activeTab, scrollToLatest]);
+
+  useEffect(() => {
+    if (!isOpen || activeTab !== "AI" || aiMessages.length === 0) return;
+    scrollToLatest(false);
+  }, [isOpen, activeTab, aiMessages, scrollToLatest]);
+
+  useEffect(() => {
+    if (!isOpen || activeTab !== "SELLER" || !activeShopId) return;
+    scrollToLatest(true);
+  }, [isOpen, activeTab, activeShopId, scrollToLatest]);
+
+  const lastSellerMessageId = sellerMessages[sellerMessages.length - 1]?.id;
+
+  useEffect(() => {
+    if (!isOpen || activeTab !== "SELLER" || !activeShopId) return;
+    scrollToLatest(false);
+  }, [isOpen, activeTab, activeShopId, sellerMessages.length, lastSellerMessageId, scrollToLatest]);
+
+  // Cuộn lại khi nội dung đổi kích thước (ảnh/video load xong)
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const container =
+      activeTab === "AI" ? aiScrollRef.current : sellerScrollRef.current;
+    if (!container) return;
+    if (activeTab === "SELLER" && !activeShopId) return;
+
+    const scroll = () => {
+      if (!isNearBottom(container)) {
+        setShowScrollDown((prev) => (prev ? prev : true));
+        return;
+      }
+      container.scrollTop = container.scrollHeight - container.clientHeight;
+      messagesEndRef.current?.scrollIntoView({ behavior: "auto", block: "end" });
+      setShowScrollDown((prev) => (prev ? false : prev));
+    };
+
+    const observer = new ResizeObserver(scroll);
+    observer.observe(container);
+    container.querySelectorAll("img, video").forEach((el) => observer.observe(el));
+
+    scroll();
+
+    return () => observer.disconnect();
+  }, [isOpen, activeTab, activeShopId, aiMessages.length, sellerMessages.length]);
+
+  useEffect(() => {
+    setShowScrollDown(false);
+  }, [activeTab, activeShopId]);
+
+  const openSellerShopChat = useCallback(async (
+    shopId: number,
+    options?: { shopInfo?: PendingShopInfo; fromProductPage?: boolean }
+  ) => {
+    pendingMarkShopNotifications.current = shopId;
+
+    const shouldCheckExisting = options?.fromProductPage !== false;
+    if (shouldCheckExisting) {
+      try {
+        const existing = await apiFetch<SellerSessionSummary | null>(
+          `/api/seller-chat/conversations/by-shop/${shopId}`
+        );
+        if (existing) {
+          setDeferCreate(false);
+          setPendingShopInfo(null);
+          setActiveConversationId(existing.id);
+          setActiveShopId(shopId);
+          return;
+        }
+      } catch {
+        // Fall through to deferred create
+      }
     }
-  }, [aiMessages, sellerMessages, isOpen, activeTab]);
+
+    setDeferCreate(true);
+    setActiveConversationId(null);
+    setActiveShopId(shopId);
+    setPendingShopInfo(
+      options?.shopInfo ?? {
+        id: shopId,
+        name: "Người bán",
+        avatar: null,
+      }
+    );
+  }, []);
 
   // Global event listener to open chat from anywhere
   useEffect(() => {
-    const handleOpenChat = (e: CustomEvent) => {
+    const handleOpenChat = async (event: Event) => {
+      const detail = (event as CustomEvent).detail;
       setIsOpen(true);
-      if (e.detail?.shopId) {
+      if (detail?.shopId) {
         setActiveTab('SELLER');
-        setActiveShopId(e.detail.shopId);
+        await openSellerShopChat(Number(detail.shopId), {
+          shopInfo: detail.shopInfo,
+          fromProductPage: Boolean(detail?.fromProductPage),
+        });
       }
-      if (e.detail?.productDraft) {
-        setProductDraft(e.detail.productDraft);
+      if (detail?.productDraft) {
+        setProductDraft(detail.productDraft);
       }
     };
-    window.addEventListener('open-chat-widget', handleOpenChat as EventListener);
-    return () => window.removeEventListener('open-chat-widget', handleOpenChat as EventListener);
-  }, []);
+    window.addEventListener('open-chat-widget', handleOpenChat);
+    return () => window.removeEventListener('open-chat-widget', handleOpenChat);
+  }, [openSellerShopChat]);
+
+  // Deep-link from notification: /chat?tab=SELLER&session_id=...&shop_id=...
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("tab") !== "SELLER") return;
+
+    const shopIdParam = params.get("shop_id");
+    setIsOpen(true);
+    setActiveTab("SELLER");
+    if (shopIdParam) {
+      void openSellerShopChat(Number(shopIdParam));
+    }
+  }, [openSellerShopChat]);
+
+  const lastSellerInboundIdRef = useRef(0);
 
   useEffect(() => {
-    if (isOpen && activeTab === 'SELLER') {
-      loadSessions();
-      markSellerAsRead();
-    } else if (!isOpen && sellerMessages.length > 0) {
-      markSellerAsDelivered();
-    }
-  }, [isOpen, activeTab, loadSessions, sellerMessages, markSellerAsRead, markSellerAsDelivered]);
+    lastSellerInboundIdRef.current = 0;
+  }, [sellerConversation?.id, sellerActiveConversationId, activeConversationId]);
+
+  // MARK_READ + đánh dấu notification khi mở đúng đoạn chat (WS kết nối)
+  useEffect(() => {
+    const convId = sellerActiveConversationId ?? sellerConversation?.id;
+    if (!isOpen || activeTab !== "SELLER" || !convId || !activeShopId || !isSellerChatConnected) return;
+
+    markSellerAsRead();
+    markSessionReadLocally(convId);
+    window.dispatchEvent(new CustomEvent("chat-unread-refresh"));
+
+    apiFetch("/notifications/read-by-url", {
+      method: "PUT",
+      body: JSON.stringify({ shop_id: activeShopId }),
+    })
+      .then(() => {
+        window.dispatchEvent(new CustomEvent("chat-unread-refresh"));
+        window.dispatchEvent(new CustomEvent("notifications-refresh"));
+      })
+      .catch(() => {});
+  }, [isOpen, activeTab, sellerActiveConversationId, sellerConversation?.id, activeShopId, isSellerChatConnected, markSellerAsRead, markSessionReadLocally]);
 
   useEffect(() => {
-    let interval: any;
-    if (activeTab === 'SELLER') {
-      loadSessions(true);
-      interval = setInterval(() => loadSessions(true), 5000);
+    const convId = sellerActiveConversationId ?? sellerConversation?.id;
+    if (!isOpen || activeTab !== "SELLER" || !isSellerChatConnected || !convId) return;
+    const latestInbound = [...sellerMessages]
+      .reverse()
+      .find((message) => message.sender_type === "SELLER");
+    if (!latestInbound || latestInbound.id <= lastSellerInboundIdRef.current) return;
+    lastSellerInboundIdRef.current = latestInbound.id;
+    markSellerAsRead();
+    markSessionReadLocally(convId);
+  }, [
+    sellerMessages,
+    isOpen,
+    activeTab,
+    isSellerChatConnected,
+    sellerActiveConversationId,
+    sellerConversation?.id,
+    markSellerAsRead,
+    markSessionReadLocally,
+  ]);
+
+  useEffect(() => {
+    if (!activeShopId) {
+      setSellerInput((prev) => (prev === "" ? prev : ""));
+      return;
     }
-    return () => {
-      if (interval) clearInterval(interval);
-    };
-  }, [activeTab, loadSessions]);
+    const next = draftTextsRef.current[activeShopId] ?? "";
+    setSellerInput((prev) => (prev === next ? prev : next));
+  }, [activeShopId]);
 
   const scrollToMessage = (msgId: number) => {
     const el = document.getElementById(`msg-${msgId}`);
@@ -107,69 +400,150 @@ export function ChatWidget() {
     setAiInput("");
   };
 
-  const handleSellerSubmit = (e?: React.FormEvent) => {
+  const handleSellerSubmit = async (e?: React.FormEvent) => {
     e?.preventDefault();
-    if (!sellerInput.trim() && !productDraft && !orderDraft) return;
+    if (!sellerInput.trim() && !productDraft && !orderDraft && !hasMediaDraft) return;
     
     if (productDraft) {
+      const productAttachmentId = String(productDraft.public_id || productDraft.id || "");
+      if (!productAttachmentId || productAttachmentId === "undefined") {
+        console.error("Missing product public_id when sending chat product attachment", productDraft);
+        return;
+      }
       if (sellerInput.trim()) {
-        sendSellerMessage("[Sản phẩm]", 'PRODUCT', String(productDraft.public_id));
-        setTimeout(() => sendSellerMessage(sellerInput.trim(), undefined, undefined, replyingToMessage?.id), 100);
+        await sendSellerMessage("[Sản phẩm]", 'PRODUCT', productAttachmentId);
+        await sendSellerMessage(sellerInput.trim(), undefined, undefined, replyingToMessage?.id);
       } else {
-        sendSellerMessage("[Sản phẩm]", 'PRODUCT', String(productDraft.public_id), replyingToMessage?.id);
+        await sendSellerMessage("[Sản phẩm]", 'PRODUCT', productAttachmentId, replyingToMessage?.id);
       }
       setProductDraft(null);
+      clearSellerInput();
+      setReplyingToMessage(null);
     } else if (orderDraft) {
       const orderCode = orderDraft.id || orderDraft.order_code;
       if (sellerInput.trim()) {
-        sendSellerMessage(`Tôi muốn hỏi về đơn hàng #${orderCode.slice(0, 8).toUpperCase()}`, 'ORDER', String(orderCode));
-        setTimeout(() => sendSellerMessage(sellerInput.trim(), undefined, undefined, replyingToMessage?.id), 100);
+        await sendSellerMessage("[Đơn hàng]", 'ORDER', String(orderCode));
+        await sendSellerMessage(sellerInput.trim(), undefined, undefined, replyingToMessage?.id);
       } else {
-        sendSellerMessage(`Tôi muốn hỏi về đơn hàng #${orderCode.slice(0, 8).toUpperCase()}`, 'ORDER', String(orderCode), replyingToMessage?.id);
+        await sendSellerMessage("[Đơn hàng]", 'ORDER', String(orderCode), replyingToMessage?.id);
       }
       setOrderDraft(null);
+      clearSellerInput();
+      setReplyingToMessage(null);
+    } else if (hasMediaDraft) {
+      const caption = sellerInput.trim();
+      const sent = await sendMediaDraft(caption);
+      if (sent) {
+        clearSellerInput();
+        setReplyingToMessage(null);
+      }
     } else {
-      sendSellerMessage(sellerInput.trim(), undefined, undefined, replyingToMessage?.id);
+      await sendSellerMessage(sellerInput.trim(), undefined, undefined, replyingToMessage?.id);
+      clearSellerInput();
+      setReplyingToMessage(null);
     }
-    setSellerInput("");
-    setReplyingToMessage(null);
   };
 
   const handleSelectShop = (shopId: number) => {
+    const session = sellerSessions.find((item) => item.shop_id === shopId);
+    pendingMarkShopNotifications.current = shopId;
+    setDeferCreate(false);
+    setPendingShopInfo(null);
+    setActiveConversationId(session?.id ?? null);
     setActiveShopId(shopId);
+    scrollToLatest(true);
   };
 
+  const handleConversationMenuAction = async (sessionId: string, action: string) => {
+    const ok = await conversationAction(sessionId, action);
+    if (!ok) return;
+
+    if (action === "delete") {
+      const deleted = sellerSessions.find((s) => s.id === sessionId);
+      if (deleted?.shop_id === activeShopId) {
+        setActiveShopId(null);
+        setActiveConversationId(null);
+        setDeferCreate(false);
+        setProductDraft(null);
+        setOrderDraft(null);
+        clearSellerInput();
+      }
+    }
+  };
+
+  const handleOpenWidget = () => setIsOpen(true);
+
+  const handleCloseWidget = () => {
+    if (activeShopId && deferCreate) {
+      setProductDraft(null);
+      setOrderDraft(null);
+      clearSellerInput();
+    }
+    setIsOpen(false);
+    setActiveShopId(null);
+    setActiveConversationId(null);
+    setDeferCreate(false);
+    setPendingShopInfo(null);
+    setShowScrollDown(false);
+    pendingMarkShopNotifications.current = null;
+  };
+
+  const scrollDownButton = showScrollDown ? (
+    <button
+      type="button"
+      onClick={() => scrollToLatest(true)}
+      className="absolute bottom-3 right-3 z-10 flex h-8 w-8 items-center justify-center rounded-full border border-slate-100 bg-white text-emerald-600 shadow-md transition-all hover:shadow-lg active:scale-95"
+      aria-label="Xuống tin mới nhất"
+      title="Xuống tin mới nhất"
+    >
+      <ChevronDown className="h-4 w-4" strokeWidth={2.5} />
+    </button>
+  ) : null;
+
   const currentShopSession = sellerSessions.find(s => s.shop_id === activeShopId);
+  const activeShopDisplayName = currentShopSession?.shop_name || pendingShopInfo?.name || "Đang kết nối...";
+  const activeShopDisplayAvatar = currentShopSession?.shop_avatar || pendingShopInfo?.avatar || '/placeholder.png';
+  const isPendingDraftChat = deferCreate && !currentShopSession;
 
   return (
     <>
-      {/* Floating Trigger Button */}
-      <button
-        onClick={() => setIsOpen((prev) => !prev)}
-        className={cn(
-          "fixed bottom-6 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full text-white shadow-soft transition-all duration-300 hover:scale-105 active:scale-95 group",
-          isOpen ? "bg-slate-800" : "bg-emerald-500"
-        )}
-      >
-        {isOpen ? (
-          <X className="h-6 w-6 transition-transform group-hover:rotate-90" />
-        ) : (
-          <MessageSquareText className="h-6 w-6 transition-transform group-hover:scale-110" />
-        )}
-        {!isOpen && (
-          <span className="absolute -top-1 -right-1 flex h-4 w-4">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-            <span className="relative inline-flex rounded-full h-4 w-4 bg-emerald-500 border-2 border-canvas"></span>
-          </span>
-        )}
-      </button>
+      {/* Nút Chat nổi — kiểu Shopee, màu hệ thống */}
+      {!isOpen && (
+        <div className="fixed bottom-0 right-2 z-50">
+          <button
+            onClick={handleOpenWidget}
+            className="relative flex items-center gap-2 rounded-t-lg bg-emerald-500 px-4 py-2.5 text-sm font-semibold text-white shadow-soft transition-all duration-200 hover:bg-emerald-600 active:scale-[0.98]"
+          >
+            <MessageSquareText className="h-5 w-5 shrink-0" />
+            Chat
+            {sellerUnreadCount > 0 && (
+              <span className="absolute -top-2 -right-1 flex h-[18px] min-w-[18px] items-center justify-center rounded-full border-2 border-white bg-[#ee4d2d] px-1 text-[10px] font-bold leading-none text-white shadow-sm">
+                {sellerUnreadCount > 99 ? "99+" : sellerUnreadCount}
+              </span>
+            )}
+          </button>
+        </div>
+      )}
 
-      {/* Chat Dialog Modal */}
+      {/* Khung chat — dính mép dưới, lề phải vài px */}
       {isOpen && (
-        <div className="fixed bottom-24 right-6 z-50 flex h-[600px] w-[800px] max-w-[calc(100vw-48px)] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl transition-all animate-in fade-in slide-in-from-bottom-5">
-          
+        <div className="chat-widget-panel fixed bottom-0 right-2 z-50 flex h-[min(600px,calc(100vh-48px))] w-[800px] max-w-[calc(100vw-16px)] flex-col overflow-hidden rounded-t-xl border border-b-0 border-slate-200 bg-white shadow-2xl animate-in fade-in slide-in-from-bottom-3 duration-200">
+          {/* Header chung */}
+          <div className="flex shrink-0 items-center justify-between border-b border-slate-200 bg-white px-4 py-1.5">
+            <h2 className="font-heading text-sm font-bold leading-none text-primary">Chat</h2>
+            <button
+              onClick={handleCloseWidget}
+              className="rounded p-1 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
+              title="Thu gọn"
+              aria-label="Thu gọn chat"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+
+          <div className="flex min-h-0 flex-1">
           {/* Sidebar */}
-          <div className="w-[280px] flex-shrink-0 border-r border-slate-200 flex flex-col bg-slate-50">
+          <div className="w-[280px] flex-shrink-0 border-r border-slate-200 flex flex-col bg-slate-50 min-h-0">
             {/* Tabs */}
             <div className="flex border-b border-slate-200 p-2 gap-1 bg-white">
               <button 
@@ -193,11 +567,14 @@ export function ChatWidget() {
             </div>
             
             {/* List */}
-            <div className="flex-1 overflow-y-auto">
+            <ChatScrollArea className="">
               {activeTab === 'AI' && (
                 <div 
                   className="p-3 m-2 rounded-xl bg-white border border-emerald-200 cursor-pointer hover:bg-emerald-50"
-                  onClick={() => setActiveShopId(null)}
+                  onClick={() => {
+                    setActiveShopId(null);
+                    scrollToLatest(true);
+                  }}
                 >
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600">
@@ -214,34 +591,31 @@ export function ChatWidget() {
                 sellerSessions.length === 0 ? (
                    <div className="p-8 text-center text-slate-500 text-sm">Chưa có đoạn chat nào với Người Bán.</div>
                 ) : (
-                  <div className="p-2 space-y-1">
+                  <div className="divide-y divide-slate-100">
                     {sellerSessions.map(session => (
-                      <div 
+                      <SellerChatListItem
                         key={session.id}
-                        onClick={() => handleSelectShop(session.shop_id!)}
-                        className={cn(
-                          "p-2 rounded-lg cursor-pointer flex gap-3 items-center transition-colors",
-                          activeShopId === session.shop_id ? "bg-emerald-50 border border-emerald-100" : "hover:bg-slate-200/50 border border-transparent"
-                        )}
-                      >
-                         <img src={session.shop_avatar || '/placeholder.png'} alt="shop avatar" className="w-10 h-10 rounded-full object-cover border border-slate-200" />
-                         <div className="flex-1 min-w-0">
-                           <div className="flex justify-between items-baseline">
-                              <h4 className="font-bold text-sm text-slate-900 truncate">{session.shop_name}</h4>
-                              <span className="text-[10px] text-slate-400 shrink-0">{new Date(session.updated_at).toLocaleTimeString('vi-VN', {hour: '2-digit', minute:'2-digit'})}</span>
-                           </div>
-                           <p className="text-xs text-slate-500 truncate">{session.last_message}</p>
-                         </div>
-                      </div>
+                        session={session}
+                        isActive={activeShopId === session.shop_id}
+                        draftPreview={
+                          session.shop_id && activeShopId !== session.shop_id
+                            ? draftTextsByShopId[session.shop_id] ?? null
+                            : null
+                        }
+                        onSelect={() => {
+                          handleSelectShop(session.shop_id!);
+                        }}
+                        onAction={(action) => handleConversationMenuAction(session.id, action)}
+                      />
                     ))}
                   </div>
                 )
               )}
-            </div>
+            </ChatScrollArea>
           </div>
           
           {/* Main Area */}
-          <div className="flex-1 flex flex-col relative bg-white min-w-0">
+          <div className="flex-1 flex flex-col relative bg-white min-w-0 min-h-0 overflow-hidden">
             {activeTab === 'AI' ? (
               <>
                  <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 bg-white">
@@ -285,14 +659,19 @@ export function ChatWidget() {
                     </div>
                   </div>
                 ) : (
-                  <div className="flex-1 overflow-y-auto p-4">
+                  <ChatScrollArea
+                    scrollRef={aiScrollRef}
+                    onScroll={handleMessagesScroll}
+                    className="p-4"
+                    overlay={scrollDownButton}
+                  >
                     <ChatMessageList
                       messages={aiMessages}
                       isStreaming={isStreaming}
                       currentStatus={currentStatus}
                     />
-                    <div ref={messagesEndRef} />
-                  </div>
+                    <div ref={messagesEndRef} className="h-px shrink-0" aria-hidden />
+                  </ChatScrollArea>
                 )}
                 
                 <form onSubmit={handleAiSubmit} className="p-3 border-t border-slate-200 bg-slate-50">
@@ -335,22 +714,35 @@ export function ChatWidget() {
                       <button className="sm:hidden" onClick={() => setActiveShopId(null)}>
                          <ArrowLeft className="w-5 h-5 text-slate-500" />
                       </button>
-                      <img src={currentShopSession?.shop_avatar || '/placeholder.png'} className="w-10 h-10 rounded-full border border-slate-200 object-cover" />
+                      <img src={activeShopDisplayAvatar} className="w-10 h-10 rounded-full border border-slate-200 object-cover" />
                       <div>
-                        <h3 className="font-bold text-slate-900 text-base leading-none">{currentShopSession?.shop_name || "Đang kết nối..."}</h3>
+                        <h3 className="font-bold text-slate-900 text-base leading-none">{activeShopDisplayName}</h3>
                         <p className="text-xs text-slate-500 mt-1">Sẵn sàng hỗ trợ</p>
                       </div>
                     </div>
                   </div>
                   
                   {/* Seller Messages */}
-                  <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50">
+                  <ChatScrollArea
+                    scrollRef={sellerScrollRef}
+                    onScroll={handleMessagesScroll}
+                    className="bg-slate-50 p-4"
+                    overlay={scrollDownButton}
+                  >
                     {sellerMessages.length === 0 ? (
-                      <div className="h-full flex items-center justify-center text-slate-400 text-sm">Chưa có tin nhắn nào. Bắt đầu trò chuyện!</div>
+                      <div className="h-full flex items-center justify-center text-slate-400 text-sm">
+                        {isPendingDraftChat
+                          ? "Bắt đầu trò chuyện với người bán về sản phẩm này."
+                          : "Chưa có tin nhắn nào. Bắt đầu trò chuyện!"}
+                      </div>
                     ) : (
-                       sellerMessages.map(msg => {
+                      <div>
+                       {sellerMessages.map((msg, idx) => {
+                         const { position, showDateSeparator } = getChatMessageGroupInfo(sellerMessages, idx);
+                         const spacingClass = getChatMessageSpacingClass(position, idx === 0 && !showDateSeparator);
                          const isMe = msg.sender_type === 'CUSTOMER';
                          const isSystem = msg.sender_type === 'SYSTEM';
+                         const tailClass = getChatBubbleTailClass(isMe, position);
                          
                          if (isSystem) {
                            return (
@@ -361,8 +753,10 @@ export function ChatWidget() {
                          }
                          
                          return (
-                           <div key={msg.id} id={`msg-${msg.id}`} className={cn("flex w-full group transition-colors duration-500 rounded p-0.5 scroll-mt-4", isMe ? "justify-end" : "justify-start")}>
-                              <div className="flex items-center gap-2 max-w-[80%]">
+                           <React.Fragment key={msg.id}>
+                             {showDateSeparator && <ChatDateSeparator date={msg.created_at} />}
+                             <div id={`msg-${msg.id}`} className={cn("flex w-full min-w-0 group transition-colors duration-500 rounded p-0.5 scroll-mt-4", spacingClass, isMe ? "justify-end" : "justify-start")}>
+                              <div className={cn("flex items-center gap-2 max-w-[80%]", CHAT_BUBBLE_WRAPPER_CLASS)}>
                                 {isMe && (
                                   <div className="relative group/reply mr-1 flex items-center">
                                     <button className="text-slate-400 hover:text-emerald-500 bg-white shadow-sm border border-slate-100 rounded-md p-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -376,14 +770,15 @@ export function ChatWidget() {
                                     </div>
                                   </div>
                                 )}
-                                <div className="flex flex-col">
+                                <div className={cn("flex flex-col", CHAT_BUBBLE_WRAPPER_CLASS)}>
                                   <div className={cn(
-                                    "text-sm w-fit",
+                                    "text-sm max-w-full min-w-0",
                                     isMe ? "ml-auto" : "mr-auto",
-                                    msg.attachment_type === 'PRODUCT' ? "" : cn(
-                                      "rounded-2xl px-4 py-2.5",
-                                      isMe ? "bg-emerald-50 text-slate-900 rounded-tr-sm shadow-sm border border-emerald-100" : "bg-white border border-slate-200 text-slate-900 rounded-tl-sm shadow-sm"
-                                    )
+                                    !isStandaloneChatAttachment(msg) ? cn(
+                                      "rounded-2xl px-3 py-1.5",
+                                      isMe ? "bg-emerald-50 text-slate-900 shadow-sm border border-emerald-100" : "bg-white border border-slate-200 text-slate-900 shadow-sm",
+                                      tailClass
+                                    ) : ""
                                   )}>
                                      {msg.reply_to_id && sellerMessages.find(m => m.id === msg.reply_to_id) && (
                                        (() => {
@@ -420,7 +815,7 @@ export function ChatWidget() {
                                            "flex items-center gap-1 text-[10px] mt-1",
                                            "justify-end text-slate-500"
                                          )}>
-                                            <span>{new Date(msg.created_at).toLocaleTimeString('vi-VN', {hour: '2-digit', minute:'2-digit'})}</span>
+                                            <span>{formatChatTime(msg.created_at)}</span>
                                             {isMe && (
                                               msg.status === 'READ' ? <CheckCheck className="w-3 h-3 text-emerald-500" /> :
                                               msg.status === 'DELIVERED' ? <CheckCheck className="w-3 h-3 text-slate-400" /> :
@@ -431,7 +826,7 @@ export function ChatWidget() {
                                      ) : msg.attachment_type === 'ORDER' && msg.attachment_id ? (
                                        <div className="flex flex-col gap-1 items-end">
                                          <OrderAttachment orderId={msg.attachment_id} />
-                                         {msg.content && (
+                                         {msg.content && msg.content !== "[Đơn hàng]" && (
                                            <div className={cn(
                                               "rounded-2xl px-4 py-2.5 text-sm w-full text-left mt-1",
                                               isMe ? "bg-emerald-50 text-slate-900 rounded-tr-sm shadow-sm border border-emerald-100" : "bg-white border border-slate-200 text-slate-900 rounded-tl-sm shadow-sm"
@@ -443,7 +838,7 @@ export function ChatWidget() {
                                            "flex items-center gap-1 text-[10px] mt-1",
                                            "justify-end text-slate-500"
                                          )}>
-                                            <span>{new Date(msg.created_at).toLocaleTimeString('vi-VN', {hour: '2-digit', minute:'2-digit'})}</span>
+                                            <span>{formatChatTime(msg.created_at)}</span>
                                             {isMe && (
                                               msg.status === 'READ' ? <CheckCheck className="w-3 h-3 text-emerald-500" /> :
                                               msg.status === 'DELIVERED' ? <CheckCheck className="w-3 h-3 text-slate-400" /> :
@@ -451,21 +846,22 @@ export function ChatWidget() {
                                             )}
                                          </div>
                                        </div>
+                                     ) : (msg.attachment_type === 'IMAGE' || msg.attachment_type === 'VIDEO') && msg.attachment_id ? (
+                                       <ChatMediaMessage msg={msg} isMe={isMe} />
                                      ) : (
-                                       <>
+                                       <span className={CHAT_BUBBLE_BODY_CLASS}>
                                          {msg.content}
-                                         <div className={cn(
-                                           "flex items-center gap-1 text-[10px] mt-1",
-                                           isMe ? "justify-end text-slate-500" : "justify-start text-slate-400"
-                                         )}>
-                                            <span>{new Date(msg.created_at).toLocaleTimeString('vi-VN', {hour: '2-digit', minute:'2-digit'})}</span>
-                                            {isMe && (
-                                              msg.status === 'READ' ? <CheckCheck className="w-3 h-3 text-emerald-500" /> :
-                                              msg.status === 'DELIVERED' ? <CheckCheck className="w-3 h-3 text-slate-400" /> :
-                                              <Check className="w-3 h-3 text-slate-400" />
-                                            )}
-                                         </div>
-                                       </>
+                                         <ChatMessageMeta
+                                           time={formatChatTime(msg.created_at)}
+                                           className={isMe ? "text-slate-500" : "text-slate-400"}
+                                         >
+                                           {isMe && (
+                                             msg.status === 'READ' ? <CheckCheck className="w-3 h-3 text-emerald-500" /> :
+                                             msg.status === 'DELIVERED' ? <CheckCheck className="w-3 h-3 text-slate-400" /> :
+                                             <Check className="w-3 h-3 text-slate-400" />
+                                           )}
+                                         </ChatMessageMeta>
+                                       </span>
                                      )}
                                   </div>
                                 </div>
@@ -483,12 +879,14 @@ export function ChatWidget() {
                                   </div>
                                 )}
                               </div>
-                           </div>
+                             </div>
+                           </React.Fragment>
                          )
-                       })
+                       })}
+                      </div>
                     )}
-                    <div ref={messagesEndRef} />
-                  </div>
+                    <div ref={messagesEndRef} className="h-px shrink-0" aria-hidden />
+                  </ChatScrollArea>
                   
                   {/* Seller Input */}
                   <div className="border-t border-slate-200 bg-white">
@@ -558,14 +956,32 @@ export function ChatWidget() {
                          </button>
                       </div>
                     )}
+                    <ChatMediaUploadStatus uploading={mediaUploading} uploadProgress={uploadProgress} />
                     
                     <form onSubmit={handleSellerSubmit} className="p-3">
                       <div className="bg-white rounded-xl border border-slate-200 focus-within:border-emerald-500 focus-within:ring-1 focus-within:ring-emerald-500 transition-all overflow-hidden flex flex-col shadow-sm">
+                        <ChatMediaHiddenInputs
+                          imageInputRef={imageInputRef}
+                          videoInputRef={videoInputRef}
+                          addInputRef={addInputRef}
+                          onImageChange={handleImageChange}
+                          onVideoChange={handleVideoChange}
+                          onAddChange={handleAddChange}
+                          disabled={mediaUploading}
+                        />
+                        <ChatMediaDraftPreview
+                          items={mediaDraftItems}
+                          canAddMore={canAddMoreMedia}
+                          maxFiles={maxMediaFiles}
+                          onRemove={removeMediaDraftItem}
+                          onClear={clearMediaDraft}
+                          onAdd={openAddPicker}
+                        />
                         <TextareaAutosize
                           minRows={1}
                           maxRows={5}
                           value={sellerInput}
-                          onChange={(e) => setSellerInput(e.target.value)}
+                          onChange={(e) => updateSellerInput(e.target.value)}
                           onKeyDown={(e) => {
                             if (e.key === 'Enter' && !e.shiftKey) {
                               e.preventDefault();
@@ -577,17 +993,27 @@ export function ChatWidget() {
                         />
                         <div className="flex items-center justify-between p-1.5 border-t border-slate-50 bg-slate-50/50">
                            <div className="flex items-center gap-1">
-                               <button type="button" className="group relative p-1.5 text-slate-400 hover:bg-slate-200/50 hover:text-emerald-600 rounded-md transition-colors">
-                                <ImageIcon className="w-4 h-4" />
+                               <button
+                                 type="button"
+                                 disabled={mediaUploading || !canAddMoreMedia}
+                                 onClick={openImagePicker}
+                                 className="group relative p-1.5 text-slate-400 hover:bg-slate-200/50 hover:text-emerald-600 rounded-md transition-colors disabled:opacity-50"
+                               >
+                                {mediaUploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <ImageIcon className="w-4 h-4" />}
                                 <span className="absolute bottom-full left-0 mb-1.5 px-2 py-1 text-[11px] font-medium text-white bg-slate-800 rounded shadow-sm opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 delay-0 group-hover:delay-[350ms] whitespace-nowrap z-50 pointer-events-none">
-                                  Hình ảnh
+                                  Hình ảnh (tối đa {maxMediaFiles}, 2MB/ảnh)
                                   <span className="absolute top-full left-3 border-[4px] border-transparent border-t-slate-800" />
                                 </span>
                               </button>
-                              <button type="button" className="group relative p-1.5 text-slate-400 hover:bg-slate-200/50 hover:text-emerald-600 rounded-md transition-colors">
+                              <button
+                                type="button"
+                                disabled={mediaUploading || !canAddMoreMedia}
+                                onClick={openVideoPicker}
+                                className="group relative p-1.5 text-slate-400 hover:bg-slate-200/50 hover:text-emerald-600 rounded-md transition-colors disabled:opacity-50"
+                              >
                                 <Video className="w-4 h-4" />
                                 <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 px-2 py-1 text-[11px] font-medium text-white bg-slate-800 rounded shadow-sm opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 delay-0 group-hover:delay-[350ms] whitespace-nowrap z-50 pointer-events-none">
-                                  Video
+                                  Video (tối đa {maxMediaFiles}, 30MB/video)
                                   <span className="absolute top-full left-1/2 -translate-x-1/2 border-[4px] border-transparent border-t-slate-800" />
                                 </span>
                               </button>
@@ -618,10 +1044,10 @@ export function ChatWidget() {
                            </div>
                            <button
                              type="submit"
-                             disabled={(!sellerInput.trim() && !productDraft && !orderDraft)}
+                             disabled={mediaUploading || (!sellerInput.trim() && !productDraft && !orderDraft && !hasMediaDraft)}
                              className={cn(
                                "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-all mr-0.5",
-                               (!sellerInput.trim() && !productDraft && !orderDraft)
+                               (mediaUploading || (!sellerInput.trim() && !productDraft && !orderDraft && !hasMediaDraft))
                                  ? "text-slate-300 pointer-events-none"
                                  : "text-emerald-600 hover:bg-emerald-100"
                              )}
@@ -677,6 +1103,7 @@ export function ChatWidget() {
                 </div>
               )
             )}
+          </div>
           </div>
         </div>
       )}

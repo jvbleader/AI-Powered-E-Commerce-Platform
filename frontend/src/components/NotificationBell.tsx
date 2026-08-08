@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState, useRef } from "react";
-import { Bell, Check, Info, Package, AlertCircle, Headset } from "lucide-react";
+import { Bell, Check, Info, Package, AlertCircle, Headset, Store } from "lucide-react";
 import { getApiBaseUrl, apiFetch } from "@/services/api";
 import { formatDate } from "@/lib/helpers";
 import { useMarketplaceStore } from "@/store/use-marketplace-store";
@@ -52,8 +52,11 @@ export function NotificationBell({ isScrolled }: { isScrolled?: boolean }) {
             try {
               const newNotif = JSON.parse(event.data);
               setNotifications((prev) => [newNotif, ...prev]);
-              if (newNotif.action_url?.startsWith('/chat')) {
+              if (newNotif.action_url?.startsWith('/support') || newNotif.action_url?.includes('tab=SUPPORTER') || (newNotif.action_url?.startsWith('/chat') && !newNotif.action_url?.includes('tab=SELLER') && !newNotif.action_url?.includes('seller'))) {
                 window.dispatchEvent(new CustomEvent('chat-unread-increment'));
+              } else if (newNotif.action_url?.includes('tab=SELLER') || newNotif.type === 'seller_chat') {
+                // Badge Chat seller dựa trên tin chưa đọc — refresh thay vì +1 mù
+                window.dispatchEvent(new CustomEvent('chat-unread-refresh'));
               }
             } catch (e) {}
           }
@@ -115,11 +118,13 @@ export function NotificationBell({ isScrolled }: { isScrolled?: boolean }) {
     window.addEventListener('notification-read', handleRead as EventListener);
     window.addEventListener('notification-read-all', handleReadAll);
     window.addEventListener('chat-unread-refresh', handleRefresh);
+    window.addEventListener('notifications-refresh', handleRefresh);
 
     return () => {
       window.removeEventListener('notification-read', handleRead as EventListener);
       window.removeEventListener('notification-read-all', handleReadAll);
       window.removeEventListener('chat-unread-refresh', handleRefresh);
+      window.removeEventListener('notifications-refresh', handleRefresh);
     };
   }, [isOpen]);
 
@@ -146,8 +151,10 @@ export function NotificationBell({ isScrolled }: { isScrolled?: boolean }) {
       setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n));
       setUnreadCount(prev => Math.max(0, prev - 1));
       window.dispatchEvent(new CustomEvent('notification-read', { detail: { id } }));
-      if (notif?.action_url?.startsWith('/chat')) {
+      if (notif?.action_url?.startsWith('/support') || notif?.action_url?.includes('tab=SUPPORTER') || (notif?.action_url?.startsWith('/chat') && !notif?.action_url?.includes('tab=SELLER'))) {
         window.dispatchEvent(new CustomEvent('chat-unread-decrement'));
+      } else if (notif?.action_url?.includes('tab=SELLER') || notif?.type === 'seller_chat') {
+        window.dispatchEvent(new CustomEvent('chat-unread-refresh'));
       }
     } catch (e) {
       console.error(e);
@@ -167,7 +174,13 @@ export function NotificationBell({ isScrolled }: { isScrolled?: boolean }) {
   };
 
   const getIcon = (notif: NotificationItem) => {
-    const type = notif.action_url?.startsWith('/chat') ? 'support' : notif.type?.toLowerCase();
+    const type = notif.action_url?.startsWith('/support')
+      ? 'support'
+      : notif.action_url?.startsWith('/chat')
+      ? (notif.action_url.includes('tab=SELLER') || notif.type === 'seller_chat' ? 'seller_chat' : 'support')
+      : notif.action_url?.startsWith('/seller/chat')
+        ? 'seller_chat'
+        : notif.type?.toLowerCase();
     switch (type) {
       case "order": return (
         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
@@ -182,6 +195,11 @@ export function NotificationBell({ isScrolled }: { isScrolled?: boolean }) {
       case "support": return (
         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-sky/10 text-sky">
           <Headset className="h-5 w-5" />
+        </div>
+      );
+      case "seller_chat": return (
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600">
+          <Store className="h-5 w-5" />
         </div>
       );
       default: return (

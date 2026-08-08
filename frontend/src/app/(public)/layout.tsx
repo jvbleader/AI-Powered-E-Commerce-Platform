@@ -8,6 +8,7 @@ import { fetchCategories } from "@/services/product-api";
 import { useMarketplaceStore } from "@/store/use-marketplace-store";
 import { MarketplaceHeader, MarketplaceFooter } from "@/components/shared/navbar";
 import { ChatWidget } from "@/components/ai/ChatWidget";
+import { CustomerChatInboxProvider } from "@/components/ai/CustomerChatInboxProvider";
 
 import { DashboardFrame } from "@/components/dashboard-frame";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -103,17 +104,13 @@ export default function MarketplaceLayout({
     return <RedirectTo href={forcedDashboardPath} kind={forcedKind} />;
   }
 
-  const isChatRoute = pathname === "/chat";
+  const isSupportRoute = pathname === "/support" || pathname === "/chat";
 
-  if (isChatRoute) {
-    return (
-      <div className="h-screen bg-canvas text-slate-900 flex flex-col overflow-hidden">
-        <ErrorBoundary>{children}</ErrorBoundary>
-      </div>
-    );
-  }
-
-  return (
+  const content = isSupportRoute ? (
+    <div className="h-screen bg-canvas text-slate-900 flex flex-col overflow-hidden">
+      <ErrorBoundary>{children}</ErrorBoundary>
+    </div>
+  ) : (
     <div className="min-h-screen bg-canvas text-slate-900 flex flex-col justify-between pt-[144px]">
       {!ready ? (
         <div className="fixed top-0 left-0 right-0 z-50 h-[144px] bg-white border-b border-line shadow-sm" />
@@ -130,6 +127,16 @@ export default function MarketplaceLayout({
         </>
       )}
     </div>
+  );
+
+  if (!ready) {
+    return content;
+  }
+
+  return (
+    <CustomerChatInboxProvider>
+      {content}
+    </CustomerChatInboxProvider>
   );
 }
 

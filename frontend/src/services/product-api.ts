@@ -85,6 +85,7 @@ type ProductPublicResponse = {
   images: ImagePublicResponse[];
   variants: VariantPublicResponse[];
   categories?: { id: number; name: string }[];
+  variant_options?: { name: string; values?: string[]; options?: string[] }[] | null;
 };
 
 type ProductListResponse = {
@@ -121,7 +122,11 @@ export const normalizeProduct = (
       backendProduct.images.find((img) => img.is_thumbnail)?.image_url ??
       backendProduct.images[0]?.image_url ??
       "https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=900&q=80",
-    createdAt: backendProduct.created_at ?? new Date().toISOString()
+    createdAt: backendProduct.created_at ?? new Date().toISOString(),
+    variantOptions: backendProduct.variant_options?.map((opt) => ({
+      name: opt.name,
+      values: opt.values ?? opt.options ?? []
+    }))
   };
 
   const variants: ProductVariant[] = backendProduct.variants.map((variant) => ({
@@ -273,6 +278,15 @@ export async function fetchProductDetail(shopSlug: string, productSlug: string) 
   } catch (error) {
     return { ok: false, message: error instanceof ApiError ? error.message : "Không thể tải chi tiết sản phẩm." };
   }
+}
+
+/** Resolve chat product attachments stored by public_id. */
+export async function fetchProductByPublicId(publicId: string) {
+  if (!publicId || publicId === "undefined" || publicId === "null") {
+    return { ok: false as const, message: "Thiếu mã sản phẩm." };
+  }
+  // Backend accepts public_id in the product_slug slot and ignores placeholder shop slug "shop".
+  return fetchProductDetail("shop", publicId);
 }
 
 
