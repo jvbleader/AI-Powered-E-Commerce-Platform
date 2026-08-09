@@ -23,9 +23,10 @@ export enum PaymentMethodEnum {
   MOCK = "MOCK",
   BANK_TRANSFER = "BANK_TRANSFER",
   MOMO = "MOMO",
-  CREDIT_CARD = "CREDIT_CARD"
+  CREDIT_CARD = "CREDIT_CARD",
+  VNPAY = "VNPAY",
 }
-export type PaymentMethod = "MOCK" | "BANK_TRANSFER" | "MOMO" | "CREDIT_CARD";
+export type PaymentMethod = "MOCK" | "BANK_TRANSFER" | "MOMO" | "CREDIT_CARD" | "VNPAY";
 export type AddressType = "HOME" | "OFFICE";
 
 export interface User {
@@ -204,6 +205,7 @@ export interface Order {
   shippingDiscountAmount: number;
   totalAmount: number;
   customerNote?: string;
+  preferredPaymentMethod?: PaymentMethod;
   paymentExpiresAt: string;
   sellerConfirmExpiresAt: string;
   completedAt?: string;
@@ -294,6 +296,8 @@ export interface AppState {
   sessionUserId?: string;
   activeRole: Role | "GUEST";
   lastCheckoutPaymentCode?: string;
+  lastCheckoutOrderCodes?: string[];
+  lastCheckoutPaymentMethod?: PaymentMethod;
 }
 
 export interface VerificationContext {

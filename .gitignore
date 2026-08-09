@@ -71,3 +71,5 @@ redis_data/
 docker-compose.tunnel.yml
 
 /scripts
+*/tests
+/docs/other

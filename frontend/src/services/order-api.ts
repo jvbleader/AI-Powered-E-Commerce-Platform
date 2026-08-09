@@ -15,6 +15,7 @@ export interface CheckoutCartRequest {
   cart_item_ids: number[];
   address_id: number;
   customer_note?: string;
+  payment_method?: string;
 }
 
 export interface CheckoutDirectItem {

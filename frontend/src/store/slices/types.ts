@@ -167,6 +167,7 @@ export type BackendOrderResponse = {
   shipping_discount_amount: string | number;
   total_amount: string | number;
   customer_note?: string | null;
+  preferred_payment_method?: string | null;
   payment_expires_at: string;
   seller_confirm_expires_at: string;
   completed_at?: string | null;
@@ -243,6 +244,8 @@ export type MarketplaceStore = {
 
   // ── Order slice ──
   checkout: (addressId: string, paymentMethod: PaymentMethod, customerNote?: string) => Promise<any>;
+  createCheckoutPayment: (orderCodes: string[], paymentMethod: PaymentMethod) => Promise<any>;
+  fetchPaymentDetail: (paymentCode: string) => Promise<any>;
   updatePaymentStatus: (paymentCode: string, status: PaymentStatus) => Promise<any>;
   retryPayment: (paymentCode: string, paymentMethod: PaymentMethod) => Promise<any>;
   cancelCustomerOrder: (orderCode: string) => Promise<any>;

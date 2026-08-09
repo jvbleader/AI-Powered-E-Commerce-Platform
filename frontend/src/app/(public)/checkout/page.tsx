@@ -61,7 +61,7 @@ export default function CheckoutPage() {
         <Panel className="mx-auto max-w-md p-8">
           <Loader2 className="mx-auto h-10 w-10 animate-spin text-emerald-600 mb-4" />
           <h2 className="text-lg font-bold text-ink mb-1">Đang xử lý đơn hàng</h2>
-          <p className="text-sm text-muted">Vui lòng chờ trong giây lát, hệ thống đang tạo đơn hàng và chuyển hướng...</p>
+          <p className="text-sm text-muted">Vui lòng chờ trong giây lát, hệ thống đang tạo đơn hàng...</p>
         </Panel>
       </main>
     );
@@ -151,8 +151,9 @@ export default function CheckoutPage() {
                 </Field>
                 <Field label="Phương thức thanh toán">
                   <Select value={method} onChange={(event) => setMethod(event.target.value as PaymentMethod)}>
-                    {Object.entries(paymentMethodLabel).map(([key, label]) => (
-                      <option key={key} value={key}>{label}</option>
+                    {/* Chỉ liệt kê phương thức đã tích hợp end-to-end (tránh BANK_TRANSFER/MOMO chưa có gateway). */}
+                    {(["MOCK", "VNPAY"] as PaymentMethod[]).map((key) => (
+                      <option key={key} value={key}>{paymentMethodLabel[key]}</option>
                     ))}
                   </Select>
                 </Field>
@@ -166,7 +167,7 @@ export default function CheckoutPage() {
                       const result = await store.checkout(addressId, method, note);
                       showToast(result.message, result.ok ? "success" : "danger");
                       if (result.ok) {
-                        router.push(`/payment/${result.paymentCode}`);
+                        router.push("/checkout/success");
                       } else {
                         setIsOrdering(false);
                       }

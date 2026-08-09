@@ -14,7 +14,7 @@ import {
   formatVnd,
   orderStatusLabel,
   paymentStatusLabel,
-  paymentMethodLabel
+  orderPaymentMethodLabel
 } from "@/lib/helpers";
 import { useMarketplaceStore } from "@/store/use-marketplace-store";
 import Unauthorized from "@/components/shared/unauthorized-page";
@@ -57,7 +57,6 @@ export default function SellerOrderDetailPage() {
   };
 
   const payment = findPaymentForOrder(order.orderCode);
-  const pm = payment?.paymentMethod ?? "MOCK";
   const paymentTime = payment?.paidAt
     ? formatDate(payment.paidAt)
     : payment?.createdAt
@@ -162,7 +161,7 @@ export default function SellerOrderDetailPage() {
               <div><StatusBadge status={order.paymentStatus} label={paymentStatusLabel[order.paymentStatus]} /></div>
               
               <span className="text-slate-500">Phương thức</span>
-              <span className="font-semibold text-slate-800">{paymentMethodLabel[pm] || pm}</span>
+              <span className="font-semibold text-slate-800">{orderPaymentMethodLabel(order, payment)}</span>
               
               {paymentTime && (
                 <>

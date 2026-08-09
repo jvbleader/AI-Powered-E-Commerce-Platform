@@ -23,6 +23,10 @@ class CheckoutCartRequest(BaseModel):
     customer_note: Optional[str] = Field(
         default=None, max_length=500, description="Ghi chú của khách hàng"
     )
+    payment_method: Optional[str] = Field(
+        default=None,
+        description="Phương thức thanh toán dự kiến: MOCK, VNPAY, ...",
+    )
 
 
 class CheckoutDirectItem(BaseModel):
@@ -35,6 +39,10 @@ class CheckoutDirectRequest(BaseModel):
     address_id: int = Field(description="ID của địa chỉ giao hàng")
     customer_note: Optional[str] = Field(
         default=None, max_length=500, description="Ghi chú của khách hàng"
+    )
+    payment_method: Optional[str] = Field(
+        default=None,
+        description="Phương thức thanh toán dự kiến: MOCK, VNPAY, ...",
     )
 
 
@@ -110,6 +118,7 @@ class OrderResponse(BaseModel):
     shipping_discount_amount: Decimal
     total_amount: Decimal
     customer_note: Optional[str]
+    preferred_payment_method: Optional[str] = None
     payment_expires_at: datetime
     seller_confirm_expires_at: datetime
     completed_at: Optional[datetime]

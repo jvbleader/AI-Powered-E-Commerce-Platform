@@ -9,7 +9,50 @@ class PaymentCreateRequest(BaseModel):
     order_codes: List[str] = Field(
         description="Danh sách order_code của các đơn hàng cần thanh toán"
     )
-    payment_method: str = Field(description="BANK, MOMO, CREDIT_CARD, MOCK")
+    payment_method: str = Field(description="BANK, MOMO, CREDIT_CARD, MOCK, VNPAY")
+
+
+class VNPayPaymentCreateRequest(BaseModel):
+    order_codes: List[str] = Field(
+        description="Danh sách order_code của các đơn hàng cần thanh toán"
+    )
+    bank_code: Optional[str] = Field(
+        default=None, description="Mã ngân hàng VNPay (tùy chọn)"
+    )
+
+
+class VNPayReturnResponse(BaseModel):
+    signature_valid: bool
+    payment_code: Optional[str]
+    payment_status: Optional[str]
+    vnp_response_code: Optional[str]
+    vnp_transaction_status: Optional[str]
+    display_success: bool
+    message: str
+
+
+class VNPayIpnResponse(BaseModel):
+    RspCode: str
+    Message: str
+
+
+class VNPayQueryRequest(BaseModel):
+    payment_code: str
+
+
+class VNPayRefundRequest(BaseModel):
+    payment_code: str
+    amount: Optional[Decimal] = Field(
+        default=None, description="Số tiền hoàn (mặc định toàn phần)"
+    )
+    reason: str = Field(min_length=1, max_length=500)
+    partial: bool = False
+
+
+class VNPayRefundResponse(BaseModel):
+    refund_status: str
+    amount: Decimal
+    gateway_response: Optional[dict]
 
 
 class PaymentOrderInfo(BaseModel):
@@ -40,6 +83,11 @@ class PaymentResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class VNPayPaymentCreateResponse(BaseModel):
+    payment: PaymentResponse
+    payment_url: str
 
 
 class MockPaymentCallbackRequest(BaseModel):

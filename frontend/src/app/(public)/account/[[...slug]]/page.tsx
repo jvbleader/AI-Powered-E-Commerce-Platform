@@ -25,7 +25,7 @@ import {
   getCategoryNames,
   orderStatusLabel,
   paymentStatusLabel,
-  paymentMethodLabel,
+  orderPaymentMethodLabel,
   roleLabel,
   sellerStatusLabel,
   canCustomerCancel,
@@ -308,13 +308,23 @@ export default function AccountPage() {
     const canContinuePayment = (order: Order) =>
       order.orderStatus !== "CANCELLED" && (order.paymentStatus === "PENDING" || order.paymentStatus === "FAILED");
 
-    const goToPaymentForOrder = (order: Order) => {
+    const goToPaymentForOrder = async (order: Order) => {
       const payment = findPaymentForOrder(order.orderCode);
-      if (!payment) {
-        showToast("Không tìm thấy payment liên kết với đơn hàng.", "danger");
+      if (payment) {
+        window.location.href = `/payment/${payment.paymentCode}`;
         return;
       }
-      window.location.href = `/payment/${payment.paymentCode}`;
+      const method = order.preferredPaymentMethod ?? store.state.lastCheckoutPaymentMethod ?? "MOCK";
+      const result = await store.createCheckoutPayment([order.orderCode], method);
+      if (!result.ok) {
+        showToast(result.message || "Không thể tạo giao dịch thanh toán.", "danger");
+        return;
+      }
+      if (result.redirectUrl) {
+        window.location.href = result.redirectUrl;
+        return;
+      }
+      window.location.href = `/payment/${result.paymentCode}`;
     };
 
     const shopById = (id?: string) => {
@@ -465,13 +475,23 @@ export default function AccountPage() {
     const canContinuePayment = (order: Order) =>
       order.orderStatus !== "CANCELLED" && (order.paymentStatus === "PENDING" || order.paymentStatus === "FAILED");
 
-    const goToPaymentForOrder = (order: Order) => {
+    const goToPaymentForOrder = async (order: Order) => {
       const payment = findPaymentForOrder(order.orderCode);
-      if (!payment) {
-        showToast("Không tìm thấy payment liên kết với đơn hàng.", "danger");
+      if (payment) {
+        window.location.href = `/payment/${payment.paymentCode}`;
         return;
       }
-      window.location.href = `/payment/${payment.paymentCode}`;
+      const method = order.preferredPaymentMethod ?? store.state.lastCheckoutPaymentMethod ?? "MOCK";
+      const result = await store.createCheckoutPayment([order.orderCode], method);
+      if (!result.ok) {
+        showToast(result.message || "Không thể tạo giao dịch thanh toán.", "danger");
+        return;
+      }
+      if (result.redirectUrl) {
+        window.location.href = result.redirectUrl;
+        return;
+      }
+      window.location.href = `/payment/${result.paymentCode}`;
     };
 
     const handleCopy = (text: string, label: string) => {
@@ -718,15 +738,16 @@ export default function AccountPage() {
                   <div className="flex items-center justify-between text-muted">
                     <span>Phương thức</span>
                     <span className="font-bold text-ink">
-                      {(() => {
-                        const pm = findPaymentForOrder(order.orderCode)?.paymentMethod ?? "MOCK";
-                        return paymentMethodLabel[pm] || pm;
-                      })()}
+                      {orderPaymentMethodLabel(order, findPaymentForOrder(order.orderCode))}
                     </span>
                   </div>
-                  <div className="flex items-center justify-between text-muted">
+                  <div className="flex items-center justify-between gap-3 text-muted">
                     <span>Trạng thái thanh toán</span>
-                    <StatusBadge status={order.paymentStatus} label={paymentStatusLabel[order.paymentStatus]} />
+                    <StatusBadge
+                      className="shrink-0"
+                      status={order.paymentStatus}
+                      label={paymentStatusLabel[order.paymentStatus]}
+                    />
                   </div>
                   {(() => {
                     const payment = findPaymentForOrder(order.orderCode);

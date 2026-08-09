@@ -32,6 +32,21 @@ class Settings(BaseSettings):
     AZURE_STORAGE_CONNECTION_STRING: Optional[str] = None
     AZURE_CONTAINER_NAME: str = None
 
+    # VNPay (optional — required when using VNPay endpoints)
+    VNPAY_TMN_CODE: Optional[str] = None
+    VNPAY_HASH_SECRET: Optional[str] = None
+    VNPAY_PAYMENT_URL: str = "https://sandbox.vnpayment.vn/paymentv2/vpcpay.html"
+    VNPAY_API_URL: str = "https://sandbox.vnpayment.vn/merchant_webapi/api/transaction"
+    VNPAY_RETURN_URL: str = "http://localhost:8000/payments/vnpay/return?redirect=true"
+    VNPAY_IPN_URL: str = "http://localhost:8000/payments/vnpay/ipn"
+    VNPAY_VERSION: str = "2.1.0"
+    VNPAY_CURR_CODE: str = "VND"
+    VNPAY_LOCALE: str = "vn"
+    VNPAY_ORDER_TYPE: str = "other"
+    VNPAY_HASH_ALGORITHM: str = "SHA512"
+    VNPAY_TIMEOUT_MINUTES: int = 15
+    FRONTEND_URL: str = "http://localhost:3000"
+
     @field_validator("COOKIE_SECURE", mode="before")
     @classmethod
     def parse_cookie_secure(cls, v):

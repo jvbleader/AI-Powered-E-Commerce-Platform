@@ -1,4 +1,4 @@
-import type { User, Shop, SellerApplication, Product, ProductVariant, Order, SellerStatus, AddressType } from "@/types/models";
+import type { User, Shop, SellerApplication, Product, ProductVariant, Order, SellerStatus, AddressType, PaymentMethod } from "@/types/models";
 import type { BackendUser, BackendSellerApplication, BackendProductResponse, BackendOrderResponse } from "./types";
 import { DEFAULT_AVATAR, DEFAULT_SHOP_LOGO } from "./constants";
 import { slugifyShopName } from "./validators";
@@ -129,6 +129,7 @@ export const normalizeBackendOrder = (
   shippingDiscountAmount: Number(backendOrder.shipping_discount_amount),
   totalAmount: Number(backendOrder.total_amount),
   customerNote: backendOrder.customer_note ?? undefined,
+  preferredPaymentMethod: backendOrder.preferred_payment_method as PaymentMethod | undefined,
   paymentExpiresAt: backendOrder.payment_expires_at,
   sellerConfirmExpiresAt: backendOrder.seller_confirm_expires_at,
   completedAt: backendOrder.completed_at ?? undefined,

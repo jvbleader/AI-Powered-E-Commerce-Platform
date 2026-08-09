@@ -24,7 +24,7 @@ class Payment(Base):
 
     __table_args__ = (
         CheckConstraint(
-            "payment_method IN ('BANK', 'MOMO', 'CREDIT_CARD', 'MOCK')",
+            "payment_method IN ('BANK', 'MOMO', 'CREDIT_CARD', 'MOCK', 'VNPAY')",
             name="ck_payments_payment_method",
         ),
         CheckConstraint(

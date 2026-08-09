@@ -41,7 +41,9 @@ export const initialState: AppState = {
   hiddenProductIds: [],
   sessionUserId: undefined,
   activeRole: "GUEST",
-  lastCheckoutPaymentCode: undefined
+  lastCheckoutPaymentCode: undefined,
+  lastCheckoutOrderCodes: undefined,
+  lastCheckoutPaymentMethod: undefined
 };
 
 export const hotKeywords = ["tai nghe chống ồn", "sneaker trắng", "serum B5", "áo sơ mi linen", "đèn bàn LED"];

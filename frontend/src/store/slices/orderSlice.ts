@@ -36,69 +36,168 @@ export const createOrderSlice: StateCreator<MarketplaceStore, [], [], any> = (se
     checkout: async (addressId: string, method: PaymentMethod, note: string) => {
       const { state } = get();
 
-    if (!get().getCurrentUser()) return { ok: false, message: "Bạn cần đăng nhập để checkout.", paymentCode: undefined };
+    if (!get().getCurrentUser()) return { ok: false, message: "Bạn cần đăng nhập để checkout.", orderCodes: undefined };
     const address = state.addresses.find((item: any) => item.id === addressId);
-    if (!address) return { ok: false, message: "Vui lòng chọn địa chỉ giao hàng.", paymentCode: undefined };
+    if (!address) return { ok: false, message: "Vui lòng chọn địa chỉ giao hàng.", orderCodes: undefined };
     const rows = getCartRows(state.cartItems, state.products, state.variants, state.shops);
     const selectedUnavailable = rows.find((row) => row.item.isSelected && row.unavailable);
     if (selectedUnavailable) {
-      return { ok: false, message: `Checkout thất bại: ${selectedUnavailable.reason}.`, paymentCode: undefined };
+      return { ok: false, message: `Checkout thất bại: ${selectedUnavailable.reason}.`, orderCodes: undefined };
     }
     const groups = selectedCheckoutGroups(rows);
-    if (!groups.length) return { ok: false, message: "Chưa có sản phẩm hợp lệ được chọn.", paymentCode: undefined };
+    if (!groups.length) return { ok: false, message: "Chưa có sản phẩm hợp lệ được chọn.", orderCodes: undefined };
 
     try {
       const cartItemIds = groups.flatMap(g => g.rows.map(r => Number(r.item.id)));
       const backendOrders = await orderApi.checkoutCart({
         cart_item_ids: cartItemIds,
         address_id: Number(addressId),
-        customer_note: note || undefined
+        customer_note: note || undefined,
+        payment_method: method,
       }) as unknown as BackendOrderResponse[];
 
       const orderCodes = backendOrders.map(o => o.order_code);
-      const rawPaymentRes = await paymentApi.createPayment({
-        order_codes: orderCodes,
-        payment_method: method
-      }) as any;
-      const paymentRes = {
-        id: rawPaymentRes.public_id || "mock-id",
-        paymentCode: rawPaymentRes.payment_code,
-        userId: get().getCurrentUser()!.id,
-        paymentMethod: rawPaymentRes.payment_method,
-        paymentStatus: rawPaymentRes.payment_status,
-        amount: parseFloat(rawPaymentRes.amount),
-        transactionCode: rawPaymentRes.transaction_code,
-        paymentGateway: rawPaymentRes.payment_gateway,
-        orderCodes: rawPaymentRes.order_codes || orderCodes,
-        expiresAt: rawPaymentRes.expires_at,
-        createdAt: rawPaymentRes.created_at,
-        paidAt: rawPaymentRes.paid_at,
-        failedAt: rawPaymentRes.failed_at,
-        cancelledAt: rawPaymentRes.cancelled_at
-      } as Payment;
-      
-      const paymentCode = paymentRes.paymentCode;
 
       setState((prev: AppState) => {
         const newOrders = backendOrders.map(bo => normalizeBackendOrder(bo, bo.seller?.public_id || "UNKNOWN_SELLER", get().getCurrentUser()!.id));
-        
-        let newPayment = paymentRes;
-        
         const checkedVariantIds = new Set(groups.flatMap((group) => group.rows.map((row) => row.variant.id)));
         return {
           ...prev,
           orders: [...newOrders, ...prev.orders],
-          payments: [newPayment, ...prev.payments],
           cartItems: prev.cartItems.filter((item) => !checkedVariantIds.has(item.variantId)),
-          lastCheckoutPaymentCode: newPayment.paymentCode
+          lastCheckoutOrderCodes: orderCodes,
+          lastCheckoutPaymentMethod: method,
+          lastCheckoutPaymentCode: undefined,
         };
       });
 
-      return { ok: true, message: "Đặt hàng thành công.", paymentCode };
+      return {
+        ok: true,
+        message: "Đặt hàng thành công.",
+        orderCodes,
+        paymentMethod: method,
+      };
     } catch (e: any) {
-      return { ok: false, message: e.message || "Lỗi khi đặt hàng.", paymentCode: undefined };
+      return { ok: false, message: e.message || "Lỗi khi đặt hàng.", orderCodes: undefined };
     }
   },
+    createCheckoutPayment: async (orderCodes: string[], method: PaymentMethod) => {
+      if (!get().getCurrentUser()) {
+        return { ok: false, message: "Bạn cần đăng nhập để thanh toán.", paymentCode: undefined, redirectUrl: undefined };
+      }
+      if (!orderCodes.length) {
+        return { ok: false, message: "Không có đơn hàng để thanh toán.", paymentCode: undefined, redirectUrl: undefined };
+      }
+
+      try {
+        let paymentRes: Payment;
+        let redirectUrl: string | undefined;
+
+        if (method === "VNPAY") {
+          const vnpayRes = await paymentApi.createVNPayPayment({ order_codes: orderCodes });
+          const raw = vnpayRes.payment;
+          paymentRes = {
+            id: raw.public_id || "vnpay-id",
+            paymentCode: raw.payment_code,
+            userId: get().getCurrentUser()!.id,
+            paymentMethod: "VNPAY",
+            paymentStatus: raw.payment_status as PaymentStatus,
+            amount: parseFloat(raw.amount),
+            transactionCode: raw.transaction_code ?? undefined,
+            paymentGateway: raw.payment_gateway ?? "VNPAY",
+            orderCodes: raw.order_codes || orderCodes,
+            expiresAt: raw.expires_at,
+            createdAt: raw.created_at,
+            paidAt: raw.paid_at ?? undefined,
+            failedAt: raw.failed_at ?? undefined,
+            cancelledAt: raw.cancelled_at ?? undefined,
+          };
+          redirectUrl = vnpayRes.payment_url;
+        } else {
+          const rawPaymentRes = await paymentApi.createPayment({
+            order_codes: orderCodes,
+            payment_method: method
+          }) as any;
+          paymentRes = {
+            id: rawPaymentRes.public_id || "mock-id",
+            paymentCode: rawPaymentRes.payment_code,
+            userId: get().getCurrentUser()!.id,
+            paymentMethod: rawPaymentRes.payment_method,
+            paymentStatus: rawPaymentRes.payment_status,
+            amount: parseFloat(rawPaymentRes.amount),
+            transactionCode: rawPaymentRes.transaction_code,
+            paymentGateway: rawPaymentRes.payment_gateway,
+            orderCodes: rawPaymentRes.order_codes || orderCodes,
+            expiresAt: rawPaymentRes.expires_at,
+            createdAt: rawPaymentRes.created_at,
+            paidAt: rawPaymentRes.paid_at,
+            failedAt: rawPaymentRes.failed_at,
+            cancelledAt: rawPaymentRes.cancelled_at
+          } as Payment;
+        }
+
+        setState((prev: AppState) => ({
+          ...prev,
+          payments: [paymentRes, ...prev.payments],
+          lastCheckoutPaymentCode: paymentRes.paymentCode,
+        }));
+
+        return {
+          ok: true,
+          message: method === "VNPAY" ? "Đang chuyển sang cổng VNPay..." : "Đã tạo giao dịch thanh toán.",
+          paymentCode: paymentRes.paymentCode,
+          redirectUrl,
+        };
+      } catch (e: any) {
+        return { ok: false, message: e.message || "Lỗi khi tạo thanh toán.", paymentCode: undefined, redirectUrl: undefined };
+      }
+    },
+    fetchPaymentDetail: async (paymentCode: string) => {
+      const currentUser = get().getCurrentUser();
+      if (!currentUser) {
+        return { ok: false, message: "Bạn cần đăng nhập.", payment: undefined };
+      }
+
+      const cached = get().state.payments.find((item) => item.paymentCode === paymentCode);
+      if (cached) {
+        return { ok: true, payment: cached };
+      }
+
+      try {
+        const raw = await paymentApi.getPaymentDetail(paymentCode);
+        const payment: Payment = {
+          id: raw.public_id || paymentCode,
+          paymentCode: raw.payment_code,
+          userId: currentUser.id,
+          paymentMethod: raw.payment_method as PaymentMethod,
+          paymentStatus: raw.payment_status as PaymentStatus,
+          amount: parseFloat(raw.amount),
+          transactionCode: raw.transaction_code ?? undefined,
+          paymentGateway: raw.payment_gateway ?? undefined,
+          orderCodes: raw.order_codes ?? [],
+          expiresAt: raw.expires_at,
+          createdAt: raw.created_at,
+          paidAt: raw.paid_at ?? undefined,
+          failedAt: raw.failed_at ?? undefined,
+          cancelledAt: raw.cancelled_at ?? undefined,
+        };
+
+        setState((prev: AppState) => ({
+          ...prev,
+          payments: prev.payments.some((item) => item.paymentCode === payment.paymentCode)
+            ? prev.payments.map((item) => (item.paymentCode === payment.paymentCode ? payment : item))
+            : [payment, ...prev.payments],
+        }));
+
+        return { ok: true, payment };
+      } catch (error) {
+        return {
+          ok: false,
+          message: error instanceof ApiError ? error.message : "Không tìm thấy giao dịch thanh toán.",
+          payment: undefined,
+        };
+      }
+    },
     updatePaymentStatus: async (paymentCode: string, status: PaymentStatus) => {
     setState((prev: AppState) => {
       const payment = prev.payments.find((item) => item.paymentCode === paymentCode);

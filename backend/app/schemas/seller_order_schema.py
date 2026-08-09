@@ -18,6 +18,7 @@ class OrderResponse(BaseModel):
     shipping_discount_amount: Decimal
     total_amount: Decimal
     customer_note: Optional[str]
+    preferred_payment_method: Optional[str] = None
     payment_expires_at: datetime
     seller_confirm_expires_at: datetime
     completed_at: Optional[datetime]

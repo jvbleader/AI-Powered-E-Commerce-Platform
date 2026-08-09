@@ -141,8 +141,8 @@ services:
       INTERNAL_API_BASE_URL: http://${BACKEND_HOST}:${BACKEND_PORT}
     volumes:
       - ./frontend:/app
-      - /app/node_modules
-      - /app/.next
+      - frontend_node_modules_dev:/app/node_modules
+      - frontend_next_dev:/app/.next
     ports:
       - "${FRONTEND_HOST_PORT}:${FRONTEND_PORT}"
     healthcheck:
@@ -155,3 +155,5 @@ services:
 volumes:
   mysql_data_dev:
   es_data_dev:
+  frontend_node_modules_dev:
+  frontend_next_dev:

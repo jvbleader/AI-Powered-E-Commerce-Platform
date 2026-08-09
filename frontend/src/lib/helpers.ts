@@ -129,7 +129,18 @@ export const paymentMethodLabel: Record<PaymentMethod, string> = {
   MOCK: "Thanh toán giả lập",
   BANK_TRANSFER: "Chuyển khoản ngân hàng",
   MOMO: "Ví MoMo",
-  CREDIT_CARD: "Thẻ tín dụng"
+  CREDIT_CARD: "Thẻ tín dụng",
+  VNPAY: "VNPay",
+};
+
+export const resolveOrderPaymentMethod = (
+  order: Order,
+  payment?: Payment
+): PaymentMethod | undefined => payment?.paymentMethod ?? order.preferredPaymentMethod;
+
+export const orderPaymentMethodLabel = (order: Order, payment?: Payment) => {
+  const method = resolveOrderPaymentMethod(order, payment);
+  return method ? paymentMethodLabel[method] : "Chưa tạo giao dịch";
 };
 
 export type ProductQuery = {
@@ -339,7 +350,7 @@ export const createPaymentFromOrders = (
   paymentCode: code,
   userId,
   paymentMethod: method,
-  paymentGateway: method === "MOCK" ? "MOCK_GATEWAY" : method,
+  paymentGateway: method === "MOCK" ? "MOCK_GATEWAY" : method === "VNPAY" ? "VNPAY" : method,
   paymentStatus: "PENDING",
   amount: orders.reduce((sum, order) => sum + order.totalAmount, 0),
   expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),

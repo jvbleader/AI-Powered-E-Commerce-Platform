@@ -35,6 +35,7 @@ async def _process_checkout(
     address_id: int,
     customer_note: str | None,
     db: AsyncSession,
+    payment_method: str | None = None,
 ) -> List[Order]:
     if not items_to_checkout:
         raise HTTPException(
@@ -153,6 +154,7 @@ async def _process_checkout(
             shipping_fee=shipping_fee,
             total_amount=total_amount,
             customer_note=customer_note,
+            preferred_payment_method=payment_method,
             payment_expires_at=utc_now() + timedelta(days=1),
             seller_confirm_expires_at=utc_now() + timedelta(days=3),
             items=order_items,
@@ -229,7 +231,7 @@ async def checkout_from_cart(user: User, data: CheckoutCartRequest, db: AsyncSes
     ]
 
     orders = await _process_checkout(
-        user, items_to_checkout, data.address_id, data.customer_note, db
+        user, items_to_checkout, data.address_id, data.customer_note, db, data.payment_method
     )
     for o in orders:
         await db.refresh(o, ["items", "seller", "shipment"])
@@ -254,7 +256,7 @@ async def checkout_direct(user: User, data: CheckoutDirectRequest, db: AsyncSess
         )
 
     orders = await _process_checkout(
-        user, items_to_checkout, data.address_id, data.customer_note, db
+        user, items_to_checkout, data.address_id, data.customer_note, db, data.payment_method
     )
     for o in orders:
         await db.refresh(o, ["items", "seller", "shipment"])

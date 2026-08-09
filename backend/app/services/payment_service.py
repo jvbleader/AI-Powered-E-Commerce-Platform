@@ -17,7 +17,19 @@ def generate_payment_code() -> str:
     return f"PAY-{secrets.token_hex(4).upper()}"
 
 
-async def create_payment(user: User, data: PaymentCreateRequest, db: AsyncSession):
+async def create_payment(
+    user: User,
+    data: PaymentCreateRequest,
+    db: AsyncSession,
+    *,
+    allow_vnpay: bool = False,
+):
+    if data.payment_method == "VNPAY" and not allow_vnpay:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Thanh toán VNPay phải dùng endpoint /payments/vnpay/create",
+        )
+
     if not data.order_codes:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -76,6 +88,12 @@ async def process_mock_callback(data: MockPaymentCallbackRequest, db: AsyncSessi
             detail="Không tìm thấy giao dịch thanh toán",
         )
 
+    if payment.payment_method != "MOCK":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Mock callback chỉ áp dụng cho phương thức MOCK",
+        )
+
     if payment.payment_status != "PENDING":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -123,4 +141,19 @@ async def process_mock_callback(data: MockPaymentCallbackRequest, db: AsyncSessi
             detail="Trạng thái callback không hợp lệ",
         )
 
+    return payment
+
+
+async def get_payment_detail(user: User, payment_code: str, db: AsyncSession):
+    payment = await payment_repository.get_payment_by_code_with_orders(db, payment_code)
+    if not payment:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Không tìm thấy giao dịch thanh toán",
+        )
+    if payment.user_id != user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Bạn không có quyền xem giao dịch này",
+        )
     return payment

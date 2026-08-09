@@ -111,6 +111,7 @@ class Order(Base):
     )
     total_amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
     customer_note: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    preferred_payment_method: Mapped[str | None] = mapped_column(String(50), nullable=True)
     print_count: Mapped[int] = mapped_column(
         mysql.INTEGER,
         nullable=False,
