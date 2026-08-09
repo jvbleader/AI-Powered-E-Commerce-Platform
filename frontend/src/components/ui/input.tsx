@@ -122,8 +122,7 @@ export function SearchField({
   onKeyDown,
   inputRef,
   placeholder = "Tìm kiếm sản phẩm, shop...",
-  className,
-  isScrolled = false
+  className
 }: {
   value: string;
   onChange: (value: string) => void;
@@ -133,15 +132,11 @@ export function SearchField({
   inputRef?: React.Ref<HTMLInputElement>;
   placeholder?: string;
   className?: string;
-  isScrolled?: boolean;
 }) {
   return (
-    <div className={cn("relative group w-full transition-all duration-500 ease-out", className)}>
+    <div className={cn("relative group w-full", className)}>
       <Search
-        className={cn(
-          "pointer-events-none absolute top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-emerald-600 transition-all duration-500",
-          isScrolled ? "left-3.5 h-4 w-4 text-slate-400" : "left-3.5 h-4 w-4"
-        )}
+        className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400 transition-colors duration-300 group-focus-within:text-emerald-600"
         aria-hidden="true"
       />
       <input
@@ -154,13 +149,8 @@ export function SearchField({
         onKeyDown={onKeyDown}
         autoComplete="off"
         name="search_query_fake_name_to_stop_autofill"
-        placeholder={isScrolled ? "" : placeholder}
-        className={cn(
-          "w-full rounded-2xl border border-slate-200/90 text-slate-900 placeholder:text-slate-400/80 transition-all duration-500 ease-out focus:border-emerald-500 focus:bg-white focus:outline-none focus:ring-4 focus:ring-emerald-500/15 shadow-2xs",
-          isScrolled
-            ? "h-9.5 pl-10 pr-8 text-xs sm:text-sm bg-white/95 hover:bg-white"
-            : "h-10 pl-10 pr-10 text-xs sm:text-sm bg-white"
-        )}
+        placeholder={placeholder}
+        className="h-10 w-full rounded-2xl border border-slate-200/90 bg-white pl-10 pr-10 text-xs text-slate-900 shadow-2xs transition-[border-color,background-color,box-shadow,color] duration-300 placeholder:text-slate-400/80 focus:border-emerald-500 focus:bg-white focus:outline-none focus:ring-4 focus:ring-emerald-500/15 sm:text-sm"
       />
       {value ? (
         <button

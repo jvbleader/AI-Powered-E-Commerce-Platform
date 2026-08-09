@@ -1,10 +1,11 @@
 "use client";
 
+import { memo } from "react";
 import { Sparkles } from "lucide-react";
 import { AIChatMessage } from "@/services/aiChatService";
 import { ChatMessageItem } from "./ChatMessageItem";
 
-export function ChatMessageList({
+function ChatMessageListInner({
   messages,
   isStreaming,
   currentStatus
@@ -32,3 +33,5 @@ export function ChatMessageList({
     </div>
   );
 }
+
+export const ChatMessageList = memo(ChatMessageListInner);

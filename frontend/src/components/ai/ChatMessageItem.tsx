@@ -1,5 +1,6 @@
 "use client";
 
+import { memo, useMemo } from "react";
 import { Bot, User } from "lucide-react";
 import { AIChatMessage } from "@/services/aiChatService";
 import { ProductCardInChat } from "./ProductCardInChat";
@@ -15,7 +16,7 @@ function formatMarkdown(text: string): string {
     .replace(/\n/g, "<br/>");
 }
 
-export function ChatMessageItem({
+function ChatMessageItemInner({
   message,
   isStreaming
 }: {
@@ -25,6 +26,10 @@ export function ChatMessageItem({
   const isAssistant = message.role === "assistant";
   const hasContent = Boolean(message.content && message.content.trim().length > 0);
   const hasProducts = Boolean(message.products && message.products.length > 0);
+  const html = useMemo(
+    () => (isAssistant && hasContent ? formatMarkdown(message.content) : ""),
+    [isAssistant, hasContent, message.content]
+  );
 
   // If assistant response has no text yet but is streaming without products, show thinking state
   const shouldRenderTextBubble = hasContent || !isAssistant || (isStreaming && !hasProducts);
@@ -52,7 +57,7 @@ export function ChatMessageItem({
               hasContent ? (
                 <div
                   className="prose prose-sm prose-p:leading-relaxed prose-strong:text-ink max-w-none text-ink"
-                  dangerouslySetInnerHTML={{ __html: formatMarkdown(message.content) }}
+                  dangerouslySetInnerHTML={{ __html: html }}
                 />
               ) : (
                 <span className="text-muted italic text-xs flex items-center gap-1.5">
@@ -87,3 +92,5 @@ export function ChatMessageItem({
     </div>
   );
 }
+
+export const ChatMessageItem = memo(ChatMessageItemInner);

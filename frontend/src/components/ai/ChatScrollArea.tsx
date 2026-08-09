@@ -11,6 +11,8 @@ type ChatScrollAreaProps = {
   overlay?: React.ReactNode;
 };
 
+type ThumbState = { height: number; top: number; visible: boolean };
+
 function assignRef<T>(ref: React.Ref<T> | undefined, value: T | null) {
   if (!ref) return;
   if (typeof ref === "function") {
@@ -18,6 +20,10 @@ function assignRef<T>(ref: React.Ref<T> | undefined, value: T | null) {
   } else {
     (ref as React.MutableRefObject<T | null>).current = value;
   }
+}
+
+function thumbEqual(a: ThumbState, b: ThumbState) {
+  return a.height === b.height && a.top === b.top && a.visible === b.visible;
 }
 
 export function ChatScrollArea({
@@ -28,7 +34,10 @@ export function ChatScrollArea({
   overlay,
 }: ChatScrollAreaProps) {
   const localRef = useRef<HTMLDivElement | null>(null);
-  const [thumb, setThumb] = useState({ height: 0, top: 0, visible: false });
+  const thumbRef = useRef<ThumbState>({ height: 0, top: 0, visible: false });
+  const [thumb, setThumb] = useState<ThumbState>(thumbRef.current);
+  const scrollRafRef = useRef(0);
+  const thumbRafRef = useRef(0);
 
   const setRefs = useCallback(
     (node: HTMLDivElement | null) => {
@@ -38,13 +47,19 @@ export function ChatScrollArea({
     [scrollRef]
   );
 
+  const commitThumb = useCallback((next: ThumbState) => {
+    if (thumbEqual(thumbRef.current, next)) return;
+    thumbRef.current = next;
+    setThumb(next);
+  }, []);
+
   const updateThumb = useCallback(() => {
     const el = localRef.current;
     if (!el) return;
 
     const { scrollTop, scrollHeight, clientHeight } = el;
     if (scrollHeight <= clientHeight + 1) {
-      setThumb({ height: 0, top: 0, visible: false });
+      commitThumb({ height: 0, top: 0, visible: false });
       return;
     }
 
@@ -53,25 +68,41 @@ export function ChatScrollArea({
     const scrollRatio = scrollTop / (scrollHeight - clientHeight);
     const top = scrollRatio * maxTop;
 
-    setThumb({ height: thumbHeight, top, visible: true });
-  }, []);
+    commitThumb({ height: thumbHeight, top, visible: true });
+  }, [commitThumb]);
 
-  const handleScroll = () => {
-    updateThumb();
-    onScroll?.();
-  };
+  const scheduleThumbUpdate = useCallback(() => {
+    if (thumbRafRef.current) return;
+    thumbRafRef.current = requestAnimationFrame(() => {
+      thumbRafRef.current = 0;
+      updateThumb();
+    });
+  }, [updateThumb]);
+
+  const handleScroll = useCallback(() => {
+    if (scrollRafRef.current) return;
+    scrollRafRef.current = requestAnimationFrame(() => {
+      scrollRafRef.current = 0;
+      updateThumb();
+      onScroll?.();
+    });
+  }, [onScroll, updateThumb]);
 
   useEffect(() => {
     const el = localRef.current;
     if (!el) return;
 
     updateThumb();
-    const observer = new ResizeObserver(updateThumb);
-    observer.observe(el);
-    el.querySelectorAll("img, video").forEach((node) => observer.observe(node));
+    // Chỉ observe container — bỏ MutationObserver/querySelectorAll (gây jank khi list đổi)
+    const ro = new ResizeObserver(scheduleThumbUpdate);
+    ro.observe(el);
 
-    return () => observer.disconnect();
-  }, [updateThumb, children]);
+    return () => {
+      ro.disconnect();
+      if (scrollRafRef.current) cancelAnimationFrame(scrollRafRef.current);
+      if (thumbRafRef.current) cancelAnimationFrame(thumbRafRef.current);
+    };
+  }, [scheduleThumbUpdate, updateThumb]);
 
   return (
     <div className="relative min-h-0 flex-1 overflow-hidden">

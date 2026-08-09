@@ -16,7 +16,7 @@ interface NotificationItem {
   created_at: string;
 }
 
-export function NotificationBell({ isScrolled }: { isScrolled?: boolean }) {
+export function NotificationBell() {
   const [unreadCount, setUnreadCount] = useState(0);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [isOpen, setIsOpen] = useState(false);
@@ -222,21 +222,21 @@ export function NotificationBell({ isScrolled }: { isScrolled?: boolean }) {
     >
       <a
         href="/account/notifications"
-        className={`relative inline-flex items-center gap-1.5 rounded-xl text-xs font-bold transition-all duration-300 ${
-          isScrolled ? "px-2.5 py-1.5" : "px-3 py-2"
-        } ${
+        className={`relative inline-flex items-center gap-1.5 whitespace-nowrap rounded-xl px-3 py-2 text-xs font-bold transition-all duration-300 ${
           isOpen
             ? "bg-emerald-50 text-emerald-700"
             : "text-slate-700 hover:bg-slate-200/50 hover:text-emerald-700"
         }`}
       >
-        <Bell className="h-4 w-4" aria-hidden="true" />
-        <span>Thông báo</span>
-        {unreadCount > 0 && (
-          <span className="animate-bounce-subtle rounded-full bg-emerald-600 px-2 py-0.5 text-[10px] font-black text-white shadow-sm">
-            {unreadCount > 99 ? '99+' : unreadCount}
-          </span>
-        )}
+        <Bell className="h-4 w-4 shrink-0" aria-hidden="true" />
+        <span className="whitespace-nowrap">Thông báo</span>
+        <span
+          className={`min-w-[1.25rem] rounded-full bg-emerald-600 px-2 py-0.5 text-center text-[10px] font-black text-white shadow-sm ${
+            unreadCount > 0 ? "animate-bounce-subtle" : "invisible"
+          }`}
+        >
+          {unreadCount > 99 ? "99+" : unreadCount || 0}
+        </span>
       </a>
 
       {isOpen && (

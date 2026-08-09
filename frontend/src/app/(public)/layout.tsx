@@ -7,6 +7,7 @@ import { ErrorBoundary } from "@/components/error-boundary";
 import { fetchCategories } from "@/services/product-api";
 import { useMarketplaceStore } from "@/store/use-marketplace-store";
 import { MarketplaceHeader, MarketplaceFooter } from "@/components/shared/navbar";
+import { MarketplaceHeaderSkeleton } from "@/components/shared/skeletons";
 import { ChatWidget } from "@/components/ai/ChatWidget";
 import { CustomerChatInboxProvider } from "@/components/ai/CustomerChatInboxProvider";
 
@@ -111,9 +112,9 @@ export default function MarketplaceLayout({
       <ErrorBoundary>{children}</ErrorBoundary>
     </div>
   ) : (
-    <div className="min-h-screen bg-canvas text-slate-900 flex flex-col justify-between pt-[144px]">
+    <div className="min-h-screen bg-canvas text-slate-900 flex flex-col justify-between marketplace-layout-shell">
       {!ready ? (
-        <div className="fixed top-0 left-0 right-0 z-50 h-[144px] bg-white border-b border-line shadow-sm" />
+        <MarketplaceHeaderSkeleton />
       ) : (
         <MarketplaceHeader />
       )}

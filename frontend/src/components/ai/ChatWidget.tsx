@@ -1,35 +1,24 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import { Bot, Sparkles, X, Plus, Send, Loader2, MessageSquareText, Store, Image as ImageIcon, Video, ShoppingBag, ArrowLeft, ClipboardList, MoreHorizontal, Reply, Check, CheckCheck, ChevronDown } from "lucide-react";
+import { Bot, Sparkles, X, Plus, MessageSquareText, ArrowLeft, ChevronDown } from "lucide-react";
 import { useAIChatStream } from "@/hooks/useAIChatStream";
 import { ChatMessageList } from "./ChatMessageList";
-import { ProductAttachment } from "./ProductAttachment";
 import { ReplyPreviewContent } from "./ReplyPreviewContent";
 import { cn } from "@/lib/utils";
 import { ChatScrollArea } from "./ChatScrollArea";
-import TextareaAutosize from 'react-textarea-autosize';
 import { useCustomerChatInbox } from "@/components/ai/CustomerChatInboxProvider";
-import { useSellerChat, type SellerConversation } from "@/hooks/useSellerChat";
+import { useSellerChat, type SellerConversation, type SellerMessage } from "@/hooks/useSellerChat";
 import { ProductSelectPopup } from "./ProductSelectPopup";
 import { OrderSelectPopup } from "./OrderSelectPopup";
-import { OrderAttachment } from "./OrderAttachment";
-import { ChatMediaMessage, isStandaloneChatAttachment } from "./ChatMediaMessage";
-import { ChatMediaDraftPreview, ChatMediaHiddenInputs, ChatMediaUploadStatus } from "./ChatMediaDraftPreview";
 import { useChatMediaDraft } from "@/hooks/useChatMediaDraft";
-import {
-  formatChatTime,
-  getChatBubbleTailClass,
-  getChatMessageGroupInfo,
-  getChatMessageSpacingClass,
-  CHAT_BUBBLE_BODY_CLASS,
-  CHAT_BUBBLE_WRAPPER_CLASS,
-} from "@/lib/chat-message-layout";
-import { ChatDateSeparator } from "@/components/chat/ChatDateSeparator";
-import { ChatMessageMeta } from "@/components/chat/ChatMessageMeta";
+import { useContainWheelScroll } from "@/hooks/useContainWheelScroll";
 import { useMarketplaceStore } from "@/store/use-marketplace-store";
 import { apiFetch } from "@/services/api";
-import { SellerChatListItem } from "./SellerChatListItem";
+import { SellerSessionSidebar } from "./SellerSessionSidebar";
+import { SellerMessageList } from "./SellerMessageList";
+import { AiComposerInput } from "./AiComposerInput";
+import { SellerComposerInput } from "./SellerComposerInput";
 import type { SellerSessionSummary } from "@/types/chat";
 
 type PendingShopInfo = {
@@ -58,11 +47,9 @@ export function ChatWidget() {
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
   const [deferCreate, setDeferCreate] = useState(false);
   const [pendingShopInfo, setPendingShopInfo] = useState<PendingShopInfo | null>(null);
-  const [draftTextsByShopId, setDraftTextsByShopId] = useState<Record<number, string>>({});
   const [showScrollDown, setShowScrollDown] = useState(false);
 
   // AI Chat
-  const [aiInput, setAiInput] = useState("");
   const { messages: aiMessages, isStreaming, currentStatus, sendMessage: sendAiMessage, clearChat: clearAiChat } = useAIChatStream();
 
   // Seller Chat inbox — WS nền khi user đăng nhập (DELIVERED + badge)
@@ -98,34 +85,27 @@ export function ChatWidget() {
       onConversationCreated: handleConversationCreated,
     }
   );
-  const [sellerInput, setSellerInput] = useState("");
-  const draftTextsRef = useRef(draftTextsByShopId);
-  draftTextsRef.current = draftTextsByShopId;
+  /** Chỉ dùng ref — tránh setState mỗi phím (re-render cả list tin). */
+  const draftTextsRef = useRef<Record<number, string>>({});
 
-  const syncSellerDraft = useCallback((shopId: number | null, value: string) => {
+  const writeSellerDraft = useCallback((shopId: number | null, value: string) => {
     if (!shopId) return;
-    setDraftTextsByShopId((prev) => {
-      const trimmed = value.trim();
-      if (trimmed) {
-        if (prev[shopId] === value) return prev;
-        return { ...prev, [shopId]: value };
-      }
-      if (!(shopId in prev)) return prev;
-      const next = { ...prev };
-      delete next[shopId];
-      return next;
-    });
+    const drafts = draftTextsRef.current;
+    const trimmed = value.trim();
+    if (trimmed) {
+      if (drafts[shopId] === value) return;
+      draftTextsRef.current = { ...drafts, [shopId]: value };
+      return;
+    }
+    if (!(shopId in drafts)) return;
+    const next = { ...drafts };
+    delete next[shopId];
+    draftTextsRef.current = next;
   }, []);
 
-  const updateSellerInput = useCallback((value: string) => {
-    setSellerInput(value);
-    syncSellerDraft(activeShopId, value);
-  }, [activeShopId, syncSellerDraft]);
-
-  const clearSellerInput = useCallback(() => {
-    setSellerInput("");
-    syncSellerDraft(activeShopId, "");
-  }, [activeShopId, syncSellerDraft]);
+  const clearSellerDraft = useCallback(() => {
+    writeSellerDraft(activeShopId, "");
+  }, [activeShopId, writeSellerDraft]);
   
   // Popups
   const [showProductPopup, setShowProductPopup] = useState(false);
@@ -135,7 +115,7 @@ export function ChatWidget() {
   const [productDraft, setProductDraft] = useState<any>(null);
   const [orderDraft, setOrderDraft] = useState<any>(null);
   const [replyingToMessage, setReplyingToMessage] = useState<any>(null);
-  const { showToast } = useMarketplaceStore();
+  const showToast = useMarketplaceStore((s) => s.showToast);
 
   const {
     draftItems: mediaDraftItems,
@@ -166,11 +146,14 @@ export function ChatWidget() {
     },
   });
 
+  const panelRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const aiScrollRef = useRef<HTMLDivElement>(null);
   const sellerScrollRef = useRef<HTMLDivElement>(null);
+  useContainWheelScroll(panelRef, isOpen);
   // Chỉ đánh dấu thông báo đã đọc khi user chủ động mở đúng đoạn chat (không phải chỉ mở widget)
   const pendingMarkShopNotifications = useRef<number | null>(null);
+  const skipNextSoftScrollRef = useRef(false);
 
   const scrollToLatest = useCallback((force = false) => {
     const container =
@@ -186,14 +169,11 @@ export function ChatWidget() {
         container.scrollTop = container.scrollHeight - container.clientHeight;
       }
 
-      messagesEndRef.current?.scrollIntoView({ behavior: "auto", block: "end" });
       setShowScrollDown((prev) => (prev ? false : prev));
     };
 
     scroll();
     requestAnimationFrame(scroll);
-    requestAnimationFrame(() => requestAnimationFrame(scroll));
-    [0, 50, 150, 300, 600].forEach((delay) => setTimeout(scroll, delay));
   }, [activeTab]);
 
   const handleMessagesScroll = useCallback(() => {
@@ -205,26 +185,37 @@ export function ChatWidget() {
   }, [activeTab]);
 
   useEffect(() => {
-    if (!isOpen || activeTab !== "AI") return;
-    scrollToLatest(true);
-  }, [isOpen, activeTab, scrollToLatest]);
+    if (!isOpen) return;
+    if (activeTab === "AI") {
+      if (aiMessages.length > 0) skipNextSoftScrollRef.current = true;
+      scrollToLatest(true);
+    } else if (activeTab === "SELLER" && activeShopId) {
+      if (sellerMessages.length > 0) skipNextSoftScrollRef.current = true;
+      scrollToLatest(true);
+    }
+  }, [isOpen, activeTab, activeShopId, scrollToLatest]);
+
+  const lastAiMessageId = aiMessages[aiMessages.length - 1]?.id;
 
   useEffect(() => {
     if (!isOpen || activeTab !== "AI" || aiMessages.length === 0) return;
+    if (skipNextSoftScrollRef.current) {
+      skipNextSoftScrollRef.current = false;
+      return;
+    }
     scrollToLatest(false);
-  }, [isOpen, activeTab, aiMessages, scrollToLatest]);
-
-  useEffect(() => {
-    if (!isOpen || activeTab !== "SELLER" || !activeShopId) return;
-    scrollToLatest(true);
-  }, [isOpen, activeTab, activeShopId, scrollToLatest]);
+  }, [aiMessages.length, lastAiMessageId, isOpen, activeTab, scrollToLatest]);
 
   const lastSellerMessageId = sellerMessages[sellerMessages.length - 1]?.id;
 
   useEffect(() => {
     if (!isOpen || activeTab !== "SELLER" || !activeShopId) return;
+    if (skipNextSoftScrollRef.current) {
+      skipNextSoftScrollRef.current = false;
+      return;
+    }
     scrollToLatest(false);
-  }, [isOpen, activeTab, activeShopId, sellerMessages.length, lastSellerMessageId, scrollToLatest]);
+  }, [sellerMessages.length, lastSellerMessageId, isOpen, activeTab, activeShopId, scrollToLatest]);
 
   // Cuộn lại khi nội dung đổi kích thước (ảnh/video load xong)
   useEffect(() => {
@@ -235,24 +226,35 @@ export function ChatWidget() {
     if (!container) return;
     if (activeTab === "SELLER" && !activeShopId) return;
 
-    const scroll = () => {
-      if (!isNearBottom(container)) {
-        setShowScrollDown((prev) => (prev ? prev : true));
-        return;
-      }
-      container.scrollTop = container.scrollHeight - container.clientHeight;
-      messagesEndRef.current?.scrollIntoView({ behavior: "auto", block: "end" });
-      setShowScrollDown((prev) => (prev ? false : prev));
+    let raf = 0;
+    const onResize = () => {
+      if (raf) return;
+      raf = requestAnimationFrame(() => {
+        raf = 0;
+        if (!isNearBottom(container)) {
+          setShowScrollDown((prev) => (prev ? prev : true));
+          return;
+        }
+        container.scrollTop = container.scrollHeight - container.clientHeight;
+        setShowScrollDown((prev) => (prev ? false : prev));
+      });
     };
 
-    const observer = new ResizeObserver(scroll);
+    const observer = new ResizeObserver(onResize);
     observer.observe(container);
     container.querySelectorAll("img, video").forEach((el) => observer.observe(el));
 
-    scroll();
+    const mo = new MutationObserver(() => {
+      container.querySelectorAll("img, video").forEach((el) => observer.observe(el));
+    });
+    mo.observe(container, { childList: true, subtree: true });
 
-    return () => observer.disconnect();
-  }, [isOpen, activeTab, activeShopId, aiMessages.length, sellerMessages.length]);
+    return () => {
+      observer.disconnect();
+      mo.disconnect();
+      if (raf) cancelAnimationFrame(raf);
+    };
+  }, [isOpen, activeTab, activeShopId]);
 
   useEffect(() => {
     setShowScrollDown(false);
@@ -375,101 +377,130 @@ export function ChatWidget() {
     markSessionReadLocally,
   ]);
 
-  useEffect(() => {
-    if (!activeShopId) {
-      setSellerInput((prev) => (prev === "" ? prev : ""));
-      return;
-    }
-    const next = draftTextsRef.current[activeShopId] ?? "";
-    setSellerInput((prev) => (prev === next ? prev : next));
-  }, [activeShopId]);
-
-  const scrollToMessage = (msgId: number) => {
+  const scrollToMessage = useCallback((msgId: number) => {
     const el = document.getElementById(`msg-${msgId}`);
     if (el) {
       el.scrollIntoView({ behavior: 'smooth', block: 'start' });
       el.classList.add('bg-emerald-100/50');
       setTimeout(() => el.classList.remove('bg-emerald-100/50'), 2000);
     }
-  };
+  }, []);
 
-  const handleAiSubmit = (e?: React.FormEvent) => {
-    e?.preventDefault();
-    if (!aiInput.trim() || isStreaming) return;
-    sendAiMessage(aiInput);
-    setAiInput("");
-  };
+  const handleReplyToMessage = useCallback((msg: SellerMessage) => {
+    setReplyingToMessage(msg);
+  }, []);
 
-  const handleSellerSubmit = async (e?: React.FormEvent) => {
-    e?.preventDefault();
-    if (!sellerInput.trim() && !productDraft && !orderDraft && !hasMediaDraft) return;
-    
+  const handleAiSend = useCallback((text: string) => {
+    if (!text.trim() || isStreaming) return;
+    sendAiMessage(text);
+  }, [isStreaming, sendAiMessage]);
+
+  const handleSellerSend = useCallback(async (text: string): Promise<boolean> => {
+    const trimmed = text.trim();
+    if (!trimmed && !productDraft && !orderDraft && !hasMediaDraft) return false;
+
     if (productDraft) {
       const productAttachmentId = String(productDraft.public_id || productDraft.id || "");
       if (!productAttachmentId || productAttachmentId === "undefined") {
         console.error("Missing product public_id when sending chat product attachment", productDraft);
-        return;
+        return false;
       }
-      if (sellerInput.trim()) {
-        await sendSellerMessage("[Sản phẩm]", 'PRODUCT', productAttachmentId);
-        await sendSellerMessage(sellerInput.trim(), undefined, undefined, replyingToMessage?.id);
+      if (trimmed) {
+        await sendSellerMessage("[Sản phẩm]", "PRODUCT", productAttachmentId);
+        await sendSellerMessage(trimmed, undefined, undefined, replyingToMessage?.id);
       } else {
-        await sendSellerMessage("[Sản phẩm]", 'PRODUCT', productAttachmentId, replyingToMessage?.id);
+        await sendSellerMessage("[Sản phẩm]", "PRODUCT", productAttachmentId, replyingToMessage?.id);
       }
       setProductDraft(null);
-      clearSellerInput();
+      clearSellerDraft();
       setReplyingToMessage(null);
-    } else if (orderDraft) {
+      return true;
+    }
+
+    if (orderDraft) {
       const orderCode = orderDraft.id || orderDraft.order_code;
-      if (sellerInput.trim()) {
-        await sendSellerMessage("[Đơn hàng]", 'ORDER', String(orderCode));
-        await sendSellerMessage(sellerInput.trim(), undefined, undefined, replyingToMessage?.id);
+      if (trimmed) {
+        await sendSellerMessage("[Đơn hàng]", "ORDER", String(orderCode));
+        await sendSellerMessage(trimmed, undefined, undefined, replyingToMessage?.id);
       } else {
-        await sendSellerMessage("[Đơn hàng]", 'ORDER', String(orderCode), replyingToMessage?.id);
+        await sendSellerMessage("[Đơn hàng]", "ORDER", String(orderCode), replyingToMessage?.id);
       }
       setOrderDraft(null);
-      clearSellerInput();
+      clearSellerDraft();
       setReplyingToMessage(null);
-    } else if (hasMediaDraft) {
-      const caption = sellerInput.trim();
-      const sent = await sendMediaDraft(caption);
-      if (sent) {
-        clearSellerInput();
-        setReplyingToMessage(null);
-      }
-    } else {
-      await sendSellerMessage(sellerInput.trim(), undefined, undefined, replyingToMessage?.id);
-      clearSellerInput();
-      setReplyingToMessage(null);
+      return true;
     }
-  };
 
-  const handleSelectShop = (shopId: number) => {
-    const session = sellerSessions.find((item) => item.shop_id === shopId);
+    if (hasMediaDraft) {
+      const sent = await sendMediaDraft(trimmed);
+      if (!sent) return false;
+      clearSellerDraft();
+      setReplyingToMessage(null);
+      return true;
+    }
+
+    await sendSellerMessage(trimmed, undefined, undefined, replyingToMessage?.id);
+    clearSellerDraft();
+    setReplyingToMessage(null);
+    return true;
+  }, [
+    productDraft,
+    orderDraft,
+    hasMediaDraft,
+    sendSellerMessage,
+    sendMediaDraft,
+    replyingToMessage?.id,
+    clearSellerDraft,
+  ]);
+
+  const activeShopIdRef = useRef(activeShopId);
+  activeShopIdRef.current = activeShopId;
+  const sellerSessionsRef = useRef(sellerSessions);
+  sellerSessionsRef.current = sellerSessions;
+  const conversationActionRef = useRef(conversationAction);
+  conversationActionRef.current = conversationAction;
+  const scrollToLatestRef = useRef(scrollToLatest);
+  scrollToLatestRef.current = scrollToLatest;
+  const clearSellerDraftRef = useRef(clearSellerDraft);
+  clearSellerDraftRef.current = clearSellerDraft;
+
+  const handleSelectShop = useCallback((shopId: number) => {
+    if (shopId === activeShopIdRef.current) return;
+
+    const session = sellerSessionsRef.current.find((item) => item.shop_id === shopId);
     pendingMarkShopNotifications.current = shopId;
     setDeferCreate(false);
     setPendingShopInfo(null);
     setActiveConversationId(session?.id ?? null);
     setActiveShopId(shopId);
-    scrollToLatest(true);
-  };
+    scrollToLatestRef.current(true);
+  }, []);
 
-  const handleConversationMenuAction = async (sessionId: string, action: string) => {
-    const ok = await conversationAction(sessionId, action);
+  const handleConversationMenuAction = useCallback(async (sessionId: string, action: string) => {
+    const ok = await conversationActionRef.current(sessionId, action);
     if (!ok) return;
 
     if (action === "delete") {
-      const deleted = sellerSessions.find((s) => s.id === sessionId);
-      if (deleted?.shop_id === activeShopId) {
+      const deleted = sellerSessionsRef.current.find((s) => s.id === sessionId);
+      if (deleted?.shop_id === activeShopIdRef.current) {
         setActiveShopId(null);
         setActiveConversationId(null);
         setDeferCreate(false);
         setProductDraft(null);
         setOrderDraft(null);
-        clearSellerInput();
+        clearSellerDraftRef.current();
       }
     }
-  };
+  }, []);
+
+  const handleTabChange = useCallback((tab: "AI" | "SELLER") => {
+    setActiveTab(tab);
+  }, []);
+
+  const handleSelectAi = useCallback(() => {
+    setActiveShopId(null);
+    scrollToLatestRef.current(true);
+  }, []);
 
   const handleOpenWidget = () => setIsOpen(true);
 
@@ -477,7 +508,7 @@ export function ChatWidget() {
     if (activeShopId && deferCreate) {
       setProductDraft(null);
       setOrderDraft(null);
-      clearSellerInput();
+      clearSellerDraft();
     }
     setIsOpen(false);
     setActiveShopId(null);
@@ -527,7 +558,7 @@ export function ChatWidget() {
 
       {/* Khung chat — dính mép dưới, lề phải vài px */}
       {isOpen && (
-        <div className="chat-widget-panel fixed bottom-0 right-2 z-50 flex h-[min(600px,calc(100vh-48px))] w-[800px] max-w-[calc(100vw-16px)] flex-col overflow-hidden rounded-t-xl border border-b-0 border-slate-200 bg-white shadow-2xl animate-in fade-in slide-in-from-bottom-3 duration-200">
+        <div ref={panelRef} className="chat-widget-panel fixed bottom-0 right-2 z-50 flex h-[min(600px,calc(100vh-48px))] w-[800px] max-w-[calc(100vw-16px)] flex-col overflow-hidden rounded-t-xl border border-b-0 border-slate-200 bg-white shadow-2xl animate-in fade-in slide-in-from-bottom-3 duration-200">
           {/* Header chung */}
           <div className="flex shrink-0 items-center justify-between border-b border-slate-200 bg-white px-4 py-1.5">
             <h2 className="font-heading text-sm font-bold leading-none text-primary">Chat</h2>
@@ -542,77 +573,16 @@ export function ChatWidget() {
           </div>
 
           <div className="flex min-h-0 flex-1">
-          {/* Sidebar */}
-          <div className="w-[280px] flex-shrink-0 border-r border-slate-200 flex flex-col bg-slate-50 min-h-0">
-            {/* Tabs */}
-            <div className="flex border-b border-slate-200 p-2 gap-1 bg-white">
-              <button 
-                onClick={() => setActiveTab('AI')}
-                className={cn(
-                  "flex-1 py-2 text-sm font-medium rounded-lg transition-colors flex items-center justify-center gap-2",
-                  activeTab === 'AI' ? "bg-emerald-100 text-emerald-700" : "text-slate-600 hover:bg-slate-100"
-                )}
-              >
-                <Bot className="w-4 h-4" /> AI
-              </button>
-              <button 
-                onClick={() => setActiveTab('SELLER')}
-                className={cn(
-                  "flex-1 py-2 text-sm font-medium rounded-lg transition-colors flex items-center justify-center gap-2",
-                  activeTab === 'SELLER' ? "bg-emerald-100 text-emerald-700" : "text-slate-600 hover:bg-slate-100"
-                )}
-              >
-                <Store className="w-4 h-4" /> Người Bán
-              </button>
-            </div>
-            
-            {/* List */}
-            <ChatScrollArea className="">
-              {activeTab === 'AI' && (
-                <div 
-                  className="p-3 m-2 rounded-xl bg-white border border-emerald-200 cursor-pointer hover:bg-emerald-50"
-                  onClick={() => {
-                    setActiveShopId(null);
-                    scrollToLatest(true);
-                  }}
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600">
-                      <Bot className="w-6 h-6" />
-                    </div>
-                    <div>
-                      <h4 className="font-bold text-sm text-slate-900">Shepoo AI</h4>
-                      <p className="text-xs text-slate-500 truncate">Trợ lý mua sắm thông minh</p>
-                    </div>
-                  </div>
-                </div>
-              )}
-              {activeTab === 'SELLER' && (
-                sellerSessions.length === 0 ? (
-                   <div className="p-8 text-center text-slate-500 text-sm">Chưa có đoạn chat nào với Người Bán.</div>
-                ) : (
-                  <div className="divide-y divide-slate-100">
-                    {sellerSessions.map(session => (
-                      <SellerChatListItem
-                        key={session.id}
-                        session={session}
-                        isActive={activeShopId === session.shop_id}
-                        draftPreview={
-                          session.shop_id && activeShopId !== session.shop_id
-                            ? draftTextsByShopId[session.shop_id] ?? null
-                            : null
-                        }
-                        onSelect={() => {
-                          handleSelectShop(session.shop_id!);
-                        }}
-                        onAction={(action) => handleConversationMenuAction(session.id, action)}
-                      />
-                    ))}
-                  </div>
-                )
-              )}
-            </ChatScrollArea>
-          </div>
+          <SellerSessionSidebar
+            activeTab={activeTab}
+            onTabChange={handleTabChange}
+            sellerSessions={sellerSessions}
+            activeShopId={activeShopId}
+            draftTextsRef={draftTextsRef}
+            onSelectShop={handleSelectShop}
+            onConversationAction={handleConversationMenuAction}
+            onSelectAi={handleSelectAi}
+          />
           
           {/* Main Area */}
           <div className="flex-1 flex flex-col relative bg-white min-w-0 min-h-0 overflow-hidden">
@@ -674,36 +644,7 @@ export function ChatWidget() {
                   </ChatScrollArea>
                 )}
                 
-                <form onSubmit={handleAiSubmit} className="p-3 border-t border-slate-200 bg-slate-50">
-                  <div className="flex items-end gap-2 bg-white rounded-xl border border-slate-200 p-1 pl-3 shadow-sm focus-within:border-emerald-500 focus-within:ring-1 focus-within:ring-emerald-500 transition-all">
-                    <TextareaAutosize
-                      minRows={1}
-                      maxRows={5}
-                      value={aiInput}
-                      onChange={(e) => setAiInput(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' && !e.shiftKey) {
-                          e.preventDefault();
-                          handleAiSubmit();
-                        }
-                      }}
-                      placeholder="Hỏi AI..."
-                      className="flex-1 min-h-[40px] py-2.5 text-sm text-slate-900 placeholder:text-slate-400 bg-transparent resize-none focus:outline-none no-scrollbar"
-                    />
-                    <button
-                      type="submit"
-                      disabled={!aiInput.trim() || isStreaming}
-                      className={cn(
-                        "m-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg transition-all",
-                        (!aiInput.trim() || isStreaming)
-                          ? "text-slate-300 pointer-events-none"
-                          : "bg-emerald-500 text-white hover:bg-emerald-600"
-                      )}
-                    >
-                      {isStreaming ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                    </button>
-                  </div>
-                </form>
+                <AiComposerInput isStreaming={isStreaming} onSend={handleAiSend} />
               </>
             ) : (
               // Seller Chat Area
@@ -729,162 +670,18 @@ export function ChatWidget() {
                     className="bg-slate-50 p-4"
                     overlay={scrollDownButton}
                   >
-                    {sellerMessages.length === 0 ? (
-                      <div className="h-full flex items-center justify-center text-slate-400 text-sm">
-                        {isPendingDraftChat
+                    <SellerMessageList
+                      messages={sellerMessages}
+                      viewerRole="CUSTOMER"
+                      peerLabel={currentShopSession?.shop_name || "Shop"}
+                      emptyText={
+                        isPendingDraftChat
                           ? "Bắt đầu trò chuyện với người bán về sản phẩm này."
-                          : "Chưa có tin nhắn nào. Bắt đầu trò chuyện!"}
-                      </div>
-                    ) : (
-                      <div>
-                       {sellerMessages.map((msg, idx) => {
-                         const { position, showDateSeparator } = getChatMessageGroupInfo(sellerMessages, idx);
-                         const spacingClass = getChatMessageSpacingClass(position, idx === 0 && !showDateSeparator);
-                         const isMe = msg.sender_type === 'CUSTOMER';
-                         const isSystem = msg.sender_type === 'SYSTEM';
-                         const tailClass = getChatBubbleTailClass(isMe, position);
-                         
-                         if (isSystem) {
-                           return (
-                             <div key={msg.id} className="flex justify-center my-4">
-                                <span className="bg-slate-200 text-slate-600 text-[10px] px-3 py-1 rounded-full uppercase tracking-wide font-medium">{msg.content}</span>
-                             </div>
-                           )
-                         }
-                         
-                         return (
-                           <React.Fragment key={msg.id}>
-                             {showDateSeparator && <ChatDateSeparator date={msg.created_at} />}
-                             <div id={`msg-${msg.id}`} className={cn("flex w-full min-w-0 group transition-colors duration-500 rounded p-0.5 scroll-mt-4", spacingClass, isMe ? "justify-end" : "justify-start")}>
-                              <div className={cn("flex items-center gap-2 max-w-[80%]", CHAT_BUBBLE_WRAPPER_CLASS)}>
-                                {isMe && (
-                                  <div className="relative group/reply mr-1 flex items-center">
-                                    <button className="text-slate-400 hover:text-emerald-500 bg-white shadow-sm border border-slate-100 rounded-md p-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                      <MoreHorizontal className="w-4 h-4" />
-                                    </button>
-                                    <div className="absolute right-full top-1/2 -translate-y-1/2 mr-2 opacity-0 invisible group-hover/reply:opacity-100 group-hover/reply:visible transition-all z-10">
-                                      <button onClick={() => setReplyingToMessage(msg)} className="flex items-center gap-1.5 bg-white px-3 py-1.5 rounded-lg shadow-md border border-slate-200 text-slate-700 hover:bg-slate-50 hover:text-emerald-600 whitespace-nowrap text-sm font-medium">
-                                        <Reply className="w-4 h-4" />
-                                        Trả lời
-                                      </button>
-                                    </div>
-                                  </div>
-                                )}
-                                <div className={cn("flex flex-col", CHAT_BUBBLE_WRAPPER_CLASS)}>
-                                  <div className={cn(
-                                    "text-sm max-w-full min-w-0",
-                                    isMe ? "ml-auto" : "mr-auto",
-                                    !isStandaloneChatAttachment(msg) ? cn(
-                                      "rounded-2xl px-3 py-1.5",
-                                      isMe ? "bg-emerald-50 text-slate-900 shadow-sm border border-emerald-100" : "bg-white border border-slate-200 text-slate-900 shadow-sm",
-                                      tailClass
-                                    ) : ""
-                                  )}>
-                                     {msg.reply_to_id && sellerMessages.find(m => m.id === msg.reply_to_id) && (
-                                       (() => {
-                                         const replyMsg = sellerMessages.find(m => m.id === msg.reply_to_id)!;
-                                         return (
-                                            <div 
-                                              onClick={() => scrollToMessage(replyMsg.id)}
-                                              className={cn(
-                                              "mb-2 border-l-[3px] px-2 py-1 bg-black/5 rounded-r max-w-[240px] cursor-pointer hover:bg-black/10 transition-colors",
-                                              replyMsg.sender_type === 'CUSTOMER' ? "border-orange-500" : "border-teal-500"
-                                            )}>
-                                              <div className={cn("font-semibold text-xs", replyMsg.sender_type === 'CUSTOMER' ? "text-orange-500" : "text-teal-600")}>
-                                                {replyMsg.sender_type === 'CUSTOMER' ? "Bạn" : (currentShopSession?.shop_name || "Shop")}
-                                              </div>
-                                              <div className="text-[13px] text-slate-600 line-clamp-1 mt-0.5">
-                                                <ReplyPreviewContent type={replyMsg.attachment_type} id={replyMsg.attachment_id} fallback={replyMsg.content} />
-                                              </div>
-                                            </div>
-                                         )
-                                       })()
-                                     )}
-                                     {msg.attachment_type === 'PRODUCT' && msg.attachment_id ? (
-                                       <div className="flex flex-col gap-1 items-end">
-                                         <ProductAttachment publicId={msg.attachment_id} />
-                                         {msg.content && msg.content !== "[Sản phẩm]" && (
-                                           <div className={cn(
-                                              "rounded-2xl px-4 py-2.5 text-sm w-full text-left mt-1",
-                                              isMe ? "bg-emerald-50 text-slate-900 rounded-tr-sm shadow-sm border border-emerald-100" : "bg-white border border-slate-200 text-slate-900 rounded-tl-sm shadow-sm"
-                                           )}>
-                                             {msg.content}
-                                           </div>
-                                         )}
-                                         <div className={cn(
-                                           "flex items-center gap-1 text-[10px] mt-1",
-                                           "justify-end text-slate-500"
-                                         )}>
-                                            <span>{formatChatTime(msg.created_at)}</span>
-                                            {isMe && (
-                                              msg.status === 'READ' ? <CheckCheck className="w-3 h-3 text-emerald-500" /> :
-                                              msg.status === 'DELIVERED' ? <CheckCheck className="w-3 h-3 text-slate-400" /> :
-                                              <Check className="w-3 h-3 text-slate-400" />
-                                            )}
-                                         </div>
-                                       </div>
-                                     ) : msg.attachment_type === 'ORDER' && msg.attachment_id ? (
-                                       <div className="flex flex-col gap-1 items-end">
-                                         <OrderAttachment orderId={msg.attachment_id} />
-                                         {msg.content && msg.content !== "[Đơn hàng]" && (
-                                           <div className={cn(
-                                              "rounded-2xl px-4 py-2.5 text-sm w-full text-left mt-1",
-                                              isMe ? "bg-emerald-50 text-slate-900 rounded-tr-sm shadow-sm border border-emerald-100" : "bg-white border border-slate-200 text-slate-900 rounded-tl-sm shadow-sm"
-                                           )}>
-                                             {msg.content}
-                                           </div>
-                                         )}
-                                         <div className={cn(
-                                           "flex items-center gap-1 text-[10px] mt-1",
-                                           "justify-end text-slate-500"
-                                         )}>
-                                            <span>{formatChatTime(msg.created_at)}</span>
-                                            {isMe && (
-                                              msg.status === 'READ' ? <CheckCheck className="w-3 h-3 text-emerald-500" /> :
-                                              msg.status === 'DELIVERED' ? <CheckCheck className="w-3 h-3 text-slate-400" /> :
-                                              <Check className="w-3 h-3 text-slate-400" />
-                                            )}
-                                         </div>
-                                       </div>
-                                     ) : (msg.attachment_type === 'IMAGE' || msg.attachment_type === 'VIDEO') && msg.attachment_id ? (
-                                       <ChatMediaMessage msg={msg} isMe={isMe} />
-                                     ) : (
-                                       <span className={CHAT_BUBBLE_BODY_CLASS}>
-                                         {msg.content}
-                                         <ChatMessageMeta
-                                           time={formatChatTime(msg.created_at)}
-                                           className={isMe ? "text-slate-500" : "text-slate-400"}
-                                         >
-                                           {isMe && (
-                                             msg.status === 'READ' ? <CheckCheck className="w-3 h-3 text-emerald-500" /> :
-                                             msg.status === 'DELIVERED' ? <CheckCheck className="w-3 h-3 text-slate-400" /> :
-                                             <Check className="w-3 h-3 text-slate-400" />
-                                           )}
-                                         </ChatMessageMeta>
-                                       </span>
-                                     )}
-                                  </div>
-                                </div>
-                                {!isMe && (
-                                  <div className="relative group/reply ml-1 flex items-center">
-                                    <button className="text-slate-400 hover:text-emerald-500 bg-white shadow-sm border border-slate-100 rounded-md p-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                      <MoreHorizontal className="w-4 h-4" />
-                                    </button>
-                                    <div className="absolute left-full top-1/2 -translate-y-1/2 ml-2 opacity-0 invisible group-hover/reply:opacity-100 group-hover/reply:visible transition-all z-10">
-                                      <button onClick={() => setReplyingToMessage(msg)} className="flex items-center gap-1.5 bg-white px-3 py-1.5 rounded-lg shadow-md border border-slate-200 text-slate-700 hover:bg-slate-50 hover:text-emerald-600 whitespace-nowrap text-sm font-medium">
-                                        <Reply className="w-4 h-4" />
-                                        Trả lời
-                                      </button>
-                                    </div>
-                                  </div>
-                                )}
-                              </div>
-                             </div>
-                           </React.Fragment>
-                         )
-                       })}
-                      </div>
-                    )}
+                          : "Chưa có tin nhắn nào. Bắt đầu trò chuyện!"
+                      }
+                      onReply={handleReplyToMessage}
+                      onScrollToMessage={scrollToMessage}
+                    />
                     <div ref={messagesEndRef} className="h-px shrink-0" aria-hidden />
                   </ChatScrollArea>
                   
@@ -956,107 +753,34 @@ export function ChatWidget() {
                          </button>
                       </div>
                     )}
-                    <ChatMediaUploadStatus uploading={mediaUploading} uploadProgress={uploadProgress} />
-                    
-                    <form onSubmit={handleSellerSubmit} className="p-3">
-                      <div className="bg-white rounded-xl border border-slate-200 focus-within:border-emerald-500 focus-within:ring-1 focus-within:ring-emerald-500 transition-all overflow-hidden flex flex-col shadow-sm">
-                        <ChatMediaHiddenInputs
-                          imageInputRef={imageInputRef}
-                          videoInputRef={videoInputRef}
-                          addInputRef={addInputRef}
-                          onImageChange={handleImageChange}
-                          onVideoChange={handleVideoChange}
-                          onAddChange={handleAddChange}
-                          disabled={mediaUploading}
-                        />
-                        <ChatMediaDraftPreview
-                          items={mediaDraftItems}
-                          canAddMore={canAddMoreMedia}
-                          maxFiles={maxMediaFiles}
-                          onRemove={removeMediaDraftItem}
-                          onClear={clearMediaDraft}
-                          onAdd={openAddPicker}
-                        />
-                        <TextareaAutosize
-                          minRows={1}
-                          maxRows={5}
-                          value={sellerInput}
-                          onChange={(e) => updateSellerInput(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter' && !e.shiftKey) {
-                              e.preventDefault();
-                              handleSellerSubmit();
-                            }
-                          }}
-                          placeholder="Nhập nội dung tin nhắn"
-                          className="w-full min-h-[40px] py-3 px-4 text-sm text-slate-900 placeholder:text-slate-400 bg-transparent resize-none focus:outline-none no-scrollbar"
-                        />
-                        <div className="flex items-center justify-between p-1.5 border-t border-slate-50 bg-slate-50/50">
-                           <div className="flex items-center gap-1">
-                               <button
-                                 type="button"
-                                 disabled={mediaUploading || !canAddMoreMedia}
-                                 onClick={openImagePicker}
-                                 className="group relative p-1.5 text-slate-400 hover:bg-slate-200/50 hover:text-emerald-600 rounded-md transition-colors disabled:opacity-50"
-                               >
-                                {mediaUploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <ImageIcon className="w-4 h-4" />}
-                                <span className="absolute bottom-full left-0 mb-1.5 px-2 py-1 text-[11px] font-medium text-white bg-slate-800 rounded shadow-sm opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 delay-0 group-hover:delay-[350ms] whitespace-nowrap z-50 pointer-events-none">
-                                  Hình ảnh (tối đa {maxMediaFiles}, 2MB/ảnh)
-                                  <span className="absolute top-full left-3 border-[4px] border-transparent border-t-slate-800" />
-                                </span>
-                              </button>
-                              <button
-                                type="button"
-                                disabled={mediaUploading || !canAddMoreMedia}
-                                onClick={openVideoPicker}
-                                className="group relative p-1.5 text-slate-400 hover:bg-slate-200/50 hover:text-emerald-600 rounded-md transition-colors disabled:opacity-50"
-                              >
-                                <Video className="w-4 h-4" />
-                                <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 px-2 py-1 text-[11px] font-medium text-white bg-slate-800 rounded shadow-sm opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 delay-0 group-hover:delay-[350ms] whitespace-nowrap z-50 pointer-events-none">
-                                  Video (tối đa {maxMediaFiles}, 30MB/video)
-                                  <span className="absolute top-full left-1/2 -translate-x-1/2 border-[4px] border-transparent border-t-slate-800" />
-                                </span>
-                              </button>
-                              <button 
-                                id="product-popup-trigger"
-                                type="button"
-                                className="group relative p-1.5 text-slate-400 hover:bg-slate-200/50 hover:text-emerald-600 rounded-md transition-colors" 
-                                onClick={() => setShowProductPopup(p => !p)}
-                              >
-                                <ShoppingBag className="w-4 h-4" />
-                                <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 px-2 py-1 text-[11px] font-medium text-white bg-slate-800 rounded shadow-sm opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 delay-0 group-hover:delay-[350ms] whitespace-nowrap z-50 pointer-events-none">
-                                  Gửi Sản phẩm
-                                  <span className="absolute top-full left-1/2 -translate-x-1/2 border-[4px] border-transparent border-t-slate-800" />
-                                </span>
-                              </button>
-                              <button 
-                                id="order-popup-trigger"
-                                type="button"
-                                className="group relative p-1.5 text-slate-400 hover:bg-slate-200/50 hover:text-emerald-600 rounded-md transition-colors" 
-                                onClick={() => setShowOrderPopup(p => !p)}
-                              >
-                                <ClipboardList className="w-4 h-4" />
-                                <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 px-2 py-1 text-[11px] font-medium text-white bg-slate-800 rounded shadow-sm opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 delay-0 group-hover:delay-[350ms] whitespace-nowrap z-50 pointer-events-none">
-                                  Gửi Đơn hàng
-                                  <span className="absolute top-full left-1/2 -translate-x-1/2 border-[4px] border-transparent border-t-slate-800" />
-                                </span>
-                              </button>
-                           </div>
-                           <button
-                             type="submit"
-                             disabled={mediaUploading || (!sellerInput.trim() && !productDraft && !orderDraft && !hasMediaDraft)}
-                             className={cn(
-                               "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-all mr-0.5",
-                               (mediaUploading || (!sellerInput.trim() && !productDraft && !orderDraft && !hasMediaDraft))
-                                 ? "text-slate-300 pointer-events-none"
-                                 : "text-emerald-600 hover:bg-emerald-100"
-                             )}
-                           >
-                              <Send className="w-5 h-5 -ml-0.5" />
-                           </button>
-                        </div>
-                      </div>
-                    </form>
+                    <SellerComposerInput
+                      key={activeShopId}
+                      shopId={activeShopId}
+                      initialValue={draftTextsRef.current[activeShopId] ?? ""}
+                      onDraftChange={writeSellerDraft}
+                      onSend={handleSellerSend}
+                      mediaUploading={mediaUploading}
+                      uploadProgress={uploadProgress}
+                      mediaDraftItems={mediaDraftItems}
+                      hasMediaDraft={hasMediaDraft}
+                      canAddMoreMedia={canAddMoreMedia}
+                      maxMediaFiles={maxMediaFiles}
+                      hasProductDraft={Boolean(productDraft)}
+                      hasOrderDraft={Boolean(orderDraft)}
+                      imageInputRef={imageInputRef}
+                      videoInputRef={videoInputRef}
+                      addInputRef={addInputRef}
+                      onImageChange={handleImageChange}
+                      onVideoChange={handleVideoChange}
+                      onAddChange={handleAddChange}
+                      onRemoveMedia={removeMediaDraftItem}
+                      onClearMedia={clearMediaDraft}
+                      onAddMedia={openAddPicker}
+                      openImagePicker={openImagePicker}
+                      openVideoPicker={openVideoPicker}
+                      onToggleProductPopup={() => setShowProductPopup((p) => !p)}
+                      onToggleOrderPopup={() => setShowOrderPopup((p) => !p)}
+                    />
                   </div>
                   
                   {/* Popups for Seller */}

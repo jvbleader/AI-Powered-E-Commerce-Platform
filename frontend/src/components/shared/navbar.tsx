@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef, useCallback } from "react";
+import { useEffect, useLayoutEffect, useState, useRef, useCallback } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import {
   Bell,
@@ -47,6 +47,8 @@ const CATEGORY_ICONS: Record<string, string> = {
   "thuc-pham": "🍎"
 };
 
+const HEADER_VISIBLE_CATEGORY_COUNT = 6;
+
 
 
 export function MarketplaceHeader() {
@@ -65,6 +67,7 @@ export function MarketplaceHeader() {
   const searchContainerRef = useRef<HTMLDivElement>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
   const catMoreRef = useRef<HTMLDivElement>(null);
+  const headerRef = useRef<HTMLElement>(null);
 
   // Autocomplete state
   const [suggestions, setSuggestions] = useState<SearchSuggestion[]>([]);
@@ -146,6 +149,9 @@ export function MarketplaceHeader() {
   const selectedCount = store.getCartRows().reduce((sum, row) => sum + row.item.quantity, 0);
   const currentUser = store.getCurrentUser();
   const currentRoles = currentUser?.roles ?? [];
+  const categories = store.state.categories;
+  const headerCategories = categories.slice(0, HEADER_VISIBLE_CATEGORY_COUNT);
+  const moreCategories = categories.slice(HEADER_VISIBLE_CATEGORY_COUNT);
   const canSwitchBuyerSeller = currentRoles.includes("CUSTOMER") && currentRoles.includes("SELLER");
 
   // Keyboard shortcut Ctrl+K to focus search
@@ -177,8 +183,6 @@ export function MarketplaceHeader() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const [isScrolled, setIsScrolled] = useState(false);
-
   // Close mobile nav on route change
   useEffect(() => {
     setMobileNavOpen(false);
@@ -186,48 +190,46 @@ export function MarketplaceHeader() {
     setCartOpen(false);
   }, [pathname]);
 
-  // Hallmark N10 Floating Morph + Ribbon Height Hysteresis Buffer (>85px / <20px) to prevent layout feedback loop
-  useEffect(() => {
-    let ticking = false;
-    const handleScroll = () => {
-      if (!ticking) {
-        window.requestAnimationFrame(() => {
-          const y = window.scrollY;
-          if (y > 85) {
-            setIsScrolled(true);
-          } else if (y < 20) {
-            setIsScrolled(false);
-          }
-          ticking = false;
-        });
-        ticking = true;
-      }
+  useLayoutEffect(() => {
+    const header = headerRef.current;
+    if (!header) return;
+
+    const syncHeaderOffset = () => {
+      document.documentElement.style.setProperty(
+        "--marketplace-header-offset",
+        `${header.offsetHeight}px`
+      );
     };
-    handleScroll();
-    window.addEventListener("scroll", handleScroll, { passive: true });
-    return () => window.removeEventListener("scroll", handleScroll);
+
+    syncHeaderOffset();
+    const observer = new ResizeObserver(syncHeaderOffset);
+    observer.observe(header);
+    return () => observer.disconnect();
   }, []);
 
   return (
-    <header className="fixed inset-x-0 top-0 z-50 w-full pointer-events-none isolate">
+    <header ref={headerRef} className="fixed inset-x-0 top-0 z-50 w-full pointer-events-none isolate">
+      <div className="w-full nav-glass-header pointer-events-auto">
       {/* TOP ANNOUNCEMENT BAR (Permanently fixed at top edge at all times) */}
-      <div className="bg-slate-900 text-slate-300 text-[11px] py-1.5 px-4 border-b border-slate-800 w-full pointer-events-auto">
+      <div className="text-slate-600 text-[11px] py-1.5 px-4 w-full">
         <div className="mx-auto max-w-7xl flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3 font-medium text-slate-300 overflow-x-auto no-scrollbar">
-            <a href="/seller" className="hover:text-emerald-400 transition-colors flex items-center gap-1 shrink-0">
-              <Store className="h-3.5 w-3.5 text-emerald-400" />
+          <div className="flex items-center gap-3 font-medium text-slate-600 overflow-x-auto no-scrollbar">
+            <a href="/seller" className="hover:text-emerald-700 transition-colors flex items-center gap-1 shrink-0">
+              <Store className="h-3.5 w-3.5 text-emerald-600" />
               Kênh người bán
             </a>
-            <span className="text-slate-800">|</span>
-            <a href="/seller/register" className="hover:text-emerald-400 transition-colors shrink-0">
+            <span className="text-[rgba(205,188,165,1)]">|</span>
+            <a href="/seller/register" className="hover:text-emerald-700 transition-colors shrink-0">
               Trở thành người bán
             </a>
-            <span className="text-slate-800">|</span>
+          </div>
+
+          <div className="flex items-center gap-4 text-slate-600 shrink-0 font-medium">
             <a
               href="https://facebook.com"
               target="_blank"
               rel="noopener noreferrer"
-              className="hover:text-emerald-400 transition-colors flex items-center gap-1.5 shrink-0"
+              className="hover:text-emerald-700 transition-colors flex items-center gap-1.5 shrink-0"
               title="Ghé thăm Fanpage chính thức"
             >
               <svg className="h-3.5 w-3.5 text-[#1877F2] fill-current" viewBox="0 0 24 24">
@@ -235,35 +237,22 @@ export function MarketplaceHeader() {
               </svg>
               <span>Fanpage Facebook</span>
             </a>
-          </div>
-
-          <div className="hidden md:flex items-center gap-4 text-slate-400 shrink-0 font-medium">
-            <a href="tel:19006868" className="hover:text-emerald-300 transition-colors flex items-center gap-1.5 text-emerald-400 font-bold">
-              <Phone className="h-3 w-3 text-emerald-400" />
+            <span className="hidden md:inline text-[rgba(205,188,165,1)]">|</span>
+            <a href="tel:19006868" className="hidden md:flex hover:text-emerald-700 transition-colors items-center gap-1.5 text-emerald-700 font-bold">
+              <Phone className="h-3 w-3 text-emerald-600" />
               <span>Hotline: 1900 6868</span>
             </a>
-            <span className="text-slate-800">|</span>
-            <a href="/support" className="hover:text-emerald-400 transition-colors flex items-center gap-1">
+            <span className="hidden md:inline text-[rgba(205,188,165,1)]">|</span>
+            <a href="/support" className="hidden md:flex hover:text-emerald-700 transition-colors items-center gap-1">
               <HelpCircle className="h-3 w-3" /> Hỗ trợ
             </a>
-            <span className="text-slate-800">|</span>
-            <span className="text-slate-300 font-semibold">🇻🇳 VN / VND</span>
           </div>
         </div>
       </div>
 
-      {/* MAIN NAVIGATION BAR (Hallmark N10 Floating Morph) */}
-      <div
-        className={`mx-auto w-full nav-glass-header pointer-events-auto ${
-          isScrolled ? "nav-glass-header-island" : ""
-        }`}
-      >
-        <div
-          className={`mx-auto w-full max-w-7xl px-4 sm:px-6 transition-all duration-500 cubic-bezier(0.16, 1, 0.3, 1) ${
-            isScrolled ? "py-2" : "py-3"
-          }`}
-        >
-          <div className="flex items-center justify-between gap-2.5 sm:gap-4 md:gap-6">
+      {/* MAIN NAVIGATION BAR */}
+        <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 pt-2.5">
+          <div className="flex min-h-10 items-center gap-2.5 sm:gap-4 md:gap-6">
             {/* LOGO */}
             <a
               href="/"
@@ -271,54 +260,37 @@ export function MarketplaceHeader() {
               aria-label={`${BRAND_NAME} Trang chủ`}
             >
               <div className="relative">
-                <span
-                  className={`flex items-center justify-center bg-emerald-600 font-heading font-black text-white shadow-sm transition-all duration-500 group-hover:scale-105 ${
-                    isScrolled ? "h-9 w-9 text-lg rounded-xl" : "h-10 w-10 text-xl rounded-2xl"
-                  }`}
-                >
+                <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-emerald-600 font-heading text-xl font-black text-white shadow-sm transition-all duration-500 group-hover:scale-105">
                   S
                 </span>
               </div>
               <div className="hidden sm:flex flex-col items-center justify-center">
-                <span
-                  className={`font-heading font-black text-slate-900 tracking-tight leading-none group-hover:text-emerald-600 transition-all duration-500 ${
-                    isScrolled ? "text-xl sm:text-2xl" : "text-2xl sm:text-[26px]"
-                  }`}
-                >
+                <span className="font-heading text-2xl font-black tracking-tight text-slate-900 leading-none transition-all duration-500 group-hover:text-emerald-600 sm:text-[26px]">
                   {BRAND_NAME}
                 </span>
-                <div
-                  className={`transition-all duration-500 cubic-bezier(0.16, 1, 0.3, 1) overflow-hidden origin-top ${
-                    isScrolled ? "max-h-0 opacity-0 scale-y-0 mt-0" : "max-h-4 opacity-100 scale-y-100 mt-0.5"
-                  }`}
-                >
-                  <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500 leading-tight block">
+                <div className="mt-0.5 max-h-4 overflow-hidden opacity-100">
+                  <span className="block text-[10px] font-bold uppercase tracking-widest text-slate-500 leading-tight">
                     Marketplace
                   </span>
                 </div>
               </div>
             </a>
 
-            {/* SEARCH AREA (Morphing search field with fixed center position) */}
-            <div className="relative flex-1 flex items-center justify-center min-w-0 px-1 sm:px-2" ref={searchContainerRef}>
-              <div
-                className={`w-full transition-all duration-500 cubic-bezier(0.16, 1, 0.3, 1) ${
-                  isScrolled ? "max-w-xs sm:max-w-sm md:max-w-md" : "max-w-xl lg:max-w-2xl"
-                }`}
-              >
+            {/* SEARCH — cột phải width cố định nên flex-1 ổn định, không nháy size */}
+            <div className="min-w-0 flex-1" ref={searchContainerRef}>
+              <div className="relative w-full max-w-[calc(36rem+20px)] lg:max-w-[calc(42rem+20px)]">
                 <SearchField
                   inputRef={searchInputRef}
                   value={query}
                   onChange={setQuery}
                   onFocus={handleSearchFocus}
                   onBlur={() => {}}
-                  isScrolled={isScrolled}
                   onKeyDown={handleSearchKeyDown}
                 />
 
                 {/* SEARCH SUGGESTION DROPDOWN */}
                 {isSearchFocused && (
-                  <div className="absolute left-0 right-0 top-full mt-2 z-50 animate-scale-in rounded-2xl border border-slate-200 bg-white p-3 shadow-2xl max-h-[80vh] overflow-y-auto">
+                  <div className="absolute left-0 top-full z-50 mt-2 w-full max-h-[80vh] overflow-y-auto animate-scale-in rounded-2xl border border-slate-200 bg-white p-3 shadow-2xl">
                     {query.trim() ? (
                       /* === AUTOCOMPLETE RESULTS === */
                       isSearchLoading ? (
@@ -434,10 +406,10 @@ export function MarketplaceHeader() {
               </div>
             </div>
 
-            {/* ACTION NAV LINKS */}
-            <div className="hidden items-center gap-1 lg:flex shrink-0">
+            {/* ACTION NAV LINKS — width cố định để flex-1 search không đổi kích thước */}
+            <div className="hidden w-[360px] shrink-0 items-center justify-end gap-1 lg:flex">
               {/* NOTIFICATION BELL */}
-              <NotificationBell isScrolled={isScrolled} />
+              <NotificationBell />
 
               {/* CART ICON & POPOVER */}
               <div
@@ -451,21 +423,21 @@ export function MarketplaceHeader() {
                 <a
                   href="/cart"
                   onClick={() => store.refreshCart?.()}
-                  className={`relative inline-flex items-center gap-1.5 rounded-xl text-xs font-bold transition-all duration-300 ${
-                    isScrolled ? "px-2.5 py-1.5" : "px-3 py-2"
-                  } ${
+                  className={`relative inline-flex items-center gap-1.5 whitespace-nowrap rounded-xl px-3 py-2 text-xs font-bold transition-all duration-300 ${
                     pathname === "/cart" || cartOpen
                       ? "bg-emerald-50 text-emerald-700"
                       : "text-slate-700 hover:bg-slate-200/50 hover:text-emerald-700"
                   }`}
                 >
-                  <ShoppingCart className="h-4 w-4" aria-hidden="true" />
-                  <span>Giỏ hàng</span>
-                  {selectedCount > 0 && (
-                    <span className="animate-bounce-subtle rounded-full bg-emerald-600 px-2 py-0.5 text-[10px] font-black text-white shadow-sm">
-                      {selectedCount}
-                    </span>
-                  )}
+                  <ShoppingCart className="h-4 w-4 shrink-0" aria-hidden="true" />
+                  <span className="whitespace-nowrap">Giỏ hàng</span>
+                  <span
+                    className={`min-w-[1.25rem] rounded-full bg-emerald-600 px-2 py-0.5 text-center text-[10px] font-black text-white shadow-sm ${
+                      selectedCount > 0 ? "animate-bounce-subtle" : "invisible"
+                    }`}
+                  >
+                    {selectedCount > 0 ? selectedCount : 0}
+                  </span>
                 </a>
 
                 {/* CART HOVER POPOVER */}
@@ -517,10 +489,12 @@ export function MarketplaceHeader() {
                 )}
               </div>
 
-              {/* USER PROFILE DROPDOWN */}
-              {currentUser ? (
+              {/* USER PROFILE DROPDOWN — giữ chỗ cố định khi store chưa ready */}
+              {!store.ready ? (
+                <div className="ml-1 h-9 w-[96px] shrink-0 rounded-xl bg-slate-100/80" aria-hidden />
+              ) : currentUser ? (
                 <div
-                  className="relative ml-0.5"
+                  className="relative ml-0.5 w-[96px] shrink-0"
                   ref={userMenuRef}
                   onMouseEnter={() => setUserMenuOpen(true)}
                   onMouseLeave={() => setUserMenuOpen(false)}
@@ -528,15 +502,13 @@ export function MarketplaceHeader() {
                   <button
                     type="button"
                     onClick={() => setUserMenuOpen((v) => !v)}
-                    className={`flex items-center gap-2 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-800 hover:border-emerald-450 hover:bg-emerald-50/50 transition-all duration-300 shadow-2xs active:scale-98 ${
-                      isScrolled ? "px-2 py-1" : "px-2.5 py-1.5"
-                    }`}
+                    className="flex h-9 w-full items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-2 py-1.5 text-xs font-bold text-slate-800 shadow-2xs transition-[border-color,background-color] duration-300 hover:border-emerald-450 hover:bg-emerald-50/50 active:scale-98"
                   >
-                    <div className="flex h-6 w-6 items-center justify-center rounded-lg bg-emerald-600 font-heading text-xs font-black text-white shadow-2xs">
+                    <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-emerald-600 font-heading text-xs font-black text-white shadow-2xs">
                       {currentUser.fullName.charAt(0).toUpperCase()}
                     </div>
-                    <span className="max-w-[100px] truncate">{currentUser.fullName.split(" ").slice(-1)}</span>
-                    <ChevronDown className="h-3.5 w-3.5 text-slate-400" />
+                    <span className="min-w-0 flex-1 truncate text-left">{currentUser.fullName.split(" ").slice(-1)}</span>
+                    <ChevronDown className="h-3.5 w-3.5 shrink-0 text-slate-400" />
                   </button>
 
                   {/* MENU POPUP */}
@@ -603,20 +575,16 @@ export function MarketplaceHeader() {
                   )}
                 </div>
               ) : (
-                <div className="flex items-center gap-2 ml-1">
+                <div className="ml-1 flex h-9 shrink-0 items-center justify-end gap-1.5">
                   <a
                     href="/login"
-                    className={`rounded-xl border border-slate-200 bg-white font-bold text-slate-800 hover:border-slate-300 hover:bg-slate-50 transition-all duration-300 shadow-2xs ${
-                      isScrolled ? "px-3 py-1.5 text-xs" : "px-3.5 py-2 text-xs"
-                    }`}
+                    className="whitespace-nowrap rounded-xl border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-bold text-slate-800 shadow-2xs transition-[border-color,background-color] duration-300 hover:border-slate-300 hover:bg-slate-50"
                   >
                     Đăng nhập
                   </a>
                   <a
                     href="/register"
-                    className={`rounded-xl bg-emerald-600 font-bold text-white hover:bg-emerald-500 transition-all duration-300 shadow-md ${
-                      isScrolled ? "px-3 py-1.5 text-xs" : "px-3.5 py-2 text-xs"
-                    }`}
+                    className="whitespace-nowrap rounded-xl bg-emerald-600 px-2.5 py-1.5 text-xs font-bold text-white shadow-md transition-[background-color] duration-300 hover:bg-emerald-500"
                   >
                     Đăng ký
                   </a>
@@ -625,58 +593,48 @@ export function MarketplaceHeader() {
             </div>
           </div>
 
-          {/* CATEGORY NAV RIBBON (Collapses ultra smoothly on scroll) */}
-          <div
-            className={`hidden lg:block transition-all duration-500 cubic-bezier(0.16, 1, 0.3, 1) overflow-hidden origin-top ${
-              isScrolled
-                ? "max-h-0 opacity-0 mt-0 pointer-events-none scale-y-95 -translate-y-1"
-                : "max-h-14 opacity-100 mt-2.5 transform-none"
-            }`}
-          >
-            <div className="relative flex items-center justify-center gap-2 py-1 px-4">
+          {/* CATEGORY NAV RIBBON */}
+          <div className="hidden lg:flex items-center justify-center gap-1.5 px-3 py-[10px]">
               <a
                 href="/products"
-                className={`shrink-0 inline-flex items-center rounded-xl border px-3 py-1.5 text-xs font-bold transition-all shadow-2xs ${
+                className={`shrink-0 inline-flex items-center px-2 py-0.5 text-[11px] font-bold leading-none transition-colors ${
                   pathname === "/products"
-                    ? "border-emerald-500 bg-emerald-500 text-white shadow-md shadow-emerald-500/20"
-                    : "border-slate-200 bg-white/90 text-slate-700 hover:border-emerald-400 hover:bg-emerald-50 hover:text-emerald-700"
+                    ? "text-emerald-600"
+                    : "text-slate-600 hover:text-emerald-700"
                 }`}
               >
                 Tất cả sản phẩm
               </a>
 
-              {store.state.categories.slice(0, 6).map((category) => {
+              {headerCategories.map((category) => {
                 const isActive = pathname === `/categories/${category.slug}`;
                 return (
                   <a
                     key={category.id}
                     href={`/categories/${category.slug}`}
-                    className={`shrink-0 inline-flex items-center rounded-xl border px-3 py-1.5 text-xs font-bold transition-all shadow-2xs ${
+                    className={`shrink-0 inline-flex items-center px-2 py-0.5 text-[11px] font-bold leading-none transition-colors ${
                       isActive
-                        ? "border-emerald-500 bg-emerald-500 text-white shadow-md"
-                        : "border-slate-200 bg-white/90 text-slate-700 hover:border-emerald-400 hover:bg-emerald-50 hover:text-emerald-700"
+                        ? "text-emerald-600"
+                        : "text-slate-600 hover:text-emerald-700"
                     }`}
                   >
                     {category.name}
                   </a>
                 );
               })}
-              {store.state.categories.length > 6 && (
-                <div
-                  className="relative shrink-0"
-                  ref={catMoreRef}
-                >
+              {moreCategories.length > 0 && (
+                <div className="relative inline-flex shrink-0 items-center" ref={catMoreRef}>
                   <button
                     type="button"
                     onClick={() => setCatMoreOpen((v) => !v)}
-                    className={`inline-flex items-center gap-1 rounded-xl border px-3 py-1.5 text-xs font-bold shadow-2xs transition-all ${
+                    className={`inline-flex items-center gap-0.5 border-0 bg-transparent px-2 py-0.5 text-[11px] font-bold leading-none transition-colors ${
                       catMoreOpen
-                        ? "border-emerald-400 bg-emerald-50 text-emerald-700"
-                        : "border-slate-200 bg-white/90 text-slate-700 hover:border-emerald-400 hover:bg-emerald-50 hover:text-emerald-700"
+                        ? "text-emerald-600"
+                        : "text-slate-600 hover:text-emerald-700"
                     }`}
                   >
                     <span>Xem thêm</span>
-                    <ChevronDown className={`h-3.5 w-3.5 transition-transform duration-200 ${catMoreOpen ? "rotate-180" : ""}`} />
+                    <ChevronDown className={`h-3 w-3 shrink-0 transition-transform duration-200 ${catMoreOpen ? "rotate-180" : ""}`} />
                   </button>
                   {catMoreOpen && (() => {
                     const rect = catMoreRef.current?.getBoundingClientRect();
@@ -684,10 +642,9 @@ export function MarketplaceHeader() {
 
                     const viewportWidth = typeof window !== "undefined" ? window.innerWidth : 1200;
                     const viewportHeight = typeof window !== "undefined" ? window.innerHeight : 800;
-                    const allCategories = store.state.categories;
                     const filtered = categoryFilter
-                      ? allCategories.filter((c) => c.name.toLowerCase().includes(categoryFilter.toLowerCase()))
-                      : allCategories;
+                      ? moreCategories.filter((c) => c.name.toLowerCase().includes(categoryFilter.toLowerCase()))
+                      : moreCategories;
 
                     const popoverWidth = Math.min(800, Math.max(340, viewportWidth - 32));
                     let rightPos = viewportWidth - rect.right;
@@ -715,7 +672,7 @@ export function MarketplaceHeader() {
                             </div>
                             <div>
                               <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider">Danh mục sản phẩm</h4>
-                              <p className="text-[11px] text-slate-500 font-medium">Tổng cộng {allCategories.length} danh mục</p>
+                              <p className="text-[11px] text-slate-500 font-medium">{moreCategories.length} danh mục khác</p>
                             </div>
                           </div>
                           <div className="flex items-center gap-2">
@@ -802,13 +759,13 @@ export function MarketplaceHeader() {
                   })()}
                 </div>
               )}
-            </div>
           </div>
         </div>
       </div>
       </header>
     );
 }
+
 
 
 export function MarketplaceFooter() {

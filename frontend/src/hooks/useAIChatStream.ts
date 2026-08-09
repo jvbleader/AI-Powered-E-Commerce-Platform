@@ -150,6 +150,23 @@ export function useAIChatStream() {
 
       abortControllerRef.current = new AbortController();
 
+      let pendingChunk = "";
+      let chunkRaf = 0;
+      const flushChunks = () => {
+        chunkRaf = 0;
+        if (!pendingChunk) return;
+        const text = pendingChunk;
+        pendingChunk = "";
+        setCurrentStatus(null);
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === assistantMsgId
+              ? { ...msg, content: msg.content + text }
+              : msg
+          )
+        );
+      };
+
       await sendStreamChatMessage({
         message: trimmed,
         sessionId: activeSessionId,
@@ -159,16 +176,12 @@ export function useAIChatStream() {
           setCurrentStatus(status);
         },
         onTextChunk: (chunk) => {
-          setCurrentStatus(null); // Clear status when text tokens begin
-          setMessages((prev) =>
-            prev.map((msg) =>
-              msg.id === assistantMsgId
-                ? { ...msg, content: msg.content + chunk }
-                : msg
-            )
-          );
+          // Gộp token theo frame — tránh setState mỗi chunk làm giật list
+          pendingChunk += chunk;
+          if (!chunkRaf) chunkRaf = requestAnimationFrame(flushChunks);
         },
         onProducts: (products: AIProductItem[]) => {
+          flushChunks();
           setMessages((prev) =>
             prev.map((msg) =>
               msg.id === assistantMsgId ? { ...msg, products } : msg
@@ -176,12 +189,16 @@ export function useAIChatStream() {
           );
         },
         onEnd: () => {
+          if (chunkRaf) cancelAnimationFrame(chunkRaf);
+          flushChunks();
           setIsStreaming(false);
           setCurrentStatus(null);
           // Reload sessions to update sidebar ordering and timestamps
           loadSessions(true);
         },
         onError: (err) => {
+          if (chunkRaf) cancelAnimationFrame(chunkRaf);
+          flushChunks();
           setIsStreaming(false);
           setCurrentStatus(null);
           setError(err.message || "Lỗi kết nối đến trợ lý AI");

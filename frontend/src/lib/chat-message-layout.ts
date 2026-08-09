@@ -19,6 +19,31 @@ export function formatChatTime(value?: string | Date): string {
   }).format(dateObj);
 }
 
+/** Thời gian sidebar: hôm nay → giờ, hôm qua → "Hôm qua", lâu hơn → ngày. */
+export function formatChatListTime(value?: string | Date): string {
+  const dateObj = parseChatDate(value);
+  if (!dateObj) return "";
+
+  const dayKey = getChatDayKey(dateObj);
+  const todayKey = getChatDayKey(new Date());
+  if (dayKey && dayKey === todayKey) {
+    return formatChatTime(dateObj);
+  }
+
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  if (dayKey && dayKey === getChatDayKey(yesterday)) {
+    return "Hôm qua";
+  }
+
+  return new Intl.DateTimeFormat("vi-VN", {
+    timeZone: CHAT_TIMEZONE,
+    day: "numeric",
+    month: "numeric",
+    year: "numeric",
+  }).format(dateObj);
+}
+
 export function formatChatDateSeparator(value?: string | Date): string {
   const dateObj = parseChatDate(value);
   if (!dateObj) return "";
