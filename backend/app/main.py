@@ -41,7 +41,10 @@ from contextlib import asynccontextmanager
 from core.scheduler import start_scheduler, stop_scheduler
 from core.elasticsearch import close_es_client
 import services.search.search_service as search_svc
-from services.search.search_helpers import fetch_all_active_products_for_indexing
+from services.search.search_helpers import (
+    fetch_all_active_products_for_indexing,
+    fetch_all_approved_shops_for_indexing,
+)
 from core.database import AsyncSessionLocal
 from services.common.websocket_manager import manager
 
@@ -49,15 +52,18 @@ from services.common.websocket_manager import manager
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     start_scheduler()
-    # Initialize Elasticsearch
+    # Initialize Elasticsearch (product listing falls back to MySQL if ES is down at request time)
     try:
         await search_svc.create_products_index()
         async with AsyncSessionLocal() as db:
             products = await fetch_all_active_products_for_indexing(db)
             await search_svc.bulk_index_products(products)
+            shops = await fetch_all_approved_shops_for_indexing(db)
+            await search_svc.bulk_index_shops(shops)
     except Exception as e:
         logging.getLogger(__name__).exception(
-            f"Elasticsearch init failed — search will fall back to MySQL: {e}"
+            "Elasticsearch init failed — public product search will fall back to MySQL: %s",
+            e,
         )
     yield
     stop_scheduler()

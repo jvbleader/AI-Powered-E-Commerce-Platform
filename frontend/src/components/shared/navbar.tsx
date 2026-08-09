@@ -95,15 +95,20 @@ export function MarketplaceHeader() {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     setHighlightIndex(-1);
 
-    if (!query.trim()) {
+    const trimmed = query.trim();
+    if (!trimmed) {
       setSuggestions([]);
       setIsSearchLoading(false);
       return;
     }
 
+    // Shopee-style: show "Tìm Shop" immediately while keyword suggestions load
+    setSuggestions([
+      { keyword: `Tìm Shop "${trimmed}"`, type: "shop", shop_slug: null },
+    ]);
     setIsSearchLoading(true);
     debounceRef.current = setTimeout(async () => {
-      const result = await fetchAutocomplete(query.trim());
+      const result = await fetchAutocomplete(trimmed);
       setSuggestions(result.suggestions);
       setIsSearchLoading(false);
     }, 300);
@@ -118,11 +123,16 @@ export function MarketplaceHeader() {
     setSearchHistory(getSearchHistory());
   };
 
-  const performSearch = (keyword: string, isShop?: boolean, shopSlug?: string) => {
-    if (isShop && shopSlug) {
-      addSearchHistory(keyword);
-      window.location.href = `/shops/${shopSlug}`;
-    } else if (keyword.trim()) {
+  const performSearch = (keyword: string, isShop?: boolean, _shopSlug?: string) => {
+    if (isShop) {
+      // Shopee-style: always go to shop search results for the typed query
+      const shopQuery = query.trim();
+      if (!shopQuery) return;
+      addSearchHistory(shopQuery);
+      window.location.href = `/search/shops?q=${encodeURIComponent(shopQuery)}`;
+      return;
+    }
+    if (keyword.trim()) {
       addSearchHistory(keyword.trim());
       window.location.href = `/search?q=${encodeURIComponent(keyword.trim())}`;
     }
@@ -292,42 +302,47 @@ export function MarketplaceHeader() {
                 {isSearchFocused && (
                   <div className="absolute left-0 top-full z-50 mt-2 w-full max-h-[80vh] overflow-y-auto animate-scale-in rounded-2xl border border-slate-200 bg-white p-3 shadow-2xl">
                     {query.trim() ? (
-                      /* === AUTOCOMPLETE RESULTS === */
-                      isSearchLoading ? (
-                        <div className="flex items-center justify-center p-4">
-                          <div className="h-5 w-5 animate-spin rounded-full border-2 border-emerald-500 border-t-transparent" />
-                        </div>
-                      ) : suggestions.length ? (
-                        <div className="space-y-0.5">
-                          {suggestions.map((item, index) => (
-                            <button
-                              key={`${item.type}-${item.keyword}-${index}`}
-                              type="button"
-                              onMouseDown={(e) => e.preventDefault()}
-                              onClick={() => performSearch(item.keyword, item.type === "shop", item.shop_slug ?? undefined)}
-                              className={`flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-sm transition-all ${
-                                index === highlightIndex
-                                  ? "bg-emerald-50 text-emerald-700"
-                                  : "text-slate-700 hover:bg-slate-50"
-                              }`}
-                            >
+                      /* === AUTOCOMPLETE RESULTS (Shopee-style: shop row first) === */
+                      <div className="space-y-0.5">
+                        {suggestions.map((item, index) => (
+                          <button
+                            key={`${item.type}-${item.keyword}-${index}`}
+                            type="button"
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => performSearch(item.keyword, item.type === "shop", item.shop_slug ?? undefined)}
+                            className={`flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-sm transition-all ${
+                              index === highlightIndex
+                                ? "bg-rose-50 text-slate-900"
+                                : "text-slate-700 hover:bg-slate-50"
+                            }`}
+                          >
+                            {item.type === "shop" ? (
+                              <Store className="h-4 w-4 shrink-0 text-rose-500" />
+                            ) : (
+                              <Search className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+                            )}
+                            <span className={`truncate ${item.type === "shop" ? "font-semibold text-slate-800" : "font-medium"}`}>
                               {item.type === "shop" ? (
-                                <Store className="h-4 w-4 shrink-0 text-emerald-600" />
+                                <>
+                                  Tìm Shop &quot;<span className="text-rose-600">{query.trim()}</span>&quot;
+                                </>
                               ) : (
-                                <Search className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+                                item.keyword
                               )}
-                              <span className={`truncate ${item.type === "shop" ? "font-bold text-emerald-700" : "font-medium"}`}>
-                                {item.keyword}
-                              </span>
-                            </button>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="p-6 text-center text-xs text-slate-500">
-                          <Search className="mx-auto h-8 w-8 text-slate-300 mb-2" />
-                          Không tìm thấy từ khóa phù hợp với &quot;{query}&quot;
-                        </div>
-                      )
+                            </span>
+                          </button>
+                        ))}
+                        {isSearchLoading && (
+                          <div className="flex items-center justify-center py-2">
+                            <div className="h-4 w-4 animate-spin rounded-full border-2 border-emerald-500 border-t-transparent" />
+                          </div>
+                        )}
+                        {!isSearchLoading && suggestions.every((s) => s.type === "shop") && (
+                          <div className="px-3 py-2 text-xs text-slate-400">
+                            Không có gợi ý sản phẩm cho &quot;{query.trim()}&quot;
+                          </div>
+                        )}
+                      </div>
                     ) : (
                       /* === FOCUS STATE: HISTORY + HOT KEYWORDS === */
                       <div className="space-y-3 p-1">

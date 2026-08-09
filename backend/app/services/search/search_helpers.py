@@ -44,6 +44,8 @@ def product_to_es_doc(product: Product, seller: SellerProfile | None = None) -> 
         category_names = [c.name for c in product.categories]
         category_slugs = [c.slug for c in product.categories]
 
+    brand_name = (product.brand or "").strip()
+
     return {
         "id": product.id,
         "public_id": product.public_id,
@@ -51,6 +53,7 @@ def product_to_es_doc(product: Product, seller: SellerProfile | None = None) -> 
         "name": product.name,
         "short_description": product.short_description or "",
         "description": product.description or "",
+        "brand_name": brand_name,
         "category_ids": category_ids,
         "category_names": category_names,
         "category_slugs": category_slugs,
@@ -58,6 +61,7 @@ def product_to_es_doc(product: Product, seller: SellerProfile | None = None) -> 
         "shop_name": seller_obj.shop_name if seller_obj else "",
         "shop_slug": seller_obj.shop_slug if seller_obj else "",
         "pickup_address": seller_obj.pickup_address if seller_obj else "",
+        "price": min_price,
         "min_price": min_price,
         "max_price": max_price,
         "total_stock": total_stock,
@@ -68,6 +72,31 @@ def product_to_es_doc(product: Product, seller: SellerProfile | None = None) -> 
         "status": product.status,
         "created_at": product.created_at.isoformat() if product.created_at else None,
         "thumbnail": thumbnail,
+    }
+
+
+def shop_to_es_doc(
+    seller: SellerProfile,
+    *,
+    total_sold: int = 0,
+    product_count: int = 0,
+    average_rating: float = 0.0,
+    review_count: int = 0,
+) -> dict:
+    """Convert a SellerProfile ORM object to an Elasticsearch shop document."""
+    return {
+        "id": seller.id,
+        "public_id": seller.public_id,
+        "shop_name": seller.shop_name,
+        "shop_slug": seller.shop_slug,
+        "shop_description": seller.shop_description or "",
+        "total_sold": total_sold,
+        "average_rating": average_rating,
+        "review_count": review_count,
+        "product_count": product_count,
+        "status": seller.status,
+        "created_at": seller.created_at.isoformat() if seller.created_at else None,
+        "shop_logo_url": seller.shop_logo_url,
     }
 
 
@@ -90,6 +119,46 @@ async def fetch_all_active_products_for_indexing(db: AsyncSession) -> list[dict]
     result = await db.execute(stmt)
     products = list(result.scalars().unique().all())
     return [product_to_es_doc(p) for p in products]
+
+
+async def fetch_all_approved_shops_for_indexing(db: AsyncSession) -> list[dict]:
+    """Fetch all APPROVED shops with stats for ES bulk indexing."""
+    from sqlalchemy import func
+    from models.seller import SellerStatistics
+
+    stmt = select(SellerProfile).where(SellerProfile.status == "APPROVED")
+    result = await db.execute(stmt)
+    sellers = list(result.scalars().all())
+    if not sellers:
+        return []
+
+    seller_ids = [s.id for s in sellers]
+    stats_res = await db.execute(
+        select(SellerStatistics).where(SellerStatistics.seller_id.in_(seller_ids))
+    )
+    stats_by_seller = {s.seller_id: s for s in stats_res.scalars().all()}
+
+    counts_res = await db.execute(
+        select(Product.seller_id, func.count(Product.id))
+        .where(
+            Product.seller_id.in_(seller_ids),
+            Product.status.in_(["ACTIVE", "OUT_OF_STOCK"]),
+        )
+        .group_by(Product.seller_id)
+    )
+    count_by_seller = {row[0]: row[1] for row in counts_res.all()}
+
+    docs = []
+    for seller in sellers:
+        stats = stats_by_seller.get(seller.id)
+        docs.append(
+            shop_to_es_doc(
+                seller,
+                total_sold=stats.total_sold if stats else 0,
+                product_count=count_by_seller.get(seller.id, 0),
+            )
+        )
+    return docs
 
 async def sync_product_to_es(product_public_id: str) -> None:
     """Background task to fetch a product by public_id and index it into ES."""
@@ -198,21 +267,12 @@ async def update_shop_in_es(seller_id: int) -> None:
         prod_count_res = await db.execute(select(func.count(Product.id)).where(Product.seller_id == seller_id, Product.status.in_(["ACTIVE", "OUT_OF_STOCK"])))
         product_count = prod_count_res.scalar() or 0
         
-        shop_doc = {
-            "id": seller.id,
-            "public_id": seller.public_id,
-            "shop_name": seller.shop_name,
-            "shop_slug": seller.shop_slug,
-            "shop_description": seller.shop_description or "",
-            "total_sold": total_sold,
-            "average_rating": 0.0,
-            "review_count": 0,
-            "product_count": product_count,
-            "status": seller.status,
-            "created_at": seller.created_at.isoformat() if seller.created_at else None,
-            "shop_logo_url": seller.shop_logo_url
-        }
-        
+        shop_doc = shop_to_es_doc(
+            seller,
+            total_sold=total_sold,
+            product_count=product_count,
+        )
+
         try:
             await es.index(
                 index=SHOP_INDEX_ALIAS,
@@ -222,7 +282,7 @@ async def update_shop_in_es(seller_id: int) -> None:
             logger.info(f"Synced Shop {seller.id} to ES.")
         except Exception:
             logger.exception(f"Failed to sync Shop {seller.id} to ES.")
-            
+
         # 2. Update_By_Query for all products of this shop (Update shop_name and shop_slug)
         # WARNING: This is a heavy operation if the shop has > 100k products.
         try:
@@ -245,3 +305,33 @@ async def update_shop_in_es(seller_id: int) -> None:
             logger.info(f"Executed Update_By_Query for Shop {seller.id} products.")
         except Exception:
             logger.exception(f"Failed Update_By_Query for Shop {seller.id} products.")
+
+
+async def reindex_seller_products_in_es(seller_id: int) -> None:
+    """Background task: reindex all ACTIVE/OUT_OF_STOCK products for a seller."""
+    import logging
+    import services.search.search_service as search_svc
+    from core.database import AsyncSessionLocal
+
+    logger = logging.getLogger(__name__)
+
+    async with AsyncSessionLocal() as db:
+        stmt = (
+            select(Product)
+            .where(
+                Product.seller_id == seller_id,
+                Product.status.in_(["ACTIVE", "OUT_OF_STOCK"]),
+            )
+            .options(
+                selectinload(Product.images),
+                selectinload(Product.variants).selectinload(ProductVariant.inventory),
+                selectinload(Product.seller),
+                selectinload(Product.categories),
+            )
+        )
+        result = await db.execute(stmt)
+        products = list(result.scalars().unique().all())
+        docs = [product_to_es_doc(p) for p in products]
+        if docs:
+            await search_svc.bulk_index_products(docs)
+            logger.info("Reindexed %d products for seller %s to ES.", len(docs), seller_id)

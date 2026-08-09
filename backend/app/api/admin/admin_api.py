@@ -1,6 +1,6 @@
 from typing import Annotated, Optional
 
-from fastapi import APIRouter, Depends, Request, Response, status, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, Request, Response, status, HTTPException
 from pydantic import BaseModel, EmailStr
 from sqlalchemy.ext.asyncio import AsyncSession
 from schemas.user.user_schema import UserMeResponse, AdminCreateUserRequest, UserRolesUpdateRequest
@@ -24,6 +24,12 @@ from services.seller.seller_application_service import (
     get_seller_application_detail,
     approve_seller_application,
     reject_seller_application,
+)
+from services.search.search_helpers import (
+    sync_product_to_es,
+    delete_product_from_es_by_public_id,
+    update_shop_in_es,
+    reindex_seller_products_in_es,
 )
 
 class CreateCategoryRequest(BaseModel):
@@ -115,11 +121,15 @@ async def approve_seller_application_api(
     seller_public_id: str,
     user: CurrentAdmin,
     db: DBSession,
+    background_tasks: BackgroundTasks,
 ) -> SellerApplicationReviewResponse:
     result = None
     try:
         result = await approve_seller_application(seller_public_id, db)
         await db.commit()
+        if result and result.id:
+            background_tasks.add_task(update_shop_in_es, result.id)
+            background_tasks.add_task(reindex_seller_products_in_es, result.id)
     except Exception:
         await db.rollback()
         raise
@@ -136,6 +146,7 @@ async def reject_seller_application_api(
     seller_public_id: str,
     user: CurrentAdmin,
     db: DBSession,
+    background_tasks: BackgroundTasks,
 ) -> SellerApplicationReviewResponse:
     result = None
     try:
@@ -143,6 +154,9 @@ async def reject_seller_application_api(
             seller_public_id=seller_public_id, data=data, db=db
         )
         await db.commit()
+        # Non-APPROVED shops are removed from the shop index
+        if result and result.id:
+            background_tasks.add_task(update_shop_in_es, result.id)
     except Exception:
         await db.rollback()
         raise
@@ -347,21 +361,22 @@ async def hide_product_admin_api(
     public_id: str,
     user: CurrentAdmin,
     db: DBSession,
+    background_tasks: BackgroundTasks,
 ):
     from sqlalchemy import select
     from models.catalog import Product
     from models.moderation import ModerationLog
     from repositories.catalog.product_repository import hide_product
-    
+
     product = await db.scalar(select(Product).where(Product.public_id == public_id))
     if not product:
         raise HTTPException(status_code=404, detail="Sản phẩm không tồn tại")
-        
+
     if product.status == "HIDDEN":
         return {"message": "Sản phẩm đã bị ẩn trước đó", "public_id": product.public_id}
-        
+
     await hide_product(db, product)
-    
+
     # Ghi log thao tác
     log = ModerationLog(
         action="HIDE_PRODUCT",
@@ -369,8 +384,9 @@ async def hide_product_admin_api(
         note="Admin ẩn sản phẩm từ trang quản lý.",
     )
     db.add(log)
-    
+
     await db.commit()
+    background_tasks.add_task(delete_product_from_es_by_public_id, public_id)
     return {"message": "Đã ẩn sản phẩm thành công", "public_id": product.public_id}
 
 
@@ -379,24 +395,25 @@ async def unhide_product_admin_api(
     public_id: str,
     user: CurrentAdmin,
     db: DBSession,
+    background_tasks: BackgroundTasks,
 ):
     from sqlalchemy import select
     from models.catalog import Product
-    from models.moderation import ModerationLog
     from repositories.catalog.product_repository import unhide_product
-    
+
     product = await db.scalar(select(Product).where(Product.public_id == public_id))
     if not product:
         raise HTTPException(status_code=404, detail="Sản phẩm không tồn tại")
-        
+
     if product.status == "ACTIVE":
         return {"message": "Sản phẩm đã hiện trước đó", "public_id": product.public_id}
-        
+
     await unhide_product(db, product)
-    
+
     # (Bỏ log do không có action UNHIDE_PRODUCT trong DB constraint)
-    
+
     await db.commit()
+    background_tasks.add_task(sync_product_to_es, public_id)
     return {"message": "Đã hiện sản phẩm thành công", "public_id": product.public_id}
 
 
@@ -405,21 +422,22 @@ async def delete_product_admin_api(
     public_id: str,
     user: CurrentAdmin,
     db: DBSession,
+    background_tasks: BackgroundTasks,
 ):
     from sqlalchemy import select
     from models.catalog import Product
     from models.moderation import ModerationLog
     from repositories.catalog.product_repository import soft_delete_product
-    
+
     product = await db.scalar(select(Product).where(Product.public_id == public_id))
     if not product:
         raise HTTPException(status_code=404, detail="Sản phẩm không tồn tại")
-        
+
     if product.status == "DELETED":
         return {"message": "Sản phẩm đã bị xoá trước đó", "public_id": product.public_id}
-        
+
     await soft_delete_product(db, product)
-    
+
     # Ghi log thao tác
     log = ModerationLog(
         action="DELETE_PRODUCT",
@@ -427,8 +445,9 @@ async def delete_product_admin_api(
         note="Admin xoá sản phẩm từ trang quản lý.",
     )
     db.add(log)
-    
+
     await db.commit()
+    background_tasks.add_task(delete_product_from_es_by_public_id, public_id)
     return {"message": "Đã xoá sản phẩm thành công", "public_id": product.public_id}
 
 

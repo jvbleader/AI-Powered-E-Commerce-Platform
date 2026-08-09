@@ -42,4 +42,8 @@ async def search_shops(
         page=page,
         limit=size
     )
-    return await search_svc.search_shops(req)
+    try:
+        return await search_svc.search_shops(req)
+    except search_svc.SearchBackendError:
+        logger.exception("Shop search backend unavailable")
+        return ShopSearchResponse(total=0, page=page, limit=size, items=[])

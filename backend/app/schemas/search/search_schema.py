@@ -14,7 +14,9 @@ class SearchRequest(BaseModel):
     min_rating: Optional[float] = None
     pickup_address: Optional[str] = None
     in_stock: Optional[bool] = None
-    sort: Optional[str] = "relevance"  # relevance, newest, price_asc, price_desc, sold_count, rating
+    # Canonical: relevance, newest, best_selling, high_rating, price_asc, price_desc
+    # Aliases accepted by strategy: latest, sales, sold_count, rating
+    sort: Optional[str] = "relevance"
     page: int = Field(default=1, ge=1)
     limit: int = Field(default=20, ge=1, le=100)
 
@@ -25,6 +27,7 @@ class ProductSearchDocument(BaseModel):
     name: str
     short_description: Optional[str] = None
     description: Optional[str] = None
+    brand_name: Optional[str] = None
     category_ids: List[int] = []
     category_names: List[str] = []
     category_slugs: List[str] = []
@@ -32,6 +35,7 @@ class ProductSearchDocument(BaseModel):
     shop_name: str
     shop_slug: str
     pickup_address: Optional[str] = None
+    price: Optional[float] = None
     min_price: float
     max_price: float
     total_stock: int
@@ -53,7 +57,7 @@ class SearchResponse(BaseModel):
 class ShopSearchRequest(BaseModel):
     q: Optional[str] = None
     min_rating: Optional[float] = None
-    sort: Optional[str] = "relevance" # relevance, newest, rating, product_count
+    sort: Optional[str] = "relevance"  # relevance, newest, high_rating, product_count
     page: int = Field(default=1, ge=1)
     limit: int = Field(default=20, ge=1, le=100)
 

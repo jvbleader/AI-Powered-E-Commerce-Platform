@@ -1,12 +1,13 @@
 from typing import Any
 
+
 class QueryBuilder:
     """
     Builder Pattern for constructing Elasticsearch Query DSL.
     Allows method chaining for adding matches, filters, and aggregations.
     Purely builds the core query structure (bool, term, match, aggregations).
     """
-    
+
     def __init__(self):
         self._must = []
         self._filter = []
@@ -19,18 +20,57 @@ class QueryBuilder:
         self._source = None
         self._minimum_should_match = 0
 
-    def add_multi_match(self, query: str, fields: list[str], fuzziness: str = "AUTO") -> "QueryBuilder":
+    def add_multi_match(
+        self,
+        query: str,
+        fields: list[str],
+        fuzziness: str | None = "AUTO",
+        minimum_should_match: str | int | None = None,
+        boost: float | None = None,
+    ) -> "QueryBuilder":
         if query:
-            match_clause = {
-                "multi_match": {
-                    "query": query,
-                    "fields": fields,
-                    "type": "best_fields"
-                }
+            mm: dict[str, Any] = {
+                "query": query,
+                "fields": fields,
+                "type": "best_fields",
             }
             if fuzziness:
-                match_clause["multi_match"]["fuzziness"] = fuzziness
-            self._must.append(match_clause)
+                mm["fuzziness"] = fuzziness
+            if minimum_should_match is not None:
+                mm["minimum_should_match"] = minimum_should_match
+            if boost is not None:
+                mm["boost"] = boost
+            self._must.append({"multi_match": mm})
+        return self
+
+    def add_match_phrase(
+        self, field: str, query: str, boost: float = 1.0, slop: int = 0
+    ) -> "QueryBuilder":
+        if query:
+            self._should.append({
+                "match_phrase": {
+                    field: {
+                        "query": query,
+                        "boost": boost,
+                        "slop": slop,
+                    }
+                }
+            })
+        return self
+
+    def add_match_phrase_prefix(
+        self, field: str, query: str, boost: float = 1.0, max_expansions: int = 10
+    ) -> "QueryBuilder":
+        if query:
+            self._should.append({
+                "match_phrase_prefix": {
+                    field: {
+                        "query": query,
+                        "boost": boost,
+                        "max_expansions": max_expansions,
+                    }
+                }
+            })
         return self
 
     def add_match(self, field: str, query: str, boost: float = 1.0) -> "QueryBuilder":
@@ -44,7 +84,7 @@ class QueryBuilder:
                 }
             })
         return self
-        
+
     def add_match_filter(self, field: str, query: str) -> "QueryBuilder":
         if query:
             self._must.append({
@@ -64,8 +104,9 @@ class QueryBuilder:
                 }
             })
         return self
-        
+
     def set_minimum_should_match(self, msm: str | int) -> "QueryBuilder":
+        """Set bool-level minimum_should_match for optional should clauses."""
         self._minimum_should_match = msm
         return self
 
@@ -73,7 +114,7 @@ class QueryBuilder:
         if value is not None:
             self._filter.append({"term": {field: value}})
         return self
-        
+
     def add_terms_filter(self, field: str, values: list[Any]) -> "QueryBuilder":
         if values:
             self._filter.append({"terms": {field: values}})
@@ -93,7 +134,7 @@ class QueryBuilder:
         if values:
             self._post_filter.append({"terms": {field: values}})
         return self
-        
+
     def add_aggregation(self, name: str, agg_dsl: dict) -> "QueryBuilder":
         """Add an aggregation to the query."""
         self._aggregations[name] = agg_dsl
@@ -121,7 +162,11 @@ class QueryBuilder:
             bool_query["filter"] = self._filter
         if self._should:
             bool_query["should"] = self._should
-            bool_query["minimum_should_match"] = self._minimum_should_match if self._minimum_should_match else (1 if not self._must else 0)
+            # Optional should boosts: do not require them when must is present
+            if self._minimum_should_match:
+                bool_query["minimum_should_match"] = self._minimum_should_match
+            elif not self._must:
+                bool_query["minimum_should_match"] = 1
 
         return {"bool": bool_query} if bool_query else {"match_all": {}}
 
@@ -132,22 +177,22 @@ class QueryBuilder:
         Otherwise it uses build_query().
         """
         query_dsl = final_query if final_query else self.build_query()
-        
+
         body = {
             "query": query_dsl,
             "from": self._from_idx,
             "size": self._size,
         }
-        
+
         if self._sort:
             body["sort"] = self._sort
-            
+
         if self._source:
             body["_source"] = self._source
-            
+
         if self._aggregations:
             body["aggs"] = self._aggregations
-            
+
         if self._post_filter:
             if len(self._post_filter) == 1:
                 body["post_filter"] = self._post_filter[0]

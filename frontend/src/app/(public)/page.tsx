@@ -11,7 +11,6 @@ import {
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
-  Clock,
   Cpu,
   Flame,
   Gift,
@@ -25,9 +24,7 @@ import {
   Sparkles,
   Star,
   Store,
-  TrendingUp,
-  Truck,
-  Zap
+  TrendingUp
 } from "lucide-react";
 import { hotKeywords } from "@/store/initial-state";
 import { Button } from "@/components/ui/button";
@@ -39,32 +36,6 @@ import { fetchRecommendedProducts, fetchPublicProducts } from "@/services/produc
 import { useMarketplaceStore } from "@/store/use-marketplace-store";
 import { BRAND_NAME } from "@/lib/constants";
 import type { Product, ProductVariant, Shop } from "@/types/models";
-import { sendChatMessage } from "@/services/chat-ai-api";
-
-/** Đếm ngược tới nửa đêm (end-of-day flash sale) */
-function FlashCountdown() {
-  const getSecondsToMidnight = () => {
-    const now = new Date();
-    const midnight = new Date(now);
-    midnight.setHours(24, 0, 0, 0);
-    return Math.max(0, Math.floor((midnight.getTime() - now.getTime()) / 1000));
-  };
-  const [secs, setSecs] = useState(getSecondsToMidnight);
-  useEffect(() => {
-    const id = setInterval(() => setSecs(getSecondsToMidnight()), 1000);
-    return () => clearInterval(id);
-  }, []);
-  const h = String(Math.floor(secs / 3600)).padStart(2, "0");
-  const m = String(Math.floor((secs % 3600) / 60)).padStart(2, "0");
-  const s = String(secs % 60).padStart(2, "0");
-  return (
-    <>
-      <span suppressHydrationWarning className="rounded-lg bg-amber-100 px-2 py-1 border border-amber-200 shadow-2xs">{h}</span> :
-      <span suppressHydrationWarning className="rounded-lg bg-amber-100 px-2 py-1 border border-amber-200 shadow-2xs">{m}</span> :
-      <span suppressHydrationWarning className="rounded-lg bg-amber-100 px-2 py-1 border border-amber-200 shadow-2xs animate-pulse">{s}</span>
-    </>
-  );
-}
 
 const heroSlides = [
   {
@@ -171,7 +142,6 @@ const heroSlides = [
 export default function HomePageComponent() {
   const store = useMarketplaceStore();
   const router = useRouter();
-  const { showToast } = store;
 
   const [bestSellers, setBestSellers] = useState<Product[]>([]);
   const [newest, setNewest] = useState<Product[]>([]);
@@ -179,9 +149,6 @@ export default function HomePageComponent() {
   const [localShops, setLocalShops] = useState<Shop[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"recommended" | "newest">("recommended");
-  const [aiPrompt, setAiPrompt] = useState("");
-  const [aiResponse, setAiResponse] = useState<string | null>(null);
-  const [isLoadingAi, setIsLoadingAi] = useState(false);
 
   const [currentHeroSlide, setCurrentHeroSlide] = useState(0);
   const [isAutoPlaying, setIsAutoPlaying] = useState(true);
@@ -253,23 +220,6 @@ export default function HomePageComponent() {
   const heroProduct = activeBestSellers[0];
   const heroShop = heroProduct ? localShops.find((shop) => shop.id === heroProduct.sellerId) : undefined;
   const heroVariant = heroProduct ? localVariants.find((v) => v.productId === heroProduct.id) : undefined;
-
-  const handleAiSearch = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!aiPrompt.trim()) return;
-    setIsLoadingAi(true);
-    setAiResponse(null);
-    try {
-      const res = await sendChatMessage(aiPrompt);
-      setAiResponse(res.reply || `Đã phân tích: ${aiPrompt}`);
-    } catch (error) {
-      console.error(error);
-      showToast("Gặp lỗi khi gọi AI. Vui lòng thử lại sau.", "danger");
-      setAiResponse("Xin lỗi, hệ thống AI đang bận. Vui lòng thử lại sau.");
-    } finally {
-      setIsLoadingAi(false);
-    }
-  };
 
   return (
     <div className="min-h-screen space-y-8 bg-canvas text-slate-900 pb-20 pt-4 px-4 sm:px-6 lg:px-8">
@@ -494,98 +444,6 @@ export default function HomePageComponent() {
             ) : (
               <div className="flex aspect-square items-center justify-center text-xs text-slate-400">
                 Chưa có sản phẩm
-              </div>
-            )}
-          </div>
-        </div>
-      </section>
-
-      {/* SECTION 2: FLASH DEALS TICKER & AI ASSISTANT BENTO */}
-      <section className="mx-auto max-w-7xl animate-fade-in-up">
-        <div className="grid gap-4 md:grid-cols-12">
-          {/* BENTO BOX 3: FLASH DEALS COUNTDOWN TICKER (7 cols) */}
-          <div className="bento-card bento-card-amber rounded-3xl p-6 md:col-span-7 flex flex-col justify-between border-orange-200/80 bg-white hover-lift">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <Zap className="h-5 w-5 fill-red-500 text-red-500 animate-bounce-subtle" />
-                <span className="font-heading text-lg font-black uppercase tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-red-500 to-orange-500">
-                  Flash Deals Giờ Vàng
-                </span>
-              </div>
-
-              <div className="flex items-center gap-1.5 font-mono text-xs font-extrabold text-red-500">
-                <Clock className="h-4 w-4 text-red-500 animate-spin-slow" />
-                <FlashCountdown />
-              </div>
-            </div>
-
-            <p className="mt-3 text-xs leading-relaxed text-slate-600">
-              Săn mã giảm giá sốc đến 50% cùng ưu đãi Miễn phí vận chuyển toàn quốc cho mọi đơn hàng từ 199k!
-            </p>
-
-            <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-4">
-              <div className="flex flex-wrap items-center gap-4 text-xs font-semibold text-slate-700">
-                <div className="flex items-center gap-1.5">
-                  <ShieldCheck className="h-4 w-4 text-emerald-600" />
-                  <span>Chính hãng 100%</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <Truck className="h-4 w-4 text-orange-500" />
-                  <span>Giao thần tốc 2H</span>
-                </div>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => showToast("Chức năng Săn Deal Giờ Vàng đang được chuẩn bị!", "info")}
-                className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-red-500 to-orange-500 hover:from-red-600 hover:to-orange-600 px-4 py-2 text-xs font-extrabold text-white shadow-md shadow-orange-500/20 transition-all active:scale-95 cursor-pointer"
-              >
-                <span>Săn Deal Ngay</span>
-                <ChevronRight className="h-3.5 w-3.5" />
-              </button>
-            </div>
-          </div>
-
-          {/* BENTO BOX 4: AI ASSISTANT SPOTLIGHT (5 cols) */}
-          <div className="bento-card bento-card-violet rounded-3xl p-6 md:col-span-5 flex flex-col justify-between border-indigo-200 bg-white/90 hover-lift">
-            <div>
-              <div className="flex items-center gap-2 text-indigo-600">
-                <Bot className="h-5 w-5 animate-pulse" />
-                <span className="font-heading text-lg font-bold text-slate-900">Shepoo AI Assistant</span>
-              </div>
-              <p className="mt-2 text-xs text-slate-500">Nhập nhu cầu của bạn để AI gợi ý sản phẩm tối ưu nhất:</p>
-            </div>
-
-            <form onSubmit={handleAiSearch} className="mt-4 flex gap-2">
-              <input
-                type="text"
-                value={aiPrompt}
-                onChange={(e) => setAiPrompt(e.target.value)}
-                placeholder="VD: Tai nghe Bluetooth pin trâu..."
-                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2 text-xs text-slate-900 placeholder-slate-400 focus:border-indigo-500 focus:bg-white focus:outline-none transition-all duration-200"
-              />
-              <button
-                type="submit"
-                disabled={isLoadingAi}
-                className="shrink-0 rounded-xl bg-indigo-600 px-4 py-2 text-xs font-bold text-white transition-all duration-200 hover:bg-indigo-500 active:scale-95 shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {isLoadingAi ? "Đang nghĩ..." : "Hỏi AI"}
-              </button>
-            </form>
-
-            {(aiResponse || isLoadingAi) && (
-              <div className="mt-3 animate-scale-in rounded-xl border border-indigo-200 bg-indigo-50 p-3 text-xs font-medium text-indigo-900 shadow-2xs">
-                {isLoadingAi && !aiResponse ? (
-                  <div className="flex items-center gap-2">
-                    <div className="h-3 w-3 rounded-full bg-indigo-400 animate-bounce"></div>
-                    <div className="h-3 w-3 rounded-full bg-indigo-400 animate-bounce" style={{ animationDelay: '0.1s' }}></div>
-                    <div className="h-3 w-3 rounded-full bg-indigo-400 animate-bounce" style={{ animationDelay: '0.2s' }}></div>
-                  </div>
-                ) : (
-                  <div className="prose prose-sm prose-indigo max-w-none">
-                    {aiResponse}
-                  </div>
-                )}
               </div>
             )}
           </div>
