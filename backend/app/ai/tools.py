@@ -26,7 +26,7 @@ from models.catalog import ProductVariant
 from models.catalog import ProductCategory
 from models.catalog import Category
 from models.seller import SellerProfile
-from repositories import product_repository
+import repositories.catalog.product_repository as product_repository
 
 
 def get_agent_tools(db: AsyncSession) -> List[Any]:

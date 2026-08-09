@@ -3,7 +3,7 @@ from collections.abc import Awaitable, Callable
 from fastapi import HTTPException, Request, Response, status
 from fastapi.responses import JSONResponse
 
-from services import jwt_service
+import services.auth.jwt_service as jwt_service
 
 
 async def validate_auth_cookie_middleware(

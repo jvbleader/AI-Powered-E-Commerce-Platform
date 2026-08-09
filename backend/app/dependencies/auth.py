@@ -5,9 +5,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.database import DBSession, get_db
 from models.user import User
-from repositories import user_repositoriy
-from services import jwt_service
-from repositories.user_role_repository import get_role_list_by_user_id
+import repositories.user.user_repository as user_repository
+import services.auth.jwt_service as jwt_service
+from repositories.user.user_role_repository import get_role_list_by_user_id
 
 
 async def get_current_user(
@@ -30,7 +30,7 @@ async def get_current_user(
             detail="Token không phải là access token.",
         )
 
-    user = await user_repositoriy.get_user_by_public_id(payload["sub"], db)
+    user = await user_repository.get_user_by_public_id(payload["sub"], db)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Người dùng không tồn tại."

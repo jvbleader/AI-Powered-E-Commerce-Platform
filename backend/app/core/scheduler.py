@@ -2,8 +2,8 @@ import asyncio
 import logging
 from datetime import datetime
 from core.database import AsyncSessionLocal
-from services.statistics_service import recalculate_all_statistics
-from services.order_service import process_expired_orders
+from services.admin.statistics_service import recalculate_all_statistics
+from services.order.order_service import process_expired_orders
 
 logger = logging.getLogger("scheduler")
 

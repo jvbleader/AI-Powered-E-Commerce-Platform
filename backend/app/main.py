@@ -11,19 +11,18 @@ from fastapi.middleware.cors import CORSMiddleware
 APP_DIR = Path(__file__).resolve().parent
 BACKEND_DIR = APP_DIR.parent
 PROJECT_DIR = BACKEND_DIR.parent
-SERVICES_DIR = APP_DIR / "services"
 
-for path in (PROJECT_DIR, BACKEND_DIR, APP_DIR, SERVICES_DIR):
+for path in (PROJECT_DIR, BACKEND_DIR, APP_DIR):
     path_text = str(path)
     if path_text not in sys.path:
         sys.path.insert(0, path_text)
 
-from api.auth_api import router as auth_router
-from api.seller_api import router as seller_router
-from api.seller_product_api import router as seller_product_router
-from api.seller_order_api import router as seller_order_router
-from api.admin_api import router as admin_router
-from api.product_api import router as product_router
+from api.auth.auth_api import router as auth_router
+from api.seller.seller_api import router as seller_router
+from api.seller.seller_product_api import router as seller_product_router
+from api.seller.seller_order_api import router as seller_order_router
+from api.admin.admin_api import router as admin_router
+from api.catalog.product_api import router as product_router
 from middleware.auth_middleware import validate_auth_cookie_middleware
 
 
@@ -41,10 +40,10 @@ logging.basicConfig(
 from contextlib import asynccontextmanager
 from core.scheduler import start_scheduler, stop_scheduler
 from core.elasticsearch import close_es_client
-import services.search_service as search_svc
-from services.search_helpers import fetch_all_active_products_for_indexing
+import services.search.search_service as search_svc
+from services.search.search_helpers import fetch_all_active_products_for_indexing
 from core.database import AsyncSessionLocal
-from services.websocket_manager import manager
+from services.common.websocket_manager import manager
 
 
 @asynccontextmanager
@@ -83,20 +82,20 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-from api.category_api import router as category_router
-from api.cart_api import router as cart_router
-from api.order_api import router as order_router
-from api.payment_api import router as payment_router
-from api.user_address_api import router as user_address_router
-from api.chat_ai_api import router as chat_ai_router
-from api.review_api import router as review_router
-from api.violation_report_api import router as violation_report_router
-from api.support_chat_api import router as support_chat_router
-from api.seller_chat_api import router as seller_chat_router
-from api.notification_api import router as notifications_router
-from api.search_api import router as search_router
+from api.catalog.category_api import router as category_router
+from api.cart.cart_api import router as cart_router
+from api.order.order_api import router as order_router
+from api.payment.payment_api import router as payment_router
+from api.user.user_address_api import router as user_address_router
+from api.chat.chat_ai_api import router as chat_ai_router
+from api.catalog.review_api import router as review_router
+from api.moderation.violation_report_api import router as violation_report_router
+from api.chat.support_chat_api import router as support_chat_router
+from api.chat.seller_chat_api import router as seller_chat_router
+from api.engagement.notification_api import router as notifications_router
+from api.search.search_api import router as search_router
 
-from api.upload_api import router as upload_router
+from api.common.upload_api import router as upload_router
 
 app.include_router(auth_router)
 app.include_router(seller_router)
