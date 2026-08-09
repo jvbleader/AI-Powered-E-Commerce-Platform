@@ -108,10 +108,10 @@ export function ChatMediaHiddenInputs({
   disabled,
   fileAccept = "image/*,video/*",
 }: {
-  imageInputRef: React.RefObject<HTMLInputElement>;
-  videoInputRef: React.RefObject<HTMLInputElement>;
-  fileInputRef?: React.RefObject<HTMLInputElement>;
-  addInputRef: React.RefObject<HTMLInputElement>;
+  imageInputRef: React.RefObject<HTMLInputElement | null>;
+  videoInputRef: React.RefObject<HTMLInputElement | null>;
+  fileInputRef?: React.RefObject<HTMLInputElement | null>;
+  addInputRef: React.RefObject<HTMLInputElement | null>;
   onImageChange: (event: React.ChangeEvent<HTMLInputElement>) => void;
   onVideoChange: (event: React.ChangeEvent<HTMLInputElement>) => void;
   onFileChange?: (event: React.ChangeEvent<HTMLInputElement>) => void;
@@ -122,7 +122,7 @@ export function ChatMediaHiddenInputs({
   return (
     <>
       <input
-        ref={imageInputRef}
+        ref={imageInputRef as React.RefObject<HTMLInputElement>}
         type="file"
         accept="image/*"
         multiple
@@ -131,7 +131,7 @@ export function ChatMediaHiddenInputs({
         disabled={disabled}
       />
       <input
-        ref={videoInputRef}
+        ref={videoInputRef as React.RefObject<HTMLInputElement>}
         type="file"
         accept="video/*"
         multiple
@@ -141,7 +141,7 @@ export function ChatMediaHiddenInputs({
       />
       {fileInputRef && onFileChange && (
         <input
-          ref={fileInputRef}
+          ref={fileInputRef as React.RefObject<HTMLInputElement>}
           type="file"
           accept={fileAccept.includes("application/pdf") ? fileAccept : "application/pdf,.pdf,.docx,.txt,text/plain"}
           multiple
@@ -151,7 +151,7 @@ export function ChatMediaHiddenInputs({
         />
       )}
       <input
-        ref={addInputRef}
+        ref={addInputRef as React.RefObject<HTMLInputElement>}
         type="file"
         accept={fileAccept}
         multiple

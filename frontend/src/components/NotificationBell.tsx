@@ -230,13 +230,11 @@ export function NotificationBell() {
       >
         <Bell className="h-4 w-4 shrink-0" aria-hidden="true" />
         <span className="whitespace-nowrap">Thông báo</span>
-        <span
-          className={`min-w-[1.25rem] rounded-full bg-emerald-600 px-2 py-0.5 text-center text-[10px] font-black text-white shadow-sm ${
-            unreadCount > 0 ? "animate-bounce-subtle" : "invisible"
-          }`}
-        >
-          {unreadCount > 99 ? "99+" : unreadCount || 0}
-        </span>
+        {unreadCount > 0 && (
+          <span className="min-w-[1.25rem] animate-bounce-subtle rounded-full bg-emerald-600 px-2 py-0.5 text-center text-[10px] font-black text-white shadow-sm">
+            {unreadCount > 99 ? "99+" : unreadCount}
+          </span>
+        )}
       </a>
 
       {isOpen && (

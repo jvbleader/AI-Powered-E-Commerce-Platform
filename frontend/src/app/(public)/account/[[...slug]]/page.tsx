@@ -6,7 +6,6 @@ import { ArrowLeft, Bell, CreditCard, LogOut, Plus, Store, Star, Copy, Check, Ex
 import { createReviewApi, fetchMyReviewsApi, type UserReviewResponse } from "@/services/review-api";
 import { Button } from "@/components/ui/button";
 import { ImageUpload } from "@/components/ui/image-upload";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from "@/components/ui/dialog";
 import { Field, Input, Select, Textarea } from "@/components/ui/input";
 import { Panel, Section } from "@/components/ui/containers";
 import { StatusBadge } from "@/components/ui/badge";

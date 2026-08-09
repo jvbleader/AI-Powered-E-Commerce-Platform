@@ -109,7 +109,7 @@ function SellerSessionSidebarInner({
                   isActive={activeShopId === session.shop_id}
                   draftPreview={
                     session.shop_id && activeShopId !== session.shop_id
-                      ? draftTextsRef.current[session.shop_id] ?? null
+                      ? draftTextsRef.current?.[session.shop_id] ?? null
                       : null
                   }
                   onSelect={onSelectShop}

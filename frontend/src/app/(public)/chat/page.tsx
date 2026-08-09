@@ -1,11 +1,10 @@
 "use client";
 
-import { useEffect } from "react";
+import { Suspense, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Loader2 } from "lucide-react";
 
-/** Redirect legacy /chat URLs to /support or home (seller widget deep-links). */
-export default function ChatRedirectPage() {
+function ChatRedirectContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -35,5 +34,20 @@ export default function ChatRedirectPage() {
     <div className="flex h-screen items-center justify-center">
       <Loader2 className="h-8 w-8 animate-spin text-slate-300" />
     </div>
+  );
+}
+
+/** Redirect legacy /chat URLs to /support or home (seller widget deep-links). */
+export default function ChatRedirectPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex h-screen items-center justify-center">
+          <Loader2 className="h-8 w-8 animate-spin text-slate-300" />
+        </div>
+      }
+    >
+      <ChatRedirectContent />
+    </Suspense>
   );
 }

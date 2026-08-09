@@ -20,6 +20,7 @@ export default function PaymentPageClient({ paymentCode }: PaymentPageClientProp
   const store = useMarketplaceStore();
   const { showToast } = store;
   const ready = store.ready;
+  const fetchPaymentDetail = useMarketplaceStore((s) => s.fetchPaymentDetail);
   const [resuming, setResuming] = useState(false);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
@@ -35,16 +36,11 @@ export default function PaymentPageClient({ paymentCode }: PaymentPageClientProp
 
     if (!ready) return;
 
-    if (payment) {
-      setLoading(false);
-      setNotFound(false);
-      return;
-    }
-
     let cancelled = false;
     setLoading(true);
     setNotFound(false);
-    store.fetchPaymentDetail(paymentCode).then((result) => {
+    // Luôn fetch lại từ API — store có thể còn PENDING sau khi IPN đã PAID.
+    fetchPaymentDetail(paymentCode).then((result) => {
       if (cancelled) return;
       setLoading(false);
       setNotFound(!result.ok);
@@ -53,7 +49,7 @@ export default function PaymentPageClient({ paymentCode }: PaymentPageClientProp
     return () => {
       cancelled = true;
     };
-  }, [paymentCode, ready, payment, store]);
+  }, [paymentCode, ready, fetchPaymentDetail]);
 
   if (!paymentCode || notFound) return <NotFoundPage />;
 
@@ -105,7 +101,7 @@ export default function PaymentPageClient({ paymentCode }: PaymentPageClientProp
             <h3 className="font-bold">Hành động</h3>
             <div className="mt-3 grid gap-2">
               {isVNPay && payment.paymentStatus === "PENDING" ? (
-                <p className="rounded-panel border border-line bg-neutral-50 p-3 text-sm text-muted dark:bg-neutral-800/50">
+                <p className="rounded-panel border border-amber-200 bg-amber-50 p-3 text-sm leading-6 text-amber-950">
                   Thanh toán VNPay chưa hoàn tất. Bạn có thể tiếp tục thanh toán nếu giao dịch vẫn còn hiệu lực.
                 </p>
               ) : null}

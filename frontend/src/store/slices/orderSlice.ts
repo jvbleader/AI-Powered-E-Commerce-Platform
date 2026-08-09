@@ -158,11 +158,6 @@ export const createOrderSlice: StateCreator<MarketplaceStore, [], [], any> = (se
         return { ok: false, message: "Bạn cần đăng nhập.", payment: undefined };
       }
 
-      const cached = get().state.payments.find((item) => item.paymentCode === paymentCode);
-      if (cached) {
-        return { ok: true, payment: cached };
-      }
-
       try {
         const raw = await paymentApi.getPaymentDetail(paymentCode);
         const payment: Payment = {
@@ -181,13 +176,30 @@ export const createOrderSlice: StateCreator<MarketplaceStore, [], [], any> = (se
           failedAt: raw.failed_at ?? undefined,
           cancelledAt: raw.cancelled_at ?? undefined,
         };
+        const linkedCodes = new Set(payment.orderCodes);
 
         setState((prev: AppState) => ({
           ...prev,
           payments: prev.payments.some((item) => item.paymentCode === payment.paymentCode)
             ? prev.payments.map((item) => (item.paymentCode === payment.paymentCode ? payment : item))
             : [payment, ...prev.payments],
+          // Đồng bộ paymentStatus đơn liên kết sau IPN (tránh giữ PENDING cũ trong store).
+          orders: prev.orders.map((order) =>
+            linkedCodes.has(order.orderCode)
+              ? {
+                  ...order,
+                  paymentStatus:
+                    payment.paymentStatus === "PAID" ||
+                    payment.paymentStatus === "FAILED" ||
+                    payment.paymentStatus === "CANCELLED"
+                      ? payment.paymentStatus
+                      : order.paymentStatus,
+                }
+              : order
+          ),
         }));
+        // Lần sau vào /account/orders sẽ fetch lại (không force mỗi lần mount → tránh spam).
+        fetchedCustomerOrdersStatusRef.current = "idle";
 
         return { ok: true, payment };
       } catch (error) {

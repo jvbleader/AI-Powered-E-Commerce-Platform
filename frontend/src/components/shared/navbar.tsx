@@ -286,9 +286,10 @@ export function MarketplaceHeader() {
               </div>
             </a>
 
-            {/* SEARCH — cột phải width cố định nên flex-1 ổn định, không nháy size */}
+            {/* SEARCH + ACTION — khoảng cách search ↔ thông báo = 5px */}
+            <div className="flex min-w-0 flex-1 items-center gap-[5px]">
             <div className="min-w-0 flex-1" ref={searchContainerRef}>
-              <div className="relative w-full max-w-[calc(36rem+20px)] lg:max-w-[calc(42rem+20px)]">
+              <div className="relative w-full">
                 <SearchField
                   inputRef={searchInputRef}
                   value={query}
@@ -421,8 +422,8 @@ export function MarketplaceHeader() {
               </div>
             </div>
 
-            {/* ACTION NAV LINKS — width cố định để flex-1 search không đổi kích thước */}
-            <div className="hidden w-[360px] shrink-0 items-center justify-end gap-1 lg:flex">
+            {/* ACTION NAV — width theo nội dung; có badge thì nở, search flex-1 tự thu */}
+            <div className="hidden shrink-0 items-center justify-end gap-1 lg:flex">
               {/* NOTIFICATION BELL */}
               <NotificationBell />
 
@@ -446,13 +447,11 @@ export function MarketplaceHeader() {
                 >
                   <ShoppingCart className="h-4 w-4 shrink-0" aria-hidden="true" />
                   <span className="whitespace-nowrap">Giỏ hàng</span>
-                  <span
-                    className={`min-w-[1.25rem] rounded-full bg-emerald-600 px-2 py-0.5 text-center text-[10px] font-black text-white shadow-sm ${
-                      selectedCount > 0 ? "animate-bounce-subtle" : "invisible"
-                    }`}
-                  >
-                    {selectedCount > 0 ? selectedCount : 0}
-                  </span>
+                  {selectedCount > 0 && (
+                    <span className="min-w-[1.25rem] animate-bounce-subtle rounded-full bg-emerald-600 px-2 py-0.5 text-center text-[10px] font-black text-white shadow-sm">
+                      {selectedCount}
+                    </span>
+                  )}
                 </a>
 
                 {/* CART HOVER POPOVER */}
@@ -605,6 +604,7 @@ export function MarketplaceHeader() {
                   </a>
                 </div>
               )}
+            </div>
             </div>
           </div>
 

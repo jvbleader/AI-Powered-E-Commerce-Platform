@@ -65,6 +65,24 @@ services:
       INIT_DB_ON_START: "false"
     entrypoint: ["python", "scripts/migrate_db.py"]
 
+  # One-shot: load seed into MySQL using the official mysql client image.
+  db-seed:
+    image: mysql:8.0
+    restart: "no"
+    depends_on:
+      db-migrate:
+        condition: service_completed_successfully
+    environment:
+      MYSQL_HOST: ${MYSQL_HOST}
+      MYSQL_PORT: ${MYSQL_PORT}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      SEED_SQL_PATH: /seed/backup.sql
+    volumes:
+      - ./database/seed:/seed:ro
+    entrypoint: ["/bin/bash", "/seed/seed.sh"]
+
   backend:
     image: ai-ecommerce-backend:prod
     build:
@@ -72,7 +90,7 @@ services:
       dockerfile: Dockerfile.prod
     restart: unless-stopped
     depends_on:
-      db-migrate:
+      db-seed:
         condition: service_completed_successfully
       redis:
         condition: service_healthy

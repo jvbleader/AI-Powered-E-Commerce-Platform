@@ -89,7 +89,6 @@ export default function ProductForm({ productId }: { productId?: string }) {
       setBrand(editing.brand ?? "");
       setOrigin(editing.origin ?? "Việt Nam");
       setWarranty(editing.warranty ?? "");
-      setStatus(editing.status ?? "ACTIVE");
       setCategoryIds(editing.categoryIds ?? []);
       setImageUrl(editing.thumbnailUrl || "https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=900&q=80");
       

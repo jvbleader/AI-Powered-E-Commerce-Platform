@@ -1,3 +1,4 @@
+import logging
 from typing import Annotated, Optional
 
 from fastapi import APIRouter, Query, Request, status
@@ -21,6 +22,7 @@ from schemas.payment.payment_schema import (
 import services.payment.payment_service as payment_service
 import services.payment.vnpay_payment_service as vnpay_payment_service
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/payments", tags=["Payment"])
 
 
@@ -147,6 +149,12 @@ async def vnpay_ipn(request: Request, db: DBSession):
             dict(request.query_params), db
         )
         await db.commit()
+        logger.info(
+            "VNPay IPN result txn_ref=%s RspCode=%s Message=%s",
+            dict(request.query_params).get("vnp_TxnRef"),
+            result.get("RspCode"),
+            result.get("Message"),
+        )
         return VNPayIpnResponse(**result)
     except Exception:
         await db.rollback()

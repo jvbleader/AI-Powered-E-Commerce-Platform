@@ -1,16 +1,18 @@
 "use client";
 
-import { useMemo } from "react";
+import { Suspense, useEffect, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { CheckCircle2, Loader2, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Panel } from "@/components/ui/containers";
 import { useMarketplaceStore } from "@/store/use-marketplace-store";
 
-export default function PaymentResultPage() {
+function PaymentResultContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const store = useMarketplaceStore();
+  const ready = useMarketplaceStore((s) => s.ready);
+  const payments = useMarketplaceStore((s) => s.state.payments);
+  const fetchPaymentDetail = useMarketplaceStore((s) => s.fetchPaymentDetail);
 
   const status = searchParams.get("status");
   const paymentCode = searchParams.get("payment_code") ?? "";
@@ -18,12 +20,15 @@ export default function PaymentResultPage() {
   const isSuccess = status === "success";
 
   const payment = useMemo(
-    () => store.state.payments.find((item) => item.paymentCode === paymentCode),
-    [store.state.payments, paymentCode]
+    () => payments.find((item) => item.paymentCode === paymentCode),
+    [payments, paymentCode]
   );
 
-  // Return URL chỉ mang tín hiệu hiển thị từ VNPay — IPN mới cập nhật DB.
-  // Không ghi đè local state thành PAID/FAILED để tránh lệch với backend.
+  // Đồng bộ payment từ API; cache đơn sẽ bị invalidate trong fetchPaymentDetail.
+  useEffect(() => {
+    if (!paymentCode || !ready) return;
+    void fetchPaymentDetail(paymentCode);
+  }, [paymentCode, ready, fetchPaymentDetail]);
 
   if (!paymentCode) {
     return (
@@ -74,5 +79,20 @@ export default function PaymentResultPage() {
         </div>
       </Panel>
     </main>
+  );
+}
+
+export default function PaymentResultPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="mx-auto max-w-lg px-4 py-16 text-center">
+          <Loader2 className="mx-auto h-10 w-10 animate-spin text-primary" />
+          <p className="mt-4 text-sm text-muted">Đang xử lý kết quả thanh toán...</p>
+        </main>
+      }
+    >
+      <PaymentResultContent />
+    </Suspense>
   );
 }

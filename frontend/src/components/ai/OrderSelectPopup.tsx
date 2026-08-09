@@ -4,6 +4,7 @@ import { apiFetch } from '@/services/api';
 
 type Order = {
   id: string;
+  order_code?: string;
   total_amount: number;
   status: string;
   created_at: string;
@@ -11,6 +12,8 @@ type Order = {
     product_name: string;
     quantity: number;
     price: number;
+    thumbnail_url?: string;
+    product_image_snapshot?: string;
   }[];
 };
 
