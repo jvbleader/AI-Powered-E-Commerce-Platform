@@ -72,6 +72,7 @@ class SellerConversationListResponse(BaseModel):
     is_muted: bool = False
     shop_name: Optional[str]
     shop_avatar: Optional[str]
+    shop_slug: Optional[str] = None
     customer_name: Optional[str]
     customer_avatar: Optional[str]
 
@@ -175,6 +176,7 @@ def _serialize_conversation_list_item(
         "is_muted": bool(settings.is_muted) if settings else False,
         "shop_name": conv.shop.shop_name if conv.shop else "Shop",
         "shop_avatar": conv.shop.shop_logo_url if conv.shop else None,
+        "shop_slug": conv.shop.shop_slug if conv.shop else None,
         "customer_name": conv.customer.full_name if conv.customer else "Khách hàng",
         "customer_avatar": conv.customer.avatar_url if conv.customer else None,
     }

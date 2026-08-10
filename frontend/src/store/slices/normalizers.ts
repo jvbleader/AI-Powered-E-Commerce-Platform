@@ -117,6 +117,7 @@ export const normalizeBackendOrder = (
     orderCode: backendOrder.order_code,
     userId: backendOrder.user?.public_id || userId,
     sellerId: sellerId,
+    shopDbId: backendOrder.seller?.id,
     shopName,
     shopSlug,
     orderStatus: backendOrder.order_status,
@@ -144,6 +145,7 @@ export const normalizeBackendOrder = (
     sellerNameSnapshot: item.seller_name_snapshot,
     skuSnapshot: item.sku_snapshot || "",
     unitPrice: Number(item.unit_price),
+    originalPriceSnapshot: item.original_price_snapshot ? Number(item.original_price_snapshot) : undefined,
     quantity: item.quantity,
     subtotal: Number(item.subtotal),
     isReviewed: Boolean(item.is_reviewed)

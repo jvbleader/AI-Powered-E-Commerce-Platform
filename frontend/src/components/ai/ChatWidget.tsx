@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { Bot, Sparkles, X, Plus, MessageSquareText, ArrowLeft, ChevronDown } from "lucide-react";
+import Link from "next/link";
 import { useAIChatStream } from "@/hooks/useAIChatStream";
 import { ChatMessageList } from "./ChatMessageList";
 import { ReplyPreviewContent } from "./ReplyPreviewContent";
@@ -25,6 +26,7 @@ type PendingShopInfo = {
   id: number;
   name: string;
   avatar: string | null;
+  shop_slug?: string | null;
 };
 
 const SUGGESTIONS = [
@@ -311,6 +313,9 @@ export function ChatWidget() {
       if (detail?.productDraft) {
         setProductDraft(detail.productDraft);
       }
+      if (detail?.orderDraft) {
+        setOrderDraft(detail.orderDraft);
+      }
     };
     window.addEventListener('open-chat-widget', handleOpenChat);
     return () => window.removeEventListener('open-chat-widget', handleOpenChat);
@@ -418,7 +423,7 @@ export function ChatWidget() {
     }
 
     if (orderDraft) {
-      const orderCode = orderDraft.id || orderDraft.order_code;
+      const orderCode = orderDraft.orderCode || orderDraft.order_code || orderDraft.id;
       if (trimmed) {
         await sendSellerMessage("[Đơn hàng]", "ORDER", String(orderCode));
         await sendSellerMessage(trimmed, undefined, undefined, replyingToMessage?.id);
@@ -655,11 +660,13 @@ export function ChatWidget() {
                       <button className="sm:hidden" onClick={() => setActiveShopId(null)}>
                          <ArrowLeft className="w-5 h-5 text-slate-500" />
                       </button>
-                      <img src={activeShopDisplayAvatar} className="w-10 h-10 rounded-full border border-slate-200 object-cover" />
-                      <div>
-                        <h3 className="font-bold text-slate-900 text-base leading-none">{activeShopDisplayName}</h3>
-                        <p className="text-xs text-slate-500 mt-1">Sẵn sàng hỗ trợ</p>
-                      </div>
+                      <Link href={`/shops/${currentShopSession?.shop_slug || pendingShopInfo?.shop_slug || activeShopId}`} className="flex items-center gap-3 hover:opacity-80 transition-opacity">
+                        <img src={activeShopDisplayAvatar} className="w-10 h-10 rounded-full border border-slate-200 object-cover" />
+                        <div>
+                          <h3 className="font-bold text-slate-900 text-base leading-none">{activeShopDisplayName}</h3>
+                          <p className="text-xs text-slate-500 mt-1">Sẵn sàng hỗ trợ</p>
+                        </div>
+                      </Link>
                     </div>
                   </div>
                   
@@ -734,10 +741,10 @@ export function ChatWidget() {
                          <div>
                             <p className="text-xs text-slate-500 mb-2">Bạn đang thắc mắc về đơn hàng này</p>
                             <div className="flex gap-3 bg-white p-2 rounded-lg border border-slate-200 shadow-sm items-center">
-                               <img src={orderDraft.items?.[0]?.thumbnail_url || orderDraft.items?.[0]?.product_image_snapshot || '/placeholder.png'} className="w-12 h-12 rounded object-cover border border-slate-100" />
+                               <img src={orderDraft.items?.[0]?.productImageSnapshot || orderDraft.items?.[0]?.thumbnail_url || orderDraft.items?.[0]?.product_image_snapshot || '/placeholder.png'} className="w-12 h-12 rounded object-cover border border-slate-100" />
                                <div>
-                                 <p className="text-sm font-medium text-slate-900 line-clamp-1">Đơn hàng #{(orderDraft.id || orderDraft.order_code || '').slice(0, 8).toUpperCase()}</p>
-                                 <p className="text-sm text-emerald-600 font-bold">{orderDraft.total_amount?.toLocaleString('vi-VN')}đ</p>
+                                 <p className="text-sm font-medium text-slate-900 line-clamp-1">Đơn hàng #{(orderDraft.orderCode || orderDraft.order_code || orderDraft.id || '').slice(0, 8).toUpperCase()}</p>
+                                 <p className="text-sm text-emerald-600 font-bold">{(orderDraft.totalAmount || orderDraft.total_amount || 0).toLocaleString('vi-VN')}đ</p>
                                </div>
                                <button 
                                  type="button"

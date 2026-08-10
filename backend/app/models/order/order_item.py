@@ -51,6 +51,9 @@ class OrderItem(Base):
     seller_name_snapshot: Mapped[str] = mapped_column(String(150), nullable=False)
     sku_snapshot: Mapped[str | None] = mapped_column(String(100), nullable=True)
     unit_price: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    original_price_snapshot: Mapped[Decimal | None] = mapped_column(
+        Numeric(12, 2), nullable=True
+    )
     quantity: Mapped[int] = mapped_column(mysql.INTEGER(unsigned=True), nullable=False)
     subtotal: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
     created_at: Mapped[datetime] = mapped_column(

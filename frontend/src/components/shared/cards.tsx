@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Check, CheckCircle2, Clock, Minus, PackageCheck, Plus, ShoppingBag, Star, Store, Truck, XCircle } from "lucide-react";
 import { Button, IconButton } from "@/components/ui/button";
 import Link from "next/link";
@@ -191,27 +191,67 @@ export function QuantityStepper({
   value,
   onChange,
   min = 1,
-  max = 99
+  max = 99,
+  disabled = false
 }: {
   value: number;
   onChange: (value: number) => void;
   min?: number;
   max?: number;
+  disabled?: boolean;
 }) {
+  const [inputValue, setInputValue] = useState(String(value));
+
+  useEffect(() => {
+    setInputValue(String(value));
+  }, [value]);
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (disabled) return;
+    const text = e.target.value.replace(/[^0-9]/g, "");
+    setInputValue(text);
+    if (text !== "") {
+      let num = parseInt(text, 10);
+      if (num > max) {
+        num = max;
+        setInputValue(String(num));
+      }
+      onChange(num);
+    }
+  };
+
+  const handleBlur = () => {
+    if (disabled) return;
+    let num = parseInt(inputValue, 10);
+    if (isNaN(num) || num < min) num = min;
+    if (num > max) num = max;
+    setInputValue(String(num));
+    onChange(num);
+  };
+
   return (
-    <div className="inline-flex h-10 items-center overflow-hidden rounded-panel border border-line bg-white">
+    <div className={`inline-flex h-10 items-center overflow-hidden rounded-panel border border-line bg-white ${disabled ? 'opacity-50 cursor-not-allowed bg-slate-50' : ''}`}>
       <IconButton
         aria-label="Giảm số lượng"
         className="h-10 w-10 rounded-none border-0"
-        onClick={() => onChange(Math.max(min, value - 1))}
+        onClick={() => !disabled && onChange(Math.max(min, value - 1))}
+        disabled={disabled}
       >
         <Minus className="h-4 w-4" aria-hidden="true" />
       </IconButton>
-      <span className="min-w-10 px-2 text-center text-sm font-bold">{value}</span>
+      <input
+        type="text"
+        className="h-10 w-12 border-x border-line bg-transparent px-1 text-center text-sm font-bold outline-none"
+        value={inputValue}
+        onChange={handleInputChange}
+        onBlur={handleBlur}
+        disabled={disabled}
+      />
       <IconButton
         aria-label="Tăng số lượng"
         className="h-10 w-10 rounded-none border-0"
-        onClick={() => onChange(Math.min(max, value + 1))}
+        onClick={() => !disabled && onChange(Math.min(max, value + 1))}
+        disabled={disabled}
       >
         <Plus className="h-4 w-4" aria-hidden="true" />
       </IconButton>

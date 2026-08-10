@@ -56,7 +56,7 @@ class ProductVariant(Base):
         ForeignKey("products.id"),
         nullable=False,
     )
-    sku: Mapped[str] = mapped_column(String(100), nullable=False)
+    sku: Mapped[str] = mapped_column(String(255), nullable=False)
     variant_name: Mapped[str] = mapped_column(String(150), nullable=False)
     price: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
     sale_price: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)

@@ -7,6 +7,7 @@ export type SellerSessionSummary = {
   updated_at: string;
   shop_name: string | null;
   shop_avatar: string | null;
+  shop_slug?: string | null;
   customer_name: string | null;
   customer_avatar: string | null;
   last_message: string | null;

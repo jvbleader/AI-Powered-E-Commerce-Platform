@@ -39,6 +39,9 @@ export const createCoreSlice: StateCreator<MarketplaceStore, [], [], any> = (set
 
     setState((prev: AppState) => ({ ...prev, users }));
   },
+    toggleSidebar: () => {
+      setState((prev: AppState) => ({ ...prev, sidebarCollapsed: !prev.sidebarCollapsed }));
+    },
     setConversations: async (conversations: Conversation[]) => {
       const { state, verificationContext } = get();
 

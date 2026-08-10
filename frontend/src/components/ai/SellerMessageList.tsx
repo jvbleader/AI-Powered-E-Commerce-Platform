@@ -117,7 +117,7 @@ function SellerMessageListInner({
                 ) : (
                   <div className="w-8 shrink-0 mr-3" aria-hidden />
                 ))}
-              <div className={cn("flex items-center gap-2 max-w-[80%]", CHAT_BUBBLE_WRAPPER_CLASS)}>
+              <div className={cn("flex items-center gap-2", viewerRole === "CUSTOMER" ? "max-w-[calc(80%-10px)]" : "max-w-[calc(80%-30px)]", CHAT_BUBBLE_WRAPPER_CLASS)}>
                 {isMe && (
                   <div className="relative group/reply mr-1 flex items-center">
                     <button

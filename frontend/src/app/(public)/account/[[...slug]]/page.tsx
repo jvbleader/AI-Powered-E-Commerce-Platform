@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, Bell, CreditCard, LogOut, Plus, Store, Star, Copy, Check, ExternalLink, RotateCcw, Truck, MapPin, MessageSquare, ShieldCheck, FileText, HelpCircle, Loader2, Package, Headset, LayoutDashboard, User as UserIcon, Mail, Smartphone, X, Upload } from "lucide-react";
+import { ArrowLeft, Bell, CreditCard, LogOut, Plus, Store, Star, Copy, Check, ExternalLink, RotateCcw, Truck, MapPin, MessageSquare, ShieldCheck, FileText, HelpCircle, Loader2, Package, Headset, LayoutDashboard, User as UserIcon, Mail, Smartphone, X, Upload, ChevronLeft, ChevronRight } from "lucide-react";
 import { createReviewApi, fetchMyReviewsApi, type UserReviewResponse } from "@/services/review-api";
+import { uploadImage } from "@/services/upload-api";
 import { Button } from "@/components/ui/button";
 import { ImageUpload } from "@/components/ui/image-upload";
 import { Field, Input, Select, Textarea } from "@/components/ui/input";
@@ -59,7 +60,7 @@ export default function AccountPage() {
 
   if (!store.ready) {
     return (
-      <main className="mx-auto max-w-7xl px-4 py-16 text-center">
+      <main className="px-6 py-16 text-center">
         <Loader2 className="mx-auto h-8 w-8 animate-spin text-emerald-600 mb-3" />
         <p className="text-sm font-medium text-muted">Đang tải thông tin tài khoản...</p>
       </main>
@@ -82,38 +83,49 @@ export default function AccountPage() {
 
   const isViewingOrderDetail = currentSection === "orders" && Boolean(detailId);
 
+  const sidebarCollapsed = store.state.sidebarCollapsed;
+
   return (
     <main
       className={cn(
-        "mx-auto grid max-w-7xl gap-6 px-4 py-8",
-        isViewingOrderDetail ? "grid-cols-1" : "lg:grid-cols-[260px_1fr]"
+        "grid gap-6 px-6 pt-4 pb-8 transition-all duration-300",
+        isViewingOrderDetail ? "grid-cols-1" : sidebarCollapsed ? "lg:grid-cols-[80px_1fr]" : "lg:grid-cols-[260px_1fr]"
       )}
     >
       {!isViewingOrderDetail && (
-        <Panel className="h-fit sticky top-24 shadow-soft border-line rounded-2xl">
-          <div className="flex items-center gap-4">
-            <div className="relative">
-              <img src={user.avatarUrl} alt={user.fullName} className="h-14 w-14 rounded-full object-cover ring-2 ring-primary/20 shadow-sm" />
-              <div className="absolute bottom-0 right-0 h-3.5 w-3.5 rounded-full border-2 border-white bg-emerald-500"></div>
+        <Panel className="h-fit sticky top-[calc(var(--marketplace-header-offset)+16px)] shadow-soft border-line rounded-2xl flex flex-col items-center">
+          <div className={cn("flex w-full items-center gap-4 relative", sidebarCollapsed ? "justify-center" : "justify-start")}>
+            <div className="relative shrink-0">
+              <img src={user.avatarUrl} alt={user.fullName} className={cn("rounded-full object-cover ring-2 ring-primary/20 shadow-sm transition-all", sidebarCollapsed ? "h-10 w-10" : "h-14 w-14")} />
+              <div className="absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-white bg-emerald-500"></div>
             </div>
-            <div className="min-w-0">
-              <p className="truncate font-bold text-ink text-base">{user.fullName}</p>
-              <p className="text-[11px] font-bold text-primary bg-primary/10 inline-block px-2 py-0.5 rounded uppercase tracking-wider mt-1.5">{roleLabel[store.state.activeRole]}</p>
-            </div>
+            {!sidebarCollapsed && (
+              <div className="min-w-0 flex-1">
+                <p className="truncate font-bold text-ink text-base">{user.fullName}</p>
+                <p className="text-[11px] font-bold text-primary bg-primary/10 inline-block px-2 py-0.5 rounded uppercase tracking-wider mt-1.5">{roleLabel[store.state.activeRole]}</p>
+              </div>
+            )}
+            <button
+              onClick={() => store.toggleSidebar()}
+              className={cn("absolute bg-white border border-line shadow-sm rounded-full p-1 text-muted hover:text-primary hover:bg-slate-50 transition-colors z-10", sidebarCollapsed ? "-right-2 -top-2" : "right-0 top-0")}
+              title={sidebarCollapsed ? "Mở rộng" : "Thu gọn"}
+            >
+              {sidebarCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+            </button>
           </div>
-          <nav className="mt-6 grid gap-1.5 border-t border-line pt-5">
+          <nav className="mt-6 grid gap-1.5 border-t border-line pt-5 w-full">
             {nav.map(({ key, href, label, icon: Icon }) => (
-              <a key={key} href={href} className={cn(linkClass, currentSection === key && activeLinkClass)}>
-                <Icon className={cn("h-5 w-5 transition-colors", currentSection === key ? "text-primary" : "text-muted group-hover:text-ink")} />
-                {label}
+              <a key={key} href={href} className={cn(linkClass, currentSection === key && activeLinkClass, sidebarCollapsed ? "justify-center px-0" : "px-4")} title={sidebarCollapsed ? label : undefined}>
+                <Icon className={cn("h-5 w-5 transition-colors shrink-0", currentSection === key ? "text-primary" : "text-muted group-hover:text-ink")} />
+                {!sidebarCollapsed && <span className="truncate">{label}</span>}
               </a>
             ))}
           </nav>
         </Panel>
       )}
-      <div>
+      <div className="[&>section]:pt-0">
         {currentSection === "overview" ? <AccountOverview /> : null}
-        {currentSection === "profile" ? <AccountProfileWrapper /> : null}
+        {currentSection === "profile" ? <AccountProfile store={store} showToast={showToast} /> : null}
         {currentSection === "security" ? <AccountSecurity /> : null}
         {currentSection === "addresses" ? <AddressBook store={store} showToast={showToast} /> : null}
         {currentSection === "orders" && detailId ? <OrderDetailPage orderCode={detailId} audience="customer" /> : null}
@@ -124,9 +136,7 @@ export default function AccountPage() {
     </main>
   );
 
-  function AccountProfileWrapper() {
-    return <AccountProfile store={store} showToast={showToast} />;
-  }
+
 
   function AccountOverview() {
     const userOrders = store.state.orders.filter((order) => order.userId === store.getCurrentUser()?.id);
@@ -281,10 +291,143 @@ export default function AccountPage() {
   }
 
 
+  function CustomerOrderCard({ order, shopName, actionNode }: { order: Order; shopName: string; actionNode: React.ReactNode }) {
+    const [isExpanded, setIsExpanded] = useState(false);
+    const firstItem = order.items?.[0];
+    const hasMore = (order.items?.length || 0) > 1;
+
+    const handleChat = (e: React.MouseEvent) => {
+      e.stopPropagation();
+      window.dispatchEvent(new CustomEvent('open-chat-widget', {
+        detail: {
+          shopId: order.shopDbId || order.sellerId,
+          shopInfo: { id: order.shopDbId || order.sellerId, name: shopName, avatar: null, shop_slug: order.shopSlug },
+          orderDraft: order
+        }
+      }));
+    };
+
+    return (
+      <div className="border-b-[8px] border-slate-100 last:border-b-0 p-5 hover:bg-slate-50/50 transition-colors">
+        <div className="flex items-center justify-between border-b border-line pb-3 mb-3">
+          <div className="flex items-center gap-3">
+            <span className="font-bold text-ink text-sm sm:text-base">{shopName}</span>
+            <div className="flex items-center gap-2">
+              <Button 
+                variant="secondary" 
+                className="h-7 text-xs px-2.5 rounded-lg border-line text-ink hover:bg-line/30 gap-1.5"
+                onClick={() => window.location.href = `/shops/${order.shopSlug || order.sellerId}`}
+              >
+                <Store className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Xem shop</span>
+              </Button>
+              <Button 
+                variant="secondary"
+                className="h-7 text-xs px-2.5 rounded-lg border-primary/20 text-primary bg-primary/5 hover:bg-primary/10 gap-1.5"
+                onClick={handleChat}
+              >
+                <MessageSquare className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Chat ngay</span>
+              </Button>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 text-sm font-medium">
+            <StatusBadge status={order.orderStatus} label={orderStatusLabel[order.orderStatus]} />
+          </div>
+        </div>
+
+        <div 
+          className="cursor-pointer group"
+          onClick={() => window.location.href = `/account/orders/${order.orderCode}`}
+        >
+          {firstItem && (
+            <div className="flex items-start gap-4">
+            <img src={firstItem.productImageSnapshot || "/images/placeholder.webp"} alt={firstItem.productNameSnapshot} className="w-20 h-20 sm:w-24 sm:h-24 object-cover rounded-xl border border-line" />
+            <div className="flex-1 min-w-0">
+              <h4 className="font-semibold text-ink line-clamp-2 text-sm sm:text-base">{firstItem.productNameSnapshot}</h4>
+              <p className="text-sm text-muted mt-1">{firstItem.variantNameSnapshot}</p>
+              <div className="text-sm font-medium mt-1">x{firstItem.quantity}</div>
+            </div>
+            <div className="flex flex-col items-end whitespace-nowrap">
+              {firstItem.originalPriceSnapshot && firstItem.originalPriceSnapshot > firstItem.unitPrice && (
+                <span className="text-xs sm:text-sm text-muted line-through mb-0.5">
+                  {formatVnd(firstItem.originalPriceSnapshot)}
+                </span>
+              )}
+              <span className="font-bold text-ink text-sm sm:text-base">
+                {formatVnd(firstItem.unitPrice)}
+              </span>
+            </div>
+          </div>
+        )}
+
+        {hasMore && (
+          <div className="mt-4">
+            {isExpanded ? (
+              <div className="space-y-4 border-t border-line/50 pt-4 mt-4">
+                {order.items.slice(1).map((item, idx) => (
+                  <div key={idx} className="flex items-start gap-4 ml-4 sm:ml-8">
+                    <img src={item.productImageSnapshot || "/images/placeholder.webp"} alt={item.productNameSnapshot} className="w-16 h-16 object-cover rounded-lg border border-line opacity-90" />
+                    <div className="flex-1 min-w-0">
+                      <h4 className="font-medium text-ink line-clamp-2 text-sm">{item.productNameSnapshot}</h4>
+                      <p className="text-xs text-muted mt-0.5">{item.variantNameSnapshot}</p>
+                      <div className="text-xs font-medium mt-0.5">x{item.quantity}</div>
+                    </div>
+                    <div className="flex flex-col items-end whitespace-nowrap">
+                      {item.originalPriceSnapshot && item.originalPriceSnapshot > item.unitPrice && (
+                        <span className="text-xs text-muted line-through mb-0.5">
+                          {formatVnd(item.originalPriceSnapshot)}
+                        </span>
+                      )}
+                      <span className="font-semibold text-ink text-sm">
+                        {formatVnd(item.unitPrice)}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+                <button 
+                  onClick={(e) => { e.stopPropagation(); setIsExpanded(false); }}
+                  className="w-full text-center text-sm font-medium text-muted hover:text-primary transition-colors py-2"
+                >
+                  Thu gọn
+                </button>
+              </div>
+            ) : (
+              <button 
+                onClick={(e) => { e.stopPropagation(); setIsExpanded(true); }}
+                className="w-full text-center text-sm font-medium text-muted hover:text-primary transition-colors border-t border-line/50 pt-3 mt-3"
+              >
+                Xem thêm {order.items.length - 1} sản phẩm khác
+              </button>
+            )}
+          </div>
+        )}
+        </div>
+
+        <div className="flex flex-wrap sm:flex-nowrap items-center justify-between gap-4 border-t border-line pt-4 mt-4">
+          <div className="text-sm text-muted hidden sm:block">
+            Mã đơn: <a className="font-bold text-primary hover:underline" href={`/account/orders/${order.orderCode}`}>{order.orderCode}</a>
+          </div>
+          <div className="flex flex-col sm:flex-row items-end sm:items-center gap-3 sm:gap-6 w-full sm:w-auto">
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-ink">Thành tiền:</span>
+              <span className="text-lg font-black text-primary">{formatVnd(order.totalAmount)}</span>
+            </div>
+            {actionNode && (
+              <div className="flex items-center gap-2">
+                {actionNode}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   function OrdersList({ audience }: { audience: "customer" | "seller" }) {
     const [status, setStatus] = useState("");
     const [currentPage, setCurrentPage] = useState(1);
+    const [visibleCount, setVisibleCount] = useState(5);
     const ITEMS_PER_PAGE = 20;
     
     useEffect(() => {
@@ -294,6 +437,7 @@ export default function AccountPage() {
         store.fetchCustomerOrders(status as OrderStatus | "");
       }
       setCurrentPage(1);
+      setVisibleCount(5);
     }, [audience, status]);
 
     const orders = store.state.orders.filter((order) => {
@@ -306,6 +450,17 @@ export default function AccountPage() {
 
     const canContinuePayment = (order: Order) =>
       order.orderStatus !== "CANCELLED" && (order.paymentStatus === "PENDING" || order.paymentStatus === "FAILED");
+
+    const observer = useRef<IntersectionObserver | null>(null);
+    const lastElementRef = useCallback((node: HTMLDivElement | null) => {
+      if (observer.current) observer.current.disconnect();
+      observer.current = new IntersectionObserver(entries => {
+        if (entries[0].isIntersecting && visibleCount < orders.length) {
+          setVisibleCount(prev => prev + 5);
+        }
+      });
+      if (node) observer.current.observe(node);
+    }, [visibleCount, orders.length]);
 
     const goToPaymentForOrder = async (order: Order) => {
       const payment = findPaymentForOrder(order.orderCode);
@@ -384,18 +539,43 @@ export default function AccountPage() {
         }
       >
         <div className="bg-white rounded-2xl border border-line shadow-sm overflow-hidden flex flex-col">
-          <DataTable
-            columns={["Mã đơn", "Shop", "Trạng thái", "Thanh toán", "Tổng", "Hành động"]}
-            rows={paginatedOrders.map((order) => [
-              <a key="code" className="font-bold text-primary hover:underline hover:text-primary/80 transition-colors" href={audience === "customer" ? `/account/orders/${order.orderCode}` : `/seller/orders/${order.orderCode}`}>{order.orderCode}</a>,
-              <span key="shop" className="font-medium text-ink">{getShopName(order)}</span>,
-              <StatusBadge key="st" status={order.orderStatus} label={orderStatusLabel[order.orderStatus]} />,
-              <StatusBadge key="pay" status={order.paymentStatus} label={paymentStatusLabel[order.paymentStatus]} />,
-              <span key="total" className="font-bold text-ink">{formatVnd(order.totalAmount)}</span>,
-              renderOrderAction(order)
-            ])}
-          />
-          {totalPages > 1 && (
+          {audience === "customer" ? (
+            <div className="flex flex-col">
+              {orders.length === 0 ? (
+                <div className="p-8 text-center text-muted">Chưa có đơn hàng nào.</div>
+              ) : (
+                <>
+                  {orders.slice(0, visibleCount).map((order) => (
+                    <CustomerOrderCard 
+                      key={order.id}
+                      order={order}
+                      shopName={getShopName(order)}
+                      actionNode={renderOrderAction(order)}
+                    />
+                  ))}
+                  {visibleCount < orders.length && (
+                    <div ref={lastElementRef} className="py-8 flex flex-col justify-center items-center gap-2">
+                      <Loader2 className="w-6 h-6 animate-spin text-muted" />
+                      <span className="text-xs font-medium text-muted">Đang tải thêm...</span>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          ) : (
+            <DataTable
+              columns={["Mã đơn", "Shop", "Trạng thái", "Thanh toán", "Tổng", "Hành động"]}
+              rows={paginatedOrders.map((order) => [
+                <a key="code" className="font-bold text-primary hover:underline hover:text-primary/80 transition-colors" href={`/seller/orders/${order.orderCode}`}>{order.orderCode}</a>,
+                <span key="shop" className="font-medium text-ink">{getShopName(order)}</span>,
+                <StatusBadge key="st" status={order.orderStatus} label={orderStatusLabel[order.orderStatus]} />,
+                <StatusBadge key="pay" status={order.paymentStatus} label={paymentStatusLabel[order.paymentStatus]} />,
+                <span key="total" className="font-bold text-ink">{formatVnd(order.totalAmount)}</span>,
+                renderOrderAction(order)
+              ])}
+            />
+          )}
+          {audience === "seller" && totalPages > 1 && (
             <div className="flex items-center justify-between border-t border-line px-6 py-4 bg-white mt-auto">
               <span className="text-sm text-muted font-medium">
                 Hiển thị {((currentPage - 1) * ITEMS_PER_PAGE) + 1} - {Math.min(currentPage * ITEMS_PER_PAGE, orders.length)} trên tổng số {orders.length} đơn hàng
@@ -1191,11 +1371,11 @@ function ReviewsModule() {
                 <div key={review.id} className="p-6">
                   <div className="flex flex-col sm:flex-row gap-4">
                     {review.product && (
-                      <a href={`/products/${review.product.slug}`} className="block shrink-0 overflow-hidden rounded-xl border border-line bg-canvas/50">
+                      <a href={`/products/${review.product.slug}`} className="block shrink-0 h-20 w-20 sm:h-24 sm:w-24 overflow-hidden rounded-xl border border-line bg-canvas/50">
                         <img 
                           src={review.product.image_url || "/placeholder-image.webp"} 
                           alt={review.product.name} 
-                          className="h-20 w-20 sm:h-24 sm:w-24 rounded-xl object-cover transition-transform hover:scale-105" 
+                          className="h-full w-full object-cover transition-transform hover:scale-105" 
                         />
                       </a>
                     )}
@@ -1288,12 +1468,15 @@ function AccountProfile({ store, showToast }: { store: any, showToast: any }) {
   const [gender, setGender] = useState(user?.gender ?? "OTHER");
   const [birthday, setBirthday] = useState(user?.birthday || "");
   const [submitting, setSubmitting] = useState(false);
+  const [avatarUrl, setAvatarUrl] = useState(user?.avatarUrl || "");
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
   useEffect(() => {
     if (user) {
       setFullName(user.fullName || "");
       setGender(user.gender ?? "OTHER");
       setBirthday(user.birthday || "");
+      setAvatarUrl(user.avatarUrl || "");
     }
   }, [user]);
 
@@ -1305,6 +1488,7 @@ function AccountProfile({ store, showToast }: { store: any, showToast: any }) {
       fullName,
       gender,
       dateOfBirth: birthday || undefined,
+      avatarUrl: avatarUrl || undefined,
     });
     setSubmitting(false);
     if (res.ok) {
@@ -1314,12 +1498,34 @@ function AccountProfile({ store, showToast }: { store: any, showToast: any }) {
     }
   };
 
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      setUploadingAvatar(true);
+      const url = await uploadImage(file);
+      setAvatarUrl(url);
+      showToast("Tải ảnh lên thành công", "success");
+    } catch (err: any) {
+      showToast(err.message || "Không thể tải ảnh lên", "danger");
+    } finally {
+      setUploadingAvatar(false);
+    }
+  };
+
   return (
     <Section title="Hồ sơ cá nhân">
       <Panel className="rounded-2xl border border-line shadow-sm p-6 lg:p-8">
-        <div className="flex items-center gap-3 mb-6 pb-6 border-b border-line">
-          <div className="h-14 w-14 rounded-full bg-primary/10 flex items-center justify-center text-primary">
-            <UserIcon className="h-7 w-7" />
+        <div className="flex items-center gap-4 mb-6 pb-6 border-b border-line">
+          <div className="relative group">
+            {avatarUrl ? (
+              <img src={avatarUrl} alt={fullName} className="h-16 w-16 rounded-full object-cover ring-2 ring-primary/20 shadow-sm" />
+            ) : (
+              <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center text-primary">
+                <UserIcon className="h-8 w-8" />
+              </div>
+            )}
           </div>
           <div>
             <h3 className="font-bold text-lg text-ink">Thông tin cá nhân</h3>
@@ -1338,7 +1544,39 @@ function AccountProfile({ store, showToast }: { store: any, showToast: any }) {
             </Select>
           </Field>
           <Field label="Ngày sinh"><Input type="date" value={birthday} onChange={e => setBirthday(e.target.value)} className="bg-canvas/50 border-line focus:bg-white rounded-xl h-11" /></Field>
-          <Field label="Ảnh đại diện (Sắp ra mắt)"><Input type="file" disabled className="opacity-70 bg-line/20 rounded-xl h-11 border-line text-sm file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-primary/10 file:text-primary file:cursor-not-allowed" /></Field>
+          <Field label="Ảnh đại diện">
+            <div className="flex items-center gap-3">
+              {avatarUrl && (
+                <img src={avatarUrl} alt="Preview" className="h-11 w-11 rounded-xl object-cover ring-1 ring-line shrink-0" />
+              )}
+              <div className="flex-1 flex items-center">
+                <input 
+                  type="file" 
+                  id="avatar-upload"
+                  accept="image/*"
+                  onChange={handleFileChange}
+                  disabled={uploadingAvatar}
+                  className="hidden" 
+                />
+                <label 
+                  htmlFor="avatar-upload"
+                  className={`inline-flex items-center justify-center gap-2 px-5 h-10 rounded-xl font-bold text-sm transition-colors ${uploadingAvatar ? "bg-slate-100 text-slate-400 cursor-not-allowed" : "bg-primary/10 text-primary cursor-pointer hover:bg-primary/20"}`}
+                >
+                  {uploadingAvatar ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Đang tải...
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="h-4 w-4" />
+                      Tải ảnh lên
+                    </>
+                  )}
+                </label>
+              </div>
+            </div>
+          </Field>
         </div>
         <div className="mt-8 flex justify-end pt-6 border-t border-line">
           <Button disabled={submitting} onClick={handleSave} className="h-11 px-8 bg-primary hover:bg-primary/90 text-white rounded-xl font-bold shadow-sm transition-transform hover:-translate-y-0.5">

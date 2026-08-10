@@ -6,7 +6,7 @@ from schemas.catalog.category_public_schema import CategoryPublicResponse
 
 
 class VariantCreateRequest(BaseModel):
-    sku: str = Field(..., max_length=100)
+    sku: str = Field(..., max_length=255)
     variant_name: str = Field(..., max_length=150)
     price: Decimal = Field(..., gt=0)
     sale_price: Optional[Decimal] = None

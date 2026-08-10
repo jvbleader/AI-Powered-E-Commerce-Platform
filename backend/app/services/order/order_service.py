@@ -122,6 +122,7 @@ async def _process_checkout(
                     seller_name_snapshot=seller.shop_name,
                     sku_snapshot=variant.sku,
                     unit_price=unit_price,
+                    original_price_snapshot=variant.price,
                     quantity=quantity,
                     subtotal=subtotal,
                 )

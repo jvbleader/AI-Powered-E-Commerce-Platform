@@ -518,9 +518,13 @@ export function MarketplaceHeader() {
                     onClick={() => setUserMenuOpen((v) => !v)}
                     className="flex h-9 w-full items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-2 py-1.5 text-xs font-bold text-slate-800 shadow-2xs transition-[border-color,background-color] duration-300 hover:border-emerald-450 hover:bg-emerald-50/50 active:scale-98"
                   >
-                    <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-emerald-600 font-heading text-xs font-black text-white shadow-2xs">
-                      {currentUser.fullName.charAt(0).toUpperCase()}
-                    </div>
+                    {currentUser.avatarUrl ? (
+                      <img src={currentUser.avatarUrl} alt={currentUser.fullName} className="h-6 w-6 shrink-0 rounded-lg object-cover shadow-2xs ring-1 ring-slate-200" />
+                    ) : (
+                      <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-emerald-600 font-heading text-xs font-black text-white shadow-2xs">
+                        {currentUser.fullName.charAt(0).toUpperCase()}
+                      </div>
+                    )}
                     <span className="min-w-0 flex-1 truncate text-left">{currentUser.fullName.split(" ").slice(-1)}</span>
                     <ChevronDown className="h-3.5 w-3.5 shrink-0 text-slate-400" />
                   </button>

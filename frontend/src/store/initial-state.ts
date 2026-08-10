@@ -26,6 +26,7 @@ export const conversations: Conversation[] = [];
 export const violationReports: ViolationReport[] = [];
 
 export const initialState: AppState = {
+  sidebarCollapsed: false,
   users,
   shops,
   categories,

@@ -163,8 +163,7 @@ export default function AuthPage({ mode: initialMode }: { mode: "login" | "regis
               <button
                 type="button"
                 onClick={() => {
-                  setMode("login");
-                  setFormErrors({});
+                  if (mode !== "login") router.push("/login");
                 }}
                 className={`rounded-lg px-3.5 py-1.5 text-xs font-bold transition-all ${
                   mode === "login" ? "bg-white text-emerald-700 shadow-sm" : "text-slate-600 hover:text-slate-900"
@@ -175,8 +174,7 @@ export default function AuthPage({ mode: initialMode }: { mode: "login" | "regis
               <button
                 type="button"
                 onClick={() => {
-                  setMode("register");
-                  setFormErrors({});
+                  if (mode !== "register") router.push("/register");
                 }}
                 className={`rounded-lg px-3.5 py-1.5 text-xs font-bold transition-all ${
                   mode === "register" ? "bg-white text-emerald-700 shadow-sm" : "text-slate-600 hover:text-slate-900"

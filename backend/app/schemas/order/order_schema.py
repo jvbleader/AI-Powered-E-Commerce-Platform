@@ -56,6 +56,7 @@ class OrderItemResponse(BaseModel):
     seller_name_snapshot: str
     sku_snapshot: Optional[str]
     unit_price: Decimal
+    original_price_snapshot: Optional[Decimal] = None
     quantity: int
     subtotal: Decimal
     is_reviewed: bool = False

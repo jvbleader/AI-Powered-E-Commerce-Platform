@@ -137,11 +137,10 @@ export default function SellerOrdersPage() {
   return (
     <Section
       title="Đơn hàng shop"
-      className="flex h-full flex-col overflow-hidden pb-0"
+      className="space-y-4 pb-0"
     >
-      {/* Filters and Bulk Actions Header */}
-      <div className="flex flex-col gap-4 mb-4">
-        {/* Filters */}
+      <div className="flex flex-col gap-4">
+        {/* Active Filters Summary */}
         <div className="flex flex-wrap items-center gap-3 bg-white p-3 rounded-panel border border-line shadow-sm">
           <div className="text-sm font-semibold text-slate-700 whitespace-nowrap">Bộ lọc:</div>
           <Select value={orderStatusFilter} onChange={(e) => setOrderStatusFilter(e.target.value)} className="w-40 sm:w-48 text-sm h-9">

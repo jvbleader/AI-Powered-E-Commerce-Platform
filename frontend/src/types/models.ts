@@ -160,6 +160,7 @@ export interface OrderItem {
   sellerNameSnapshot: string;
   skuSnapshot: string;
   unitPrice: number;
+  originalPriceSnapshot?: number;
   quantity: number;
   subtotal: number;
   isReviewed?: boolean;
@@ -193,6 +194,7 @@ export interface Order {
   orderCode: string;
   userId: string;
   sellerId: string;
+  shopDbId?: number;
   shopName?: string;
   shopSlug?: string;
   orderStatus: OrderStatus;
@@ -280,6 +282,7 @@ export interface ViolationReport {
 }
 
 export interface AppState {
+  sidebarCollapsed: boolean;
   users: User[];
   shops: Shop[];
   categories: Category[];

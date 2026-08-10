@@ -364,6 +364,8 @@ async def handle_multiplex_command(
         await websocket.send_text(json.dumps({"type": "pong"}))
         return active_conversation_id, active_conversation_viewer_type, True
 
+    await db.commit()
+
     if action == "SUBSCRIBE_CONVERSATION":
         conversation_id = data.get("conversation_id")
         if not conversation_id:

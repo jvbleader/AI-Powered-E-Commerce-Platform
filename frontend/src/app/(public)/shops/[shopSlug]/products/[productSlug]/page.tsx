@@ -50,6 +50,7 @@ export default function ProductDetailPage() {
   const { showToast } = store;
 
   const [selectedVariantId, setSelectedVariantId] = useState("");
+  const [selectedTierIndex, setSelectedTierIndex] = useState<number[]>([]);
   const [selectedImage, setSelectedImage] = useState<string>("");
   const [quantity, setQuantity] = useState(1);
   const [showReport, setShowReport] = useState(false);
@@ -70,11 +71,30 @@ export default function ProductDetailPage() {
       if (isMounted) {
         if (res.ok && res.product) {
           setProduct(res.product);
-          setProductVariants(res.variants!);
+          
+          let fetchedVariants = res.variants!;
+          if (res.product.variantOptions && res.product.variantOptions.length > 0) {
+            if (fetchedVariants.some(v => !v.tierIndex)) {
+              const sizes = res.product.variantOptions.map(opt => opt.values.length);
+              fetchedVariants = fetchedVariants.map((v, idx) => {
+                if (v.tierIndex) return v;
+                const inferredTierIndex = [];
+                let currentIdx = idx;
+                for (let i = sizes.length - 1; i >= 0; i--) {
+                  inferredTierIndex.unshift(currentIdx % sizes[i]);
+                  currentIdx = Math.floor(currentIdx / sizes[i]);
+                }
+                return { ...v, tierIndex: inferredTierIndex };
+              });
+            }
+          }
+          setProductVariants(fetchedVariants);
+          
           setShop(res.shop);
-          setSelectedVariantId(res.variants![0]?.id ?? "");
+          setSelectedVariantId(fetchedVariants[0]?.id ?? "");
+          setSelectedTierIndex(fetchedVariants[0]?.tierIndex || (res.product.variantOptions ? new Array(res.product.variantOptions.length).fill(0) : []));
           setSelectedImage(res.product.thumbnailUrl);
-          store.saveProduct(res.product, res.variants!);
+          store.saveProduct(res.product, fetchedVariants);
           if (res.shop) store.saveShop(res.shop);
         }
         setLoading(false);
@@ -86,7 +106,7 @@ export default function ProductDetailPage() {
 
   if (loading) {
     return (
-      <main className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8 py-6 space-y-6 bg-canvas min-h-screen">
+      <main className="mx-auto max-w-[1252px] px-4 sm:px-6 lg:px-8 py-6 space-y-6 bg-canvas min-h-screen">
         {/* BREADCRUMB */}
         <nav className="flex items-center gap-2 text-xs">
           <Skeleton className="h-4 w-16" />
@@ -276,11 +296,29 @@ export default function ProductDetailPage() {
     totalRevenue: 0
   };
   
-  const selectedVariant = productVariants.find((variant) => variant.id === selectedVariantId) ?? productVariants[0];
+  const selectedVariant = productVariants.find((variant) => variant.id === selectedVariantId);
 
   const totalStock = productVariants.reduce((sum, v) => sum + (v.inventory?.quantity ?? 0), 0);
-  const isSelectedVariantOutOfStock = (selectedVariant?.inventory?.quantity ?? 0) <= 0 || selectedVariant?.status === "OUT_OF_STOCK";
+  const isSelectedVariantOutOfStock = !selectedVariant || (selectedVariant.inventory?.quantity ?? 0) <= 0 || selectedVariant.status === "OUT_OF_STOCK";
   const isProductOutOfStock = product.status === "OUT_OF_STOCK" || (productVariants.length > 0 && totalStock <= 0);
+
+  const handleOptionClick = (optIdx: number, valIdx: number) => {
+    const newTierIndex = [...selectedTierIndex];
+    newTierIndex[optIdx] = valIdx;
+    setSelectedTierIndex(newTierIndex);
+    
+    const matchedVariant = productVariants.find(v => 
+       v.tierIndex && v.tierIndex.length === newTierIndex.length && 
+       v.tierIndex.every((val, idx) => val === newTierIndex[idx])
+    );
+    
+    if (matchedVariant) {
+       setSelectedVariantId(matchedVariant.id);
+       if (matchedVariant.imageUrl) setSelectedImage(matchedVariant.imageUrl);
+    } else {
+       setSelectedVariantId("");
+    }
+  };
 
   // Prepare images array
   const allImages = Array.from(
@@ -330,7 +368,7 @@ export default function ProductDetailPage() {
   };
 
   return (
-    <main className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8 py-6 space-y-6 bg-canvas min-h-screen">
+    <main className="mx-auto max-w-[1252px] px-4 sm:px-6 lg:px-8 py-6 space-y-6 bg-canvas min-h-screen">
       {/* BREADCRUMB */}
       <nav className="flex items-center gap-2 text-xs font-semibold text-slate-500">
         <a href="/" className="hover:text-emerald-700 transition-colors">Trang chủ</a>
@@ -413,17 +451,13 @@ export default function ProductDetailPage() {
         <div className="lg:col-span-7 mt-6 lg:mt-0 flex flex-col justify-between space-y-5">
           <div>
             {/* TAGS & CATEGORY */}
-            <div className="flex flex-wrap items-center gap-2 text-xs font-bold text-slate-500">
-              <span className="inline-flex items-center gap-1 rounded-lg bg-emerald-50 px-2.5 py-1 text-emerald-700">
-                <Tag className="h-3 w-3" />
-                {getCategoryNames(store.state.categories, product) || "Sản phẩm Shepoo"}
-              </span>
-              {(isProductOutOfStock || isSelectedVariantOutOfStock) && (
+            {(isProductOutOfStock || isSelectedVariantOutOfStock) && (
+              <div className="flex flex-wrap items-center gap-2 text-xs font-bold text-slate-500">
                 <span className="inline-flex items-center gap-1 rounded-lg bg-rose-100 px-2.5 py-1 text-xs font-extrabold text-rose-700">
                   Hết hàng
                 </span>
-              )}
-            </div>
+              </div>
+            )}
 
             {/* TITLE */}
             <h1 className="mt-2.5 font-heading text-xl sm:text-2xl font-black text-slate-900 leading-snug">
@@ -444,7 +478,7 @@ export default function ProductDetailPage() {
             <div className="mt-4 rounded-2xl bg-slate-50/90 border border-slate-200/80 p-4">
               <div className="flex items-baseline gap-3">
                 <PriceDisplay
-                  price={selectedVariant?.price ?? 0}
+                  price={selectedVariant?.price ?? productVariants[0]?.price ?? 0}
                   salePrice={selectedVariant?.salePrice}
                   className="text-slate-900 text-2xl font-extrabold"
                 />
@@ -461,56 +495,109 @@ export default function ProductDetailPage() {
             </div>
 
             {/* VARIANT SELECTOR */}
-            <div className="mt-5 space-y-3">
-              <label className="block text-xs font-bold text-slate-700">
-                Chọn biến thể:
-              </label>
-              <div className="flex flex-wrap gap-2">
-                {productVariants.map((variant) => {
-                  const isSelected = selectedVariant.id === variant.id;
-                  const isVariantOutOfStock = (variant.inventory?.quantity ?? 0) <= 0 || variant.status === "OUT_OF_STOCK";
-                  return (
-                    <button
-                      key={variant.id}
-                      type="button"
-                      disabled={variant.status !== "ACTIVE"}
-                      onClick={() => {
-                        setSelectedVariantId(variant.id);
-                        if (variant.imageUrl) setSelectedImage(variant.imageUrl);
-                      }}
-                      className={`inline-flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-extrabold transition-all border ${
-                        isSelected
-                          ? "border-emerald-600 bg-emerald-50/80 text-emerald-800 ring-2 ring-emerald-600/20 shadow-xs"
-                          : "border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50"
-                      } ${isVariantOutOfStock ? "opacity-60 bg-slate-50" : ""}`}
-                    >
-                      {isSelected && <Check className="h-3.5 w-3.5 text-emerald-600" />}
-                      <span>{variant.variantName}</span>
-                      {isVariantOutOfStock && (
-                        <span className="ml-1 rounded-md bg-rose-100 px-1.5 py-0.5 text-[10px] font-bold text-rose-600">
-                          Hết hàng
-                        </span>
-                      )}
-                    </button>
-                  );
-                })}
+            {product.variantOptions && product.variantOptions.length > 0 ? (
+              <div className="mt-6 space-y-4">
+                {product.variantOptions.map((opt: any, optIdx: number) => (
+                  <div key={optIdx} className="flex items-start gap-4">
+                    <label className="text-sm text-slate-500 font-medium min-w-[100px] pt-2">
+                      {opt.name}
+                    </label>
+                    <div className="flex flex-wrap gap-3 flex-1">
+                      {opt.values.map((val: string, valIdx: number) => {
+                        const isSelected = selectedTierIndex[optIdx] === valIdx;
+                        
+                        const targetTier = [...selectedTierIndex];
+                        targetTier[optIdx] = valIdx;
+                        const targetVariant = productVariants.find(v => v.tierIndex && v.tierIndex.length === targetTier.length && v.tierIndex.every((t, i) => t === targetTier[i]));
+                        const isOutOfStock = !targetVariant || (targetVariant.inventory?.quantity ?? 0) <= 0 || targetVariant.status === "OUT_OF_STOCK";
+
+                        return (
+                          <button
+                            key={valIdx}
+                            type="button"
+                            disabled={targetVariant ? (targetVariant.status !== "ACTIVE" && targetVariant.status !== "OUT_OF_STOCK") : false}
+                            onClick={() => handleOptionClick(optIdx, valIdx)}
+                            className={`relative inline-flex items-center justify-center min-w-[80px] px-3 py-2 text-sm transition-all border bg-white ${
+                              isSelected
+                                ? "border-emerald-600 text-emerald-600 z-10"
+                                : "border-slate-200 text-slate-700 hover:border-slate-300"
+                            } ${isOutOfStock && !isSelected ? "opacity-60 bg-slate-50 border-dashed" : ""}`}
+                          >
+                            {optIdx === 0 && targetVariant?.imageUrl && (
+                              <img src={targetVariant.imageUrl} alt={val} className="w-5 h-5 mr-2 rounded-sm object-cover" />
+                            )}
+                            <span>{val}</span>
+                            {isSelected && (
+                              <div className="absolute bottom-0 right-0">
+                                <svg viewBox="0 0 16 16" className="w-4 h-4 text-emerald-600 fill-current">
+                                  <polygon points="16,0 16,16 0,16" />
+                                </svg>
+                                <Check className="absolute bottom-0 right-0 h-2.5 w-2.5 text-white mb-[1px] mr-[1px]" strokeWidth={4} />
+                              </div>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
               </div>
-            </div>
+            ) : (
+              <div className="mt-6 flex items-start gap-4">
+                <label className="text-sm text-slate-500 font-medium min-w-[100px] pt-2">
+                  Phân loại
+                </label>
+                <div className="flex flex-wrap gap-3 flex-1">
+                  {productVariants.map((variant) => {
+                    const isSelected = selectedVariant?.id === variant.id;
+                    const isVariantOutOfStock = (variant.inventory?.quantity ?? 0) <= 0 || variant.status === "OUT_OF_STOCK";
+                    return (
+                      <button
+                        key={variant.id}
+                        type="button"
+                        disabled={variant.status !== "ACTIVE" && variant.status !== "OUT_OF_STOCK"}
+                        onClick={() => {
+                          setSelectedVariantId(variant.id);
+                          if (variant.imageUrl) setSelectedImage(variant.imageUrl);
+                        }}
+                        className={`relative inline-flex items-center justify-center min-w-[80px] px-3 py-2 text-sm transition-all border bg-white ${
+                          isSelected
+                            ? "border-emerald-600 text-emerald-600 z-10"
+                            : "border-slate-200 text-slate-700 hover:border-slate-300"
+                        } ${isVariantOutOfStock && !isSelected ? "opacity-60 bg-slate-50 border-dashed" : ""}`}
+                      >
+                        <span>{variant.variantName}</span>
+                        {isSelected && (
+                          <div className="absolute bottom-0 right-0">
+                            <svg viewBox="0 0 16 16" className="w-4 h-4 text-emerald-600 fill-current">
+                              <polygon points="16,0 16,16 0,16" />
+                            </svg>
+                            <Check className="absolute bottom-0 right-0 h-2.5 w-2.5 text-white mb-[1px] mr-[1px]" strokeWidth={4} />
+                          </div>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
             {/* QUANTITY STEPPER */}
-            <div className="mt-5 space-y-2">
-              <label className="block text-xs font-bold text-slate-700">
-                Số lượng mua:
+            <div className="mt-5 flex items-center gap-4">
+              <label className="text-sm text-slate-500 font-medium min-w-[100px]">
+                Số lượng
               </label>
-              <div className="flex items-center gap-4">
+              <div className="flex items-center gap-4 flex-1">
                 <QuantityStepper
-                  value={quantity}
+                  value={isSelectedVariantOutOfStock ? 0 : Math.max(1, Math.min(quantity, selectedVariant?.inventory?.quantity ?? 1))}
                   onChange={setQuantity}
-                  max={selectedVariant?.inventory.quantity ?? 1}
+                  min={isSelectedVariantOutOfStock ? 0 : 1}
+                  max={isSelectedVariantOutOfStock ? 0 : (selectedVariant?.inventory?.quantity ?? 1)}
+                  disabled={isSelectedVariantOutOfStock}
                 />
-                <span className="text-xs font-medium text-slate-500">
-                  Kho còn: <strong className={isSelectedVariantOutOfStock ? "text-rose-600 font-bold" : "text-slate-900"}>{selectedVariant?.inventory?.quantity ?? 0}</strong> sản phẩm
-                  {isSelectedVariantOutOfStock && <span className="ml-2 font-extrabold text-rose-600">(Hết hàng)</span>}
+                <span className="text-sm text-slate-500">
+                  {selectedVariant?.inventory?.quantity ?? 0} sản phẩm có sẵn
+                  {isSelectedVariantOutOfStock && <span className="ml-2 font-bold text-rose-600">(Hết hàng)</span>}
                 </span>
               </div>
             </div>
@@ -530,6 +617,7 @@ export default function ProductDetailPage() {
                         id: Number(activeShop.id) || activeShop.id,
                         name: activeShop.shopName,
                         avatar: activeShop.logoUrl || null,
+                        shop_slug: activeShop.shopSlug,
                       },
                       productDraft: {
                          id: product.id,

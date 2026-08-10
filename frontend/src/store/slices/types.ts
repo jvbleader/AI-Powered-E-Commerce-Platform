@@ -288,6 +288,7 @@ export type MarketplaceStore = {
   // ── Core slice ──
   resetDemo: () => Promise<void>;
   showToast: (message: string, tone?: ToastTone) => Promise<void>;
+  toggleSidebar: () => void;
   setUsers: (users: User[]) => Promise<void>;
   setConversations: (conversations: Conversation[]) => Promise<void>;
   submitViolationReport: (reportData: { productId: string; reasonType: string; description: string; imageUrls?: string[] }) => Promise<any>;

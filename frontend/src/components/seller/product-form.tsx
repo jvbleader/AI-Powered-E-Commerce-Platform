@@ -5,7 +5,7 @@ import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox, Field, Input, Select, Textarea } from "@/components/ui/input";
 import { MultiSelect } from "@/components/ui/multi-select";
-import { ImageUpload } from "@/components/ui/image-upload";
+import { ImageUpload, MultiImageUpload } from "@/components/ui/image-upload";
 import { Panel, Section } from "@/components/ui/containers";
 import { StatusBadge } from "@/components/ui/badge";
 import { useMarketplaceStore } from "@/store/use-marketplace-store";
@@ -62,7 +62,9 @@ export default function ProductForm({ productId }: { productId?: string }) {
   const [origin, setOrigin] = useState(editing?.origin ?? "Việt Nam");
   const [warranty, setWarranty] = useState(editing?.warranty ?? "");
   const [categoryIds, setCategoryIds] = useState<string[]>(editing?.categoryIds ?? []);
-  const [imageUrl, setImageUrl] = useState(editing?.thumbnailUrl || "https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=900&q=80");
+  const [imageUrls, setImageUrls] = useState<string[]>(
+    editing?.imageUrls?.length ? editing.imageUrls : (editing?.thumbnailUrl ? [editing.thumbnailUrl] : [])
+  );
   const slug = slugify(name || "san-pham-moi");
 
   const [hasVariants, setHasVariants] = useState(editing && editing.variantOptions && editing.variantOptions.length > 0 ? true : false);
@@ -76,7 +78,7 @@ export default function ProductForm({ productId }: { productId?: string }) {
     quantity: string;
     imageUrl: string;
     publicId?: string;
-  }[]>([{ tierIndex: [], sku: "", price: "199000", quantity: "20", imageUrl: imageUrl }]);
+  }[]>([{ tierIndex: [], sku: "", price: "199000", quantity: "20", imageUrl: imageUrls[0] || "" }]);
 
   const [bulkPrice, setBulkPrice] = useState("");
   const [bulkQuantity, setBulkQuantity] = useState("");
@@ -90,7 +92,7 @@ export default function ProductForm({ productId }: { productId?: string }) {
       setOrigin(editing.origin ?? "Việt Nam");
       setWarranty(editing.warranty ?? "");
       setCategoryIds(editing.categoryIds ?? []);
-      setImageUrl(editing.thumbnailUrl || "https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=900&q=80");
+      setImageUrls(editing.imageUrls?.length ? editing.imageUrls : (editing.thumbnailUrl ? [editing.thumbnailUrl] : []));
       
       if (editing.variantOptions && editing.variantOptions.length > 0) {
         setHasVariants(true);
@@ -155,7 +157,7 @@ export default function ProductForm({ productId }: { productId?: string }) {
                   sku: `${shop?.shopSlug}-${slug}-${combo.join("")}`,
                   price: "0",
                   quantity: "0",
-                  imageUrl: imageUrl
+                  imageUrl: imageUrls[0] || ""
               };
           });
       });
@@ -201,8 +203,8 @@ export default function ProductForm({ productId }: { productId?: string }) {
               <Field label="Xuất xứ"><Input value={origin} onChange={(e) => setOrigin(e.target.value)} /></Field>
               <Field label="Bảo hành"><Input value={warranty} onChange={(e) => setWarranty(e.target.value)} /></Field>
             </div>
-            <Field label="Ảnh sản phẩm chính">
-              <ImageUpload value={imageUrl} onChange={setImageUrl} />
+            <Field label="Ảnh sản phẩm">
+              <MultiImageUpload value={imageUrls} onChange={setImageUrls} />
             </Field>
             <Field label="Danh mục sản phẩm">
               <MultiSelect
@@ -346,9 +348,7 @@ export default function ProductForm({ productId }: { productId?: string }) {
                   warranty_info: warranty,
                   category_ids: categoryIds.map(Number),
                   variant_options: hasVariants ? options : [],
-                  images: [
-                    { image_url: imageUrl, is_thumbnail: true, sort_order: 1 }
-                  ],
+                  images: imageUrls.map((url, i) => ({ image_url: url, is_thumbnail: i === 0, sort_order: i + 1 })),
                   variants: variantMatrix.map(row => ({
                     public_id: row.publicId,
                     sku: row.sku || `${shop.shopSlug}-${slug}-${row.tierIndex.join("") || "1"}`,
@@ -357,7 +357,7 @@ export default function ProductForm({ productId }: { productId?: string }) {
                       : "Default",
                     price: Number(row.price) || 0,
                     quantity: Number(row.quantity) || 0,
-                    image_url: imageUrl,
+                    image_url: imageUrls[0] || "",
                     tier_index: hasVariants ? row.tierIndex : []
                   }))
                 };

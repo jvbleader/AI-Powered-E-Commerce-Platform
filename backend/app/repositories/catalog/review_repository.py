@@ -147,7 +147,12 @@ async def get_user_reviews(
 
     query = (
         select(ProductReview)
-        .options(selectinload(ProductReview.product).selectinload(Product.images))
+        .options(
+            selectinload(ProductReview.product).selectinload(Product.images),
+            selectinload(ProductReview.user),
+            selectinload(ProductReview.images),
+            selectinload(ProductReview.order_item)
+        )
         .where(ProductReview.user_id == user_id)
         .order_by(ProductReview.created_at.desc())
         .offset(skip)

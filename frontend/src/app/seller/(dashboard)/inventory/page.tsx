@@ -69,11 +69,11 @@ function InventoryAdjuster({ variant }: { variant: ProductVariant }) {
         </button>
         <Input
           className={cn(
-            "h-8 w-16 text-center font-bold text-sm shrink-0 border transition-colors",
+            "h-8 !w-16 text-center font-bold text-sm shrink-0 border transition-colors [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none",
             currentNum === 0
               ? "bg-rose-50/60 text-rose-700 border-rose-300"
               : currentNum <= 10
-                ? "bg-amber-50/60 text-amber-700 border-amber-300"
+                ? "bg-orange-50/60 text-orange-700 border-orange-300"
                 : "bg-emerald-50/60 text-emerald-700 border-emerald-300"
           )}
           type="number"
@@ -89,33 +89,6 @@ function InventoryAdjuster({ variant }: { variant: ProductVariant }) {
           title="Tăng 1"
         >
           <Plus className="h-4 w-4" />
-        </button>
-      </div>
-
-      <div className="flex items-center gap-1 shrink-0">
-        <button
-          type="button"
-          className="h-8 px-1.5 text-xs font-semibold rounded bg-canvas hover:bg-primary/10 text-primary border border-line transition-colors"
-          onClick={() => handleAdjust(5)}
-          disabled={loading}
-        >
-          +5
-        </button>
-        <button
-          type="button"
-          className="h-8 px-1.5 text-xs font-semibold rounded bg-canvas hover:bg-primary/10 text-primary border border-line transition-colors"
-          onClick={() => handleAdjust(10)}
-          disabled={loading}
-        >
-          +10
-        </button>
-        <button
-          type="button"
-          className="h-8 px-1.5 text-xs font-semibold rounded bg-canvas hover:bg-primary/10 text-primary border border-line transition-colors"
-          onClick={() => handleAdjust(50)}
-          disabled={loading}
-        >
-          +50
         </button>
       </div>
 
@@ -203,7 +176,7 @@ function InventoryContent() {
   });
 
   return (
-    <div className="space-y-6">
+    <Section title="Quản lý tồn kho" className="space-y-6 pb-0">
       {/* Stats Summary */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Panel className="p-4 flex items-center gap-3">
@@ -227,12 +200,12 @@ function InventoryContent() {
         </Panel>
 
         <Panel className="p-4 flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-panel bg-amber-100 text-amber-600">
+          <div className="flex h-10 w-10 items-center justify-center rounded-panel bg-orange-100 text-orange-600">
             <AlertTriangle className="h-5 w-5" />
           </div>
           <div>
             <p className="text-xs text-muted font-medium">Sắp hết (≤ 10)</p>
-            <p className="text-lg font-bold text-amber-600">{lowStockCount}</p>
+            <p className="text-lg font-bold text-orange-600">{lowStockCount}</p>
           </div>
         </Panel>
 
@@ -247,7 +220,7 @@ function InventoryContent() {
         </Panel>
       </div>
 
-      <Section title="Quản lý tồn kho biến thể">
+      <div className="flex flex-col gap-4">
         {/* Filters bar */}
         <div className="space-y-4 mb-4">
           {/* Status Tabs */}
@@ -314,6 +287,7 @@ function InventoryContent() {
 
         <DataTable
           columns={["Variant", "SKU", "Sản phẩm", "Số lượng", "Tạm khóa", "Trạng thái", "Điều chỉnh tồn kho"]}
+          aligns={["left", "left", "left", "center", "center", "left", "left"]}
           rows={filteredVariants.map((variant) => {
             const product = products.find((item) => item.id === variant.productId);
             const qty = variant.inventory?.quantity ?? 0;
@@ -328,7 +302,7 @@ function InventoryContent() {
                   qty === 0
                     ? "bg-rose-50 text-rose-600 border-rose-200"
                     : qty <= 10
-                      ? "bg-amber-50 text-amber-600 border-amber-200"
+                      ? "bg-orange-50 text-orange-600 border-orange-200"
                       : "bg-emerald-50 text-emerald-600 border-emerald-200"
                 )}
               >
@@ -344,8 +318,8 @@ function InventoryContent() {
             ];
           })}
         />
-      </Section>
-    </div>
+      </div>
+    </Section>
   );
 }
 

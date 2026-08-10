@@ -42,7 +42,7 @@ function ChatMessageItemInner({
         </div>
       )}
 
-      <div className="space-y-3 max-w-[85%] sm:max-w-[78%]">
+      <div className="space-y-3 max-w-[calc(85%-10px)] sm:max-w-[calc(78%-10px)]">
         {shouldRenderTextBubble && (
           <div
             className={cn(

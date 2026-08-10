@@ -65,6 +65,7 @@ type VariantPublicResponse = {
   image_url: string | null;
   status: string;
   inventory?: InventoryPublicResponse | null;
+  tier_index?: number[] | null;
 };
 
 type ProductPublicResponse = {
@@ -140,6 +141,7 @@ export const normalizeProduct = (
     saleEndAt: variant.sale_end_at ?? undefined,
     imageUrl: variant.image_url ?? product.thumbnailUrl,
     status: toVariantStatus(variant.status),
+    tierIndex: variant.tier_index ?? undefined,
     inventory: {
       quantity: Math.max(0, (variant.inventory?.quantity ?? 0) - (variant.inventory?.reserved_quantity ?? 0)),
       reservedQuantity: variant.inventory?.reserved_quantity ?? 0

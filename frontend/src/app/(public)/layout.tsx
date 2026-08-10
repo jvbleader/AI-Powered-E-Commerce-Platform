@@ -7,6 +7,7 @@ import { ErrorBoundary } from "@/components/error-boundary";
 import { fetchCategories } from "@/services/product-api";
 import { useMarketplaceStore } from "@/store/use-marketplace-store";
 import { MarketplaceHeader, MarketplaceFooter } from "@/components/shared/navbar";
+import { AuthHeader } from "@/components/shared/auth-header";
 import { MarketplaceHeaderSkeleton } from "@/components/shared/skeletons";
 import { ChatWidget } from "@/components/ai/ChatWidget";
 import { CustomerChatInboxProvider } from "@/components/ai/CustomerChatInboxProvider";
@@ -106,14 +107,17 @@ export default function MarketplaceLayout({
   }
 
   const isSupportRoute = pathname === "/support" || pathname === "/chat";
+  const isAuthRoute = ["/login", "/register", "/forgot-password", "/reset-password", "/verify-email", "/verify-phone"].includes(pathname);
 
   const content = isSupportRoute ? (
     <div className="h-screen bg-canvas text-slate-900 flex flex-col overflow-hidden">
       <ErrorBoundary>{children}</ErrorBoundary>
     </div>
   ) : (
-    <div className="min-h-screen bg-canvas text-slate-900 flex flex-col justify-between marketplace-layout-shell">
-      {!ready ? (
+    <div className={`min-h-screen bg-canvas text-slate-900 flex flex-col justify-between ${!isAuthRoute ? "marketplace-layout-shell" : ""}`}>
+      {isAuthRoute ? (
+        <AuthHeader />
+      ) : !ready ? (
         <MarketplaceHeaderSkeleton />
       ) : (
         <MarketplaceHeader />
@@ -140,6 +144,3 @@ export default function MarketplaceLayout({
     </CustomerChatInboxProvider>
   );
 }
-
-
-

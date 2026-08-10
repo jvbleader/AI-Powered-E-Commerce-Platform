@@ -20,6 +20,10 @@ async function uploadFile(endpoint: string, file: File): Promise<string> {
   }
 }
 
+export async function uploadImage(file: File): Promise<string> {
+  return uploadFile("/api/upload/image", file);
+}
+
 export async function uploadChatImage(file: File): Promise<string> {
   return uploadFile("/api/upload/image", file);
 }
