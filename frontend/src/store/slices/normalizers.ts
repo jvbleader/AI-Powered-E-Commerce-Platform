@@ -41,7 +41,9 @@ export const normalizeBackendSellerApplication = (
 ): SellerApplication => ({
   publicId: application.publicId ?? application.public_id,
   shopName: application.shop_name,
+  shopLogoUrl: application.shop_logo_url ?? undefined,
   shopSlug: application.shop_slug ?? undefined,
+  shopDescription: application.shop_description ?? undefined,
   phone: application.phone,
   email: application.email,
   pickupAddress: application.pickup_address,
@@ -49,6 +51,14 @@ export const normalizeBackendSellerApplication = (
   bankName: application.bank_name ?? "",
   bankAccountNumber: application.bank_account_number ?? "",
   bankAccountName: application.bank_account_name ?? "",
+  shippingProviders: application.shipping_providers?.map((p: any) => ({
+    publicId: p.public_id,
+    code: p.code,
+    name: p.name,
+    fixedFee: Number(p.fixed_fee),
+    logoUrl: p.logo_url,
+    active: Boolean(p.active)
+  })) ?? [],
   status: application.status ?? status ?? undefined,
   rejectedReason: application.rejected_reason ?? undefined,
   approvedAt: application.approved_at ?? undefined
@@ -151,7 +161,9 @@ export const normalizeBackendOrder = (
     isReviewed: Boolean(item.is_reviewed)
   })),
   shipment: backendOrder.shipment ? {
-    shippingProviderName: backendOrder.shipment.shipping_provider_name || "Chưa có thông tin",
+    shippingProviderId: backendOrder.shipment.shipping_provider_id,
+    shippingProviderName: backendOrder.shipment.shipping_provider_name,
+    trackingCode: backendOrder.shipment.tracking_code,
     receiverName: backendOrder.shipment.receiver_name,
     receiverPhone: backendOrder.shipment.receiver_phone,
     province: backendOrder.shipment.province,
@@ -162,7 +174,6 @@ export const normalizeBackendOrder = (
     shippedAt: backendOrder.shipment.shipped_at || undefined,
     deliveredAt: backendOrder.shipment.delivered_at || undefined
   } : {
-    shippingProviderName: "Chưa có thông tin",
     receiverName: "-",
     receiverPhone: "-",
     province: "-",
@@ -187,13 +198,12 @@ export const sellerApplicationToShop = (
   userId: user.id,
   shopName: application.shopName,
   shopSlug: (application.shopSlug ?? slugifyShopName(application.shopName)) || `seller-${user.id}`,
-  logoUrl: DEFAULT_SHOP_LOGO,
-  description: "Hồ sơ shop được đồng bộ từ backend seller application.",
+  logoUrl: application.shopLogoUrl ?? "",
+  description: application.shopDescription ?? "Hồ sơ shop được đồng bộ từ backend seller application.",
   phone: application.phone,
   email: application.email,
   pickupAddress: application.pickupAddress,
-  shippingFee: Number(backendApplication.shipping_fee ?? 0),
-  shippingProviderName: backendApplication.shipping_provider_name ?? "Chưa cấu hình",
+  shippingProviders: application.shippingProviders ?? [],
   status: application.status ?? fallbackStatus,
   rejectedReason: application.rejectedReason,
   totalSold: 0,
@@ -211,8 +221,7 @@ export const sameShopSnapshot = (left: Shop, right: Shop) =>
   left.phone === right.phone &&
   left.email === right.email &&
   left.pickupAddress === right.pickupAddress &&
-  left.shippingFee === right.shippingFee &&
-  left.shippingProviderName === right.shippingProviderName &&
+  left.shippingProviders?.length === right.shippingProviders?.length &&
   left.status === right.status &&
   left.rejectedReason === right.rejectedReason &&
   left.totalSold === right.totalSold &&

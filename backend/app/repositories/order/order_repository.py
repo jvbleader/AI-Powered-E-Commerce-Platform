@@ -5,6 +5,7 @@ from sqlalchemy.orm import selectinload
 from models.order import Order
 from models.order import OrderItem
 from models.order import OrderStatusLog
+from models.order import Shipment
 from models.base import utc_now
 
 
@@ -28,7 +29,7 @@ async def get_orders_by_seller_and_status(
     items_query = (
         query.options(
             selectinload(Order.items).selectinload(OrderItem.review),
-            selectinload(Order.shipment),
+            selectinload(Order.shipment).selectinload(Shipment.shipping_provider),
             selectinload(Order.user),
         )
         .order_by(Order.created_at.desc())
@@ -48,7 +49,7 @@ async def get_order_by_public_id_and_seller(
         select(Order)
         .options(
             selectinload(Order.items).selectinload(OrderItem.review),
-            selectinload(Order.shipment),
+            selectinload(Order.shipment).selectinload(Shipment.shipping_provider),
             selectinload(Order.user),
         )
         .filter(
@@ -126,7 +127,7 @@ async def get_user_orders(db: AsyncSession, user_id: int) -> list[Order]:
         .options(
             selectinload(Order.items).selectinload(OrderItem.review),
             selectinload(Order.seller),
-            selectinload(Order.shipment),
+            selectinload(Order.shipment).selectinload(Shipment.shipping_provider),
         )
         .where(Order.user_id == user_id)
         .order_by(Order.created_at.desc())
@@ -143,7 +144,7 @@ async def get_order_by_code_and_user(
         .options(
             selectinload(Order.items).selectinload(OrderItem.review),
             selectinload(Order.seller),
-            selectinload(Order.shipment),
+            selectinload(Order.shipment).selectinload(Shipment.shipping_provider),
         )
     )
     if is_seller:

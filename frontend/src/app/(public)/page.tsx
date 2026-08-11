@@ -32,7 +32,7 @@ import { EmptyState } from "@/components/ui/feedback";
 import { CyberProductGridSkeleton, HeroSpotlightSkeleton, ShopCardSkeleton } from "@/components/ui/skeletons";
 import { Skeleton } from "@/components/ui/skeleton";
 import { RatingStars } from "@/components/shared/cards";
-import { fetchRecommendedProducts, fetchPublicProducts } from "@/services/product-api";
+import { fetchRecommendedProducts, fetchPublicProducts, fetchFeaturedShops } from "@/services/product-api";
 import { useMarketplaceStore } from "@/store/use-marketplace-store";
 import { BRAND_NAME } from "@/lib/constants";
 import type { Product, ProductVariant, Shop } from "@/types/models";
@@ -147,6 +147,7 @@ export default function HomePageComponent() {
   const [newest, setNewest] = useState<Product[]>([]);
   const [localVariants, setLocalVariants] = useState<ProductVariant[]>([]);
   const [localShops, setLocalShops] = useState<Shop[]>([]);
+  const [featuredShops, setFeaturedShops] = useState<Shop[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"recommended" | "newest">("recommended");
 
@@ -169,11 +170,28 @@ export default function HomePageComponent() {
     let isMounted = true;
     const loadHomeData = async () => {
       setLoading(true);
-      const [recommendRes, newestRes] = await Promise.all([
+      const [recommendRes, newestRes, featuredRes] = await Promise.all([
         fetchRecommendedProducts(20),
-        fetchPublicProducts({ sort_by: "newest", size: 20 })
+        fetchPublicProducts({ sort_by: "newest", size: 20 }),
+        fetchFeaturedShops(10)
       ]);
       if (isMounted) {
+        if (featuredRes.ok && featuredRes.shops) {
+          setFeaturedShops(featuredRes.shops);
+          // Also merge them into localShops so products can link to them if needed
+          setLocalShops((prev) => {
+            const shopMap = new Map();
+            for (const s of [...prev, ...featuredRes.shops]) {
+              const existing = shopMap.get(s.id);
+              if (existing && !s.description && existing.description) {
+                shopMap.set(s.id, { ...s, description: existing.description });
+              } else {
+                shopMap.set(s.id, s);
+              }
+            }
+            return Array.from(shopMap.values());
+          });
+        }
         if (recommendRes.ok && recommendRes.products) {
           setBestSellers(recommendRes.products);
           setLocalVariants((prev) => {
@@ -182,7 +200,16 @@ export default function HomePageComponent() {
           });
           setLocalShops((prev) => {
             const combined = [...prev, ...(recommendRes.shops || [])];
-            return Array.from(new Map(combined.map((s) => [s.id, s])).values());
+            const shopMap = new Map();
+            for (const s of combined) {
+              const existing = shopMap.get(s.id);
+              if (existing && !s.description && existing.description) {
+                shopMap.set(s.id, { ...s, description: existing.description });
+              } else {
+                shopMap.set(s.id, s);
+              }
+            }
+            return Array.from(shopMap.values());
           });
         }
         if (newestRes.ok && newestRes.products) {
@@ -193,7 +220,16 @@ export default function HomePageComponent() {
           });
           setLocalShops((prev) => {
             const combined = [...prev, ...(newestRes.shops || [])];
-            return Array.from(new Map(combined.map((s) => [s.id, s])).values());
+            const shopMap = new Map();
+            for (const s of combined) {
+              const existing = shopMap.get(s.id);
+              if (existing && !s.description && existing.description) {
+                shopMap.set(s.id, { ...s, description: existing.description });
+              } else {
+                shopMap.set(s.id, s);
+              }
+            }
+            return Array.from(shopMap.values());
           });
         }
         setLoading(false);
@@ -216,7 +252,7 @@ export default function HomePageComponent() {
     return !isHidden && (globalP ? globalP.status !== "HIDDEN" : p.status !== "HIDDEN");
   });
 
-  const approvedShops = localShops.filter((shop) => shop.status === "APPROVED").sort((a, b) => (b.totalSold || 0) - (a.totalSold || 0));
+  const approvedShops = featuredShops.filter((shop) => shop.status === "APPROVED");
   const heroProduct = activeBestSellers[0];
   const heroShop = heroProduct ? localShops.find((shop) => shop.id === heroProduct.sellerId) : undefined;
   const heroVariant = heroProduct ? localVariants.find((v) => v.productId === heroProduct.id) : undefined;
@@ -508,20 +544,23 @@ export default function HomePageComponent() {
               <ShopCardSkeleton key={`shop-skel-${i}`} />
             ))
           ) : approvedShops.slice(0, 6).map((shop) => (
-            <div key={shop.id} className="bento-card rounded-2xl p-5 flex items-center justify-between bg-white/90 border-slate-200/80">
-              <div className="flex items-center gap-3">
-                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 font-heading font-extrabold text-lg">
-                  {shop.shopName.charAt(0)}
-                </div>
-                <div>
-                  <h4 className="font-heading font-bold text-slate-900">{shop.shopName}</h4>
-                  <p className="text-xs text-slate-500">{shop.description || "Gian hàng uy tín trên Shepoo"}</p>
+            <div key={shop.id} className="bento-card rounded-2xl p-5 flex items-center justify-between gap-4 bg-white/90 border-slate-200/80">
+              <div className="flex items-center gap-3 min-w-0">
+                {shop.logoUrl ? (
+                  <img src={shop.logoUrl} alt={shop.shopName} className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl object-cover border border-emerald-200" />
+                ) : (
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 font-heading font-extrabold text-lg">
+                    {shop.shopName.charAt(0)}
+                  </div>
+                )}
+                <div className="min-w-0">
+                  <h4 className="font-heading font-bold text-slate-900 truncate">{shop.shopName}</h4>
                 </div>
               </div>
 
               <Link
                 href={`/shops/${shop.shopSlug}`}
-                className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-bold text-emerald-700 hover:border-emerald-400 hover:bg-emerald-50"
+                className="shrink-0 whitespace-nowrap rounded-xl border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-bold text-emerald-700 hover:border-emerald-400 hover:bg-emerald-50"
               >
                 Ghé Shop
               </Link>

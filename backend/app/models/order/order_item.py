@@ -49,7 +49,7 @@ class OrderItem(Base):
         nullable=True,
     )
     seller_name_snapshot: Mapped[str] = mapped_column(String(150), nullable=False)
-    sku_snapshot: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    sku_snapshot: Mapped[str | None] = mapped_column(String(255), nullable=True)
     unit_price: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
     original_price_snapshot: Mapped[Decimal | None] = mapped_column(
         Numeric(12, 2), nullable=True

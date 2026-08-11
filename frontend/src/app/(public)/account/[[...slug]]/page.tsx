@@ -721,7 +721,7 @@ export default function AccountPage() {
     const shop = shopById(order.sellerId);
     const shopName = order.shopName || shop?.shopName || order.items?.[0]?.sellerNameSnapshot || "Shop";
     const shopSlug = order.shopSlug || shop?.shopSlug || "shop";
-    const trackingCode = `SPX-VN-${order.orderCode.slice(-8)}`;
+    const trackingCode = order.shipment?.trackingCode || "N/A";
 
     return (
       <Section title={`Chi tiết đơn hàng`}>
@@ -1025,7 +1025,7 @@ export default function AccountPage() {
 
                 <div className="mt-5 border-t border-line pt-4">
                   <p className="text-xs font-bold text-muted/70 uppercase tracking-wider">Đơn vị vận chuyển</p>
-                  <p className="mt-1 text-sm font-bold text-ink">Standard Express (Giao Hàng Nhanh)</p>
+                  <p className="mt-1 text-sm font-bold text-ink">{order.shipment.shippingProviderName || "Standard Express"}</p>
                   <div className="mt-3 flex items-center justify-between rounded-xl bg-canvas p-3 border border-line">
                     <span className="font-mono font-bold text-ink text-sm">{trackingCode}</span>
                     <button

@@ -9,6 +9,7 @@ from . import (
     payment,
     promotion,
     seller,
+    shipping,
     user,
 )
 
@@ -23,5 +24,6 @@ __all__ = [
     "payment",
     "promotion",
     "seller",
+    "shipping",
     "user",
 ]

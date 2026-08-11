@@ -81,6 +81,7 @@ export type BackendSellerApplication = {
   publicId?: string;
   shop_name: string;
   shop_slug?: string | null;
+  shop_description?: string | null;
   phone: string;
   email: string;
   pickup_address: string;
@@ -88,8 +89,7 @@ export type BackendSellerApplication = {
   bank_name?: string | null;
   bank_account_number?: string | null;
   bank_account_name?: string | null;
-  shipping_fee?: number | string | null;
-  shipping_provider_name?: string | null;
+  shipping_providers?: any[];
   status?: SellerStatus | null;
   approved_at?: string | null;
   rejected_reason?: string | null;
@@ -175,7 +175,7 @@ export type BackendOrderResponse = {
   created_at: string;
   updated_at?: string | null;
   user?: { public_id: string; full_name: string; avatar_url?: string | null };
-  seller?: { public_id: string; shop_name: string; shop_logo_url?: string | null; shop_slug?: string };
+  seller?: { id?: number; public_id: string; shop_name: string; shop_logo_url?: string | null; shop_slug?: string };
   items?: any[];
   shipment?: any;
 };
@@ -195,6 +195,8 @@ export type SellerApplicationPayload = Pick<
   | "bankName"
   | "bankAccountNumber"
   | "bankAccountName"
+  | "shippingProviderPublicIds"
+  | "shopDescription"
 >;
 
 
@@ -243,7 +245,7 @@ export type MarketplaceStore = {
 
 
   // ── Order slice ──
-  checkout: (addressId: string, paymentMethod: PaymentMethod, customerNote?: string) => Promise<any>;
+  checkout: (addressId: string, paymentMethod: PaymentMethod, customerNote?: string, shopShippingMap?: Record<string, string>) => Promise<any>;
   createCheckoutPayment: (orderCodes: string[], paymentMethod: PaymentMethod) => Promise<any>;
   fetchPaymentDetail: (paymentCode: string) => Promise<any>;
   updatePaymentStatus: (paymentCode: string, status: PaymentStatus) => Promise<any>;

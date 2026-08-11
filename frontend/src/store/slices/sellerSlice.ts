@@ -93,17 +93,33 @@ export const createSellerSlice: StateCreator<MarketplaceStore, [], [], any> = (s
           tax_code: validation.taxCode,
           bank_name: validation.bankName,
           bank_account_number: validation.bankAccountNumber,
-          bank_account_name: validation.bankAccountName
+          bank_account_name: validation.bankAccountName,
+          shipping_provider_public_ids: payload.shippingProviderPublicIds ?? [],
+          shop_description: payload.shopDescription,
+          shop_logo_url: payload.shopLogoUrl
         })
       });
-      const application = normalizeBackendSellerApplication(backendApplication, "PENDING");
-      setState((prev: AppState) => upsertSellerApplicationShop(prev, user, application, backendApplication, "PENDING"));
+      const newStatus = backendApplication.status ?? "PENDING";
+      const application = normalizeBackendSellerApplication(backendApplication, newStatus as SellerStatus);
+      setState((prev: AppState) => upsertSellerApplicationShop(prev, user, application, backendApplication, newStatus as SellerStatus));
+
+      let message = "Đã gửi hồ sơ shop, vui lòng chờ admin duyệt.";
+      let redirectTo = "/seller/pending";
+      
+      if (mode === "update") {
+        if (newStatus === "APPROVED") {
+          message = "Đã cập nhật hồ sơ shop.";
+          redirectTo = "/seller/profile";
+        } else {
+          message = "Đã cập nhật hồ sơ shop và chuyển về chờ duyệt.";
+        }
+      }
 
       return {
         ok: true as const,
-        message: mode === "update" ? "Đã cập nhật hồ sơ shop và chuyển về chờ duyệt." : "Đã gửi hồ sơ shop, vui lòng chờ admin duyệt.",
+        message,
         application,
-        redirectTo: "/seller/pending"
+        redirectTo
       };
     } catch (error) {
       if (error instanceof ApiError) {

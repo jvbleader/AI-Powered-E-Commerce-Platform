@@ -226,7 +226,7 @@ export default function ProductForm({ productId }: { productId?: string }) {
                       setHasVariants(e.target.checked);
                       if (!e.target.checked) {
                           setOptions([]);
-                          setVariantMatrix([{ tierIndex: [], sku: `${shop?.shopSlug}-${slug}-1`, price: "0", quantity: "0", imageUrl: imageUrl }]);
+                          setVariantMatrix([{ tierIndex: [], sku: `${shop?.shopSlug}-${slug}-1`, price: "0", quantity: "0", imageUrl: imageUrls[0] || "" }]);
                       } else if (options.length === 0) {
                           setOptions([{ name: "Màu sắc", values: ["Đỏ", "Xanh"] }]);
                       }

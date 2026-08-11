@@ -33,7 +33,7 @@ export const createOrderSlice: StateCreator<MarketplaceStore, [], [], any> = (se
   const setVerificationContext = (ctx: any) => set({ verificationContext: ctx });
   const cloneState = () => typeof structuredClone === 'function' ? structuredClone(get().state) : JSON.parse(JSON.stringify(get().state));
   return {
-    checkout: async (addressId: string, method: PaymentMethod, note: string) => {
+    checkout: async (addressId: string, method: PaymentMethod, note: string, shopShippingMap?: Record<string, string>) => {
       const { state } = get();
 
     if (!get().getCurrentUser()) return { ok: false, message: "Bạn cần đăng nhập để checkout.", orderCodes: undefined };
@@ -49,11 +49,23 @@ export const createOrderSlice: StateCreator<MarketplaceStore, [], [], any> = (se
 
     try {
       const cartItemIds = groups.flatMap(g => g.rows.map(r => Number(r.item.id)));
+      
+      const shippingProvidersPayload = shopShippingMap 
+        ? Object.entries(shopShippingMap).map(([shopId, providerId]) => {
+            const group = groups.find(g => g.shop.id === shopId);
+            return {
+              shop_public_id: group?.shop.publicId || shopId,
+              shipping_provider_public_id: providerId
+            };
+          })
+        : [];
+
       const backendOrders = await orderApi.checkoutCart({
         cart_item_ids: cartItemIds,
         address_id: Number(addressId),
         customer_note: note || undefined,
         payment_method: method,
+        shipping_providers: shippingProvidersPayload
       }) as unknown as BackendOrderResponse[];
 
       const orderCodes = backendOrders.map(o => o.order_code);

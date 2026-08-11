@@ -108,7 +108,7 @@ export default function SellerProductsPage() {
                   type="button"
                   className="font-bold text-sky hover:underline inline-flex items-center gap-1"
                   onClick={() => setInventoryProduct(product)}
-                  title="Quản lý tồn kho biến thể"
+                  title="Quản lý tồn kho phân loại"
                 >
                   <Box className="h-3.5 w-3.5" />
                   Quản lý kho

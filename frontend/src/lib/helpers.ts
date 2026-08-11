@@ -231,7 +231,7 @@ export const getCartRows = (
           product.status === "DELETED"
             ? "Sản phẩm đã bị xóa"
             : product.status === "HIDDEN" || variant.status === "HIDDEN"
-              ? "Sản phẩm/biến thể đang ẩn"
+              ? "Sản phẩm/phân loại đang ẩn"
               : product.status === "OUT_OF_STOCK" || variant.status === "OUT_OF_STOCK" || variant.inventory.quantity <= 0
                 ? "Hết hàng"
                 : shop.status !== "APPROVED"
@@ -256,7 +256,7 @@ export const groupCartByShop = (rows: CartRow[]) =>
   rows.reduce<Record<string, { shop: Shop; rows: CartRow[]; subtotal: number; shippingFee: number; total: number }>>(
     (acc, row) => {
       if (!acc[row.shop.id]) {
-        acc[row.shop.id] = { shop: row.shop, rows: [], subtotal: 0, shippingFee: row.shop.shippingFee, total: 0 };
+        acc[row.shop.id] = { shop: row.shop, rows: [], subtotal: 0, shippingFee: 0, total: 0 };
       }
       acc[row.shop.id].rows.push(row);
       if (row.item.isSelected && !row.unavailable) {
@@ -317,7 +317,7 @@ export const createOrderFromGroup = (
     sellerConfirmExpiresAt: new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString(),
     items,
     shipment: {
-      shippingProviderName: group.shop.shippingProviderName,
+      shippingProviderName: group.shop.shippingProviders?.[0]?.name || "Giao hàng nhanh",
       receiverName: address.receiverName,
       receiverPhone: address.phone,
       province: address.province,

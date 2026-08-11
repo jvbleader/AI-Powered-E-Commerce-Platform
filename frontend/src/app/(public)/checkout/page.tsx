@@ -9,7 +9,7 @@ import { Panel, Section } from "@/components/ui/containers";
 import { EmptyState } from "@/components/ui/feedback";
 import { useMarketplaceStore } from "@/store/use-marketplace-store";
 import { selectedCheckoutGroups, paymentMethodLabel, formatVnd } from "@/lib/helpers";
-import type { Address, AddressType, PaymentMethod } from "@/types/models";
+import type { Address, AddressType, PaymentMethod, ShippingProvider } from "@/types/models";
 import Unauthorized from "@/components/shared/unauthorized-page";
 
 export default function CheckoutPage() {
@@ -27,9 +27,24 @@ export default function CheckoutPage() {
   const [note, setNote] = useState("");
   const [coupon, setCoupon] = useState("");
   const [shipCoupon, setShipCoupon] = useState("");
+  const [shopShippingMap, setShopShippingMap] = useState<Record<string, string>>({});
 
   const rows = store.getCartRows();
-  const groups = selectedCheckoutGroups(rows);
+  const rawGroups = selectedCheckoutGroups(rows);
+  const groups = rawGroups.map(group => {
+    let providerId = shopShippingMap[group.shop.id];
+    
+    // Default to first provider if not selected
+    if (!providerId && group.shop.shippingProviders?.length) {
+      providerId = group.shop.shippingProviders[0].publicId;
+    }
+
+    const selectedProvider = group.shop.shippingProviders?.find(p => p.publicId === providerId);
+    const shippingFee = selectedProvider ? selectedProvider.fixedFee : 30000;
+    const total = group.subtotal + shippingFee;
+    return { ...group, shippingFee, total, selectedProvider, effectiveProviderId: providerId };
+  });
+
   const total = groups.reduce((sum, group) => sum + group.total, 0);
   const addresses = store.state.addresses.filter((address) => address.userId === user?.id);
 
@@ -129,6 +144,27 @@ export default function CheckoutPage() {
                       </div>
                     ))}
                   </div>
+                  <div className="mt-4 border-t border-line pt-3">
+                    <Field label="Đơn vị vận chuyển">
+                      <div className="grid gap-2 sm:grid-cols-2 mt-2">
+                        {group.shop.shippingProviders?.map((provider) => (
+                          <label key={provider.publicId} className="flex items-start gap-3 rounded-xl border border-line p-3 cursor-pointer hover:bg-canvas/50">
+                            <input
+                              type="radio"
+                              name={`shipping-${group.shop.id}`}
+                              className="mt-1 h-4 w-4 border-line text-primary focus:ring-primary"
+                              checked={group.effectiveProviderId === provider.publicId}
+                              onChange={() => setShopShippingMap(prev => ({ ...prev, [group.shop.id]: provider.publicId }))}
+                            />
+                            <div>
+                              <p className="font-bold text-ink">{provider.name}</p>
+                              <p className="text-xs text-muted">Phí: {provider.fixedFee.toLocaleString("vi-VN")}đ</p>
+                            </div>
+                          </label>
+                        ))}
+                      </div>
+                    </Field>
+                  </div>
                   <div className="mt-3 grid gap-2 text-sm sm:grid-cols-3">
                     <InfoRow label="Subtotal" value={formatVnd(group.subtotal)} />
                     <InfoRow label="Phí ship" value={formatVnd(group.shippingFee)} />
@@ -164,7 +200,22 @@ export default function CheckoutPage() {
                   onClick={async () => {
                     setIsOrdering(true);
                     try {
-                      const result = await store.checkout(addressId, method, note);
+                      const finalShopShippingMap: Record<string, string> = {};
+                      groups.forEach(g => {
+                        if (g.effectiveProviderId) {
+                          finalShopShippingMap[g.shop.id] = g.effectiveProviderId;
+                        }
+                      });
+
+                      // Check if all shops have a shipping provider selected
+                      const missingProvider = groups.find(g => !finalShopShippingMap[g.shop.id] && g.shop.shippingProviders?.length);
+                      if (missingProvider) {
+                        showToast(`Vui lòng chọn đơn vị vận chuyển cho shop ${missingProvider.shop.shopName}`, "danger");
+                        setIsOrdering(false);
+                        return;
+                      }
+
+                      const result = await store.checkout(addressId, method, note, finalShopShippingMap);
                       showToast(result.message, result.ok ? "success" : "danger");
                       if (result.ok) {
                         router.push("/checkout/success");

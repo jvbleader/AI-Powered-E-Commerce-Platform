@@ -25,6 +25,7 @@ def _map_es_doc_to_public(
 ) -> ProductPublicResponse:
     seller_info = SellerInfo(
         id=doc.seller_id,
+        public_id=getattr(doc, "seller_public_id", ""),
         shop_name=doc.shop_name,
         shop_slug=doc.shop_slug,
         pickup_address=getattr(doc, "pickup_address", ""),
@@ -114,6 +115,7 @@ def _map_orm_product_to_public(product) -> ProductPublicResponse:
             shop_slug=seller.shop_slug,
             pickup_address=getattr(seller, "pickup_address", None),
             shop_logo_url=getattr(seller, "shop_logo_url", None),
+            shop_description=getattr(seller, "shop_description", None),
         )
 
     images = [

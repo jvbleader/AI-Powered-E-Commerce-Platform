@@ -38,12 +38,14 @@ function PrintOrdersContent() {
 
         for (const order of orders) {
           const shop = store.state.shops.find(s => s.id === order.sellerId);
-          // Generate QR Code
-          const qrCodeDataUrl = await QRCode.toDataURL(order.orderCode, { width: 200, margin: 1 });
+          const trackingCode = order.shipment.trackingCode || order.orderCode;
           
-          // Generate Barcode using offscreen canvas
+          // Generate QR Code with tracking code
+          const qrCodeDataUrl = await QRCode.toDataURL(trackingCode, { width: 200, margin: 1 });
+          
+          // Generate Barcode using offscreen canvas with tracking code
           const canvas = document.createElement("canvas");
-          JsBarcode(canvas, order.orderCode, {
+          JsBarcode(canvas, trackingCode, {
             format: "CODE128",
             displayValue: false,
             fontSize: 20,
@@ -54,6 +56,21 @@ function PrintOrdersContent() {
 
           // Fake Routing Code
           const routingCode = `HC-${Math.floor(Math.random() * 90 + 10)}-0${Math.floor(Math.random() * 9 + 1)}-GV${Math.floor(Math.random() * 90 + 10)}`;
+          
+          // Determine logo URL
+          const providerName = order.shipment.shippingProviderName?.toLowerCase() || "";
+          let logoUrl = "";
+          if (providerName.includes("ghn") || providerName.includes("giao hàng nhanh")) {
+            logoUrl = "/images/providers/ghn_logo.jpg";
+          } else if (providerName.includes("spx") || providerName.includes("shepoo express")) {
+            logoUrl = "/images/providers/spx_logo.jpg";
+          } else if (providerName.includes("viettel post")) {
+            logoUrl = "/images/providers/viettel_post_logo.jpg";
+          }
+
+          if (logoUrl && typeof window !== "undefined") {
+            logoUrl = window.location.origin + logoUrl;
+          }
 
           const orderWithShop = {
             ...order,
@@ -65,6 +82,7 @@ function PrintOrdersContent() {
             barcodeDataUrl,
             qrCodeDataUrl,
             routingCode,
+            logoUrl,
           });
         }
 

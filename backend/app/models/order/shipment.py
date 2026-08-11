@@ -30,10 +30,12 @@ class Shipment(Base):
         unique=True,
         nullable=False,
     )
-    shipping_provider_name: Mapped[str | None] = mapped_column(
-        String(150),
+    shipping_provider_id: Mapped[int | None] = mapped_column(
+        mysql.BIGINT(unsigned=True),
+        ForeignKey("shipping_providers.id"),
         nullable=True,
     )
+    tracking_code: Mapped[str | None] = mapped_column(String(50), unique=True, nullable=True)
     receiver_name: Mapped[str] = mapped_column(String(150), nullable=False)
     receiver_phone: Mapped[str] = mapped_column(String(20), nullable=False)
     province: Mapped[str] = mapped_column(String(100), nullable=False)
@@ -46,3 +48,10 @@ class Shipment(Base):
     failed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     order: Mapped["Order"] = relationship(back_populates="shipment")
+    shipping_provider: Mapped["ShippingProvider | None"] = relationship()
+
+    @property
+    def shipping_provider_name(self) -> str | None:
+        if hasattr(self, "__dict__") and "shipping_provider" in self.__dict__ and self.shipping_provider:
+            return self.shipping_provider.name
+        return None

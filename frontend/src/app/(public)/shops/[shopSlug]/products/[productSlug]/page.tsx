@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState, Fragment } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { cn } from "@/lib/utils";
 import {
@@ -16,8 +16,12 @@ import {
   Info,
   Tag,
   MessageSquare,
-  X
+  X,
+  Store,
+  Plus,
+  XCircle
 } from "lucide-react";
+import { createPortal } from "react-dom";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Select, Textarea } from "@/components/ui/input";
 import { StatusBadge } from "@/components/ui/badge";
@@ -32,12 +36,25 @@ import {
   getCategoryNames,
   productStatusLabel
 } from "@/lib/helpers";
-import { fetchProductDetail } from "@/services/product-api";
+import {
+  fetchProductDetail,
+  fetchRelatedProducts,
+  fetchPublicProducts,
+  fetchPublicShop,
+} from "@/services/product-api";
 import { fetchProductReviewsApi, ProductReview } from "@/services/review-api";
 import { useMarketplaceStore } from "@/store/use-marketplace-store";
 import NotFoundPage from "@/components/shared/not-found-page";
 import type { Product, ProductVariant, Shop } from "@/types/models";
 import { Skeleton } from "@/components/ui/skeleton";
+
+const getJoinDuration = (approvedAt?: string) => {
+  if (!approvedAt) return "Mới đây";
+  const diffDays = (new Date().getTime() - new Date(approvedAt).getTime()) / (1000 * 60 * 60 * 24);
+  if (diffDays < 30) return "Mới đây";
+  if (diffDays < 365) return `${Math.floor(diffDays / 30)} tháng`;
+  return `${Math.floor(diffDays / 365)} năm`;
+};
 
 export default function ProductDetailPage() {
   const params = useParams();
@@ -56,11 +73,27 @@ export default function ProductDetailPage() {
   const [showReport, setShowReport] = useState(false);
   const [addingToCart, setAddingToCart] = useState(false);
   const [buyingNow, setBuyingNow] = useState(false);
-  
+  const [shopStats, setShopStats] = useState({ products: 0, reviews: 0, totalSold: 0, approvedAt: "" });
   const [product, setProduct] = useState<Product | undefined>(undefined);
   const [shop, setShop] = useState<Shop | undefined>(undefined);
   const [productVariants, setProductVariants] = useState<ProductVariant[]>([]);
   const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const activeShopSlug = shop?.shopSlug || store.state.activeShop?.shopSlug;
+    if (activeShopSlug) {
+      fetchPublicShop(activeShopSlug).then((res) => {
+        if (res.ok && res.shop) {
+          setShopStats({
+            products: res.shop.productCount || 0,
+            reviews: res.shop.reviewCount || 0,
+            totalSold: res.shop.totalSold || 0,
+            approvedAt: res.shop.approvedAt || ""
+          });
+        }
+      });
+    }
+  }, [shop?.shopSlug, store.state.activeShop?.shopSlug]);
 
   useEffect(() => {
     let isMounted = true;
@@ -284,13 +317,12 @@ export default function ProductDetailPage() {
     userId: "",
     shopName: "Cửa hàng",
     shopSlug: shopSlug || "shop",
-    logoUrl: "https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?auto=format&fit=crop&w=240&q=80",
+    logoUrl: "",
     description: "",
     phone: "",
     email: "",
     pickupAddress: "",
-    shippingFee: 0,
-    shippingProviderName: "Giao hàng nhanh",
+    shippingProviders: [],
     status: "APPROVED",
     totalSold: 0,
     totalRevenue: 0
@@ -371,7 +403,7 @@ export default function ProductDetailPage() {
     <main className="mx-auto max-w-[1252px] px-4 sm:px-6 lg:px-8 py-6 space-y-6 bg-canvas min-h-screen">
       {/* BREADCRUMB */}
       <nav className="flex items-center gap-2 text-xs font-semibold text-slate-500">
-        <a href="/" className="hover:text-emerald-700 transition-colors">Trang chủ</a>
+        <a href="/" className="hover:text-emerald-700 transition-colors">Shepoo</a>
         <ChevronRight className="h-3 w-3 text-slate-400" />
         <a href={`/shops/${activeShop.shopSlug}`} className="hover:text-emerald-700 transition-colors">{activeShop.shopName}</a>
         <ChevronRight className="h-3 w-3 text-slate-400" />
@@ -424,27 +456,7 @@ export default function ProductDetailPage() {
             </div>
           )}
 
-          {/* SHOP CARD STRIP */}
-          <div className="rounded-2xl border border-slate-100 bg-slate-50/80 p-3.5 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-600 font-extrabold text-white text-sm">
-                {activeShop.shopName.charAt(0).toUpperCase()}
-              </div>
-              <div>
-                <a href={`/shops/${activeShop.shopSlug}`} className="text-xs font-extrabold text-slate-900 hover:text-emerald-700 flex items-center gap-1.5">
-                  <span>{activeShop.shopName}</span>
-                  <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" />
-                </a>
-                <p className="text-[11px] text-slate-500 mt-0.5">Gian hàng chính hãng Verified</p>
-              </div>
-            </div>
-            <a
-              href={`/shops/${activeShop.shopSlug}`}
-              className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 hover:border-emerald-600 hover:text-emerald-700 transition-colors shadow-2xs"
-            >
-              Xem Shop
-            </a>
-          </div>
+
         </div>
 
         {/* RIGHT INFO (Col 7) */}
@@ -465,13 +477,38 @@ export default function ProductDetailPage() {
             </h1>
 
             {/* STATS BAR */}
-            <div className="mt-3 flex flex-wrap items-center gap-4 text-xs font-semibold text-slate-500 border-b border-slate-100 pb-4">
-              <RatingStars rating={product.averageRating} count={product.reviewCount} />
-              <span className="h-3 w-px bg-slate-200" />
-              <span className="flex items-center gap-1 text-slate-700">
-                <PackageCheck className="h-3.5 w-3.5 text-emerald-600" />
-                Đã bán <strong className="text-slate-900">{product.soldCount}</strong>
-              </span>
+            <div className="mt-3 flex items-center justify-between border-b border-slate-100 pb-4">
+              <div className="flex flex-wrap items-center gap-3 sm:gap-4 text-xs font-semibold text-slate-500">
+                <RatingStars rating={product.averageRating} count={product.reviewCount} />
+                <span className="h-3 w-px bg-slate-200" />
+                <span className="flex items-center gap-1 text-slate-700">
+                  <strong className="text-slate-900 border-b border-slate-900 pb-[1px]">{product.reviewCount || 0}</strong> Đánh giá
+                </span>
+                <span className="h-3 w-px bg-slate-200" />
+                <span className="flex items-center gap-1 text-slate-700">
+                  <strong className="text-slate-900">{product.soldCount || 0}</strong> Đã bán
+                </span>
+              </div>
+              <button
+                onClick={() => {
+                  if (!store.state.sessionUserId) {
+                    showToast("Vui lòng đăng nhập để gửi báo cáo vi phạm", "warning" as any);
+                    return;
+                  }
+                  setShowReport((v) => {
+                    const willShow = !v;
+                    if (willShow) {
+                      setTimeout(() => {
+                        document.getElementById("report-panel")?.scrollIntoView({ behavior: "smooth", block: "center" });
+                      }, 100);
+                    }
+                    return willShow;
+                  });
+                }}
+                className="text-xs font-medium text-slate-400 hover:text-rose-500 transition-colors"
+              >
+                Tố cáo
+              </button>
             </div>
 
             {/* PRICE CONTAINER */}
@@ -608,40 +645,6 @@ export default function ProductDetailPage() {
             <div className="flex flex-col sm:flex-row flex-wrap gap-3">
               <Button
                 variant={"outline" as any}
-                onClick={() => {
-                  window.dispatchEvent(new CustomEvent('open-chat-widget', {
-                    detail: {
-                      shopId: Number(activeShop.id) || activeShop.id,
-                      fromProductPage: true,
-                      shopInfo: {
-                        id: Number(activeShop.id) || activeShop.id,
-                        name: activeShop.shopName,
-                        avatar: activeShop.logoUrl || null,
-                        shop_slug: activeShop.shopSlug,
-                      },
-                      productDraft: {
-                         id: product.id,
-                         public_id: product.id,
-                         name: product.name,
-                         slug: product.slug,
-                         shop_slug: activeShop.shopSlug,
-                         price: selectedVariant?.price || 0,
-                         promotional_price: selectedVariant?.salePrice,
-                         images: [{ image_url: activeImageSrc, is_thumbnail: true }],
-                         variants: [{
-                           price: selectedVariant?.price || 0,
-                           sale_price: selectedVariant?.salePrice ?? null
-                         }]
-                      }
-                    }
-                  }));
-                }}
-                className="flex-[0.7] rounded-xl border-emerald-600 text-emerald-600 hover:bg-emerald-50 py-3 text-sm font-extrabold shadow-sm transition-all"
-              >
-                Chat Ngay
-              </Button>
-              <Button
-                variant={"outline" as any}
                 disabled={
                   addingToCart ||
                   buyingNow ||
@@ -691,50 +694,91 @@ export default function ProductDetailPage() {
                   <span>Mua Ngay</span>
                 )}
               </Button>
+            </div>
 
-              <Button
-                variant={"outline" as any}
-                onClick={() => {
-                  if (!store.state.sessionUserId) {
-                    showToast("Vui lòng đăng nhập để gửi báo cáo vi phạm", "warning" as any);
-                    return;
-                  }
-                  setShowReport((v) => {
-                    const willShow = !v;
-                    if (willShow) {
-                      setTimeout(() => {
-                        document.getElementById("report-panel")?.scrollIntoView({ behavior: "smooth", block: "center" });
-                      }, 100);
+          </div>
+        </div>
+      </div>
+
+      {/* SHOP CARD */}
+      <div className="rounded-3xl border border-slate-200/80 bg-white p-5 sm:p-7 shadow-sm flex flex-col md:flex-row items-center gap-6">
+        <div className="flex flex-col md:flex-row items-start md:items-center gap-4 flex-shrink-0 border-r-0 md:border-r border-slate-100 pr-0 md:pr-6 w-full md:w-auto">
+          <div className="flex items-center gap-4">
+            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-slate-100 border border-slate-200 text-xl font-black text-slate-600 overflow-hidden">
+              {activeShop.logoUrl ? (
+                <img src={activeShop.logoUrl} alt={activeShop.shopName} className="h-full w-full object-cover"/>
+              ) : (
+                activeShop.shopName.charAt(0).toUpperCase()
+              )}
+            </div>
+            <div>
+              <a href={`/shops/${activeShop.shopSlug}`} className="text-base font-bold text-slate-900 hover:text-emerald-600 line-clamp-1 max-w-[200px]">
+                {activeShop.shopName}
+              </a>
+            </div>
+          </div>
+          
+          <div className="flex items-center gap-2 mt-2 md:mt-0 md:ml-4 w-full md:w-auto justify-between md:justify-start">
+            <Button
+              variant="outline"
+              onClick={() => {
+                window.dispatchEvent(new CustomEvent('open-chat-widget', {
+                  detail: {
+                    shopId: Number(activeShop.id) || activeShop.id,
+                    fromProductPage: true,
+                    shopInfo: {
+                      id: Number(activeShop.id) || activeShop.id,
+                      name: activeShop.shopName,
+                      avatar: activeShop.logoUrl || null,
+                      shop_slug: activeShop.shopSlug,
+                    },
+                    productDraft: {
+                       id: product.id,
+                       public_id: product.id,
+                       name: product.name,
+                       slug: product.slug,
+                       shop_slug: activeShop.shopSlug,
+                       price: selectedVariant?.price || 0,
+                       promotional_price: selectedVariant?.salePrice,
+                       images: [{ image_url: activeImageSrc, is_thumbnail: true }],
+                       variants: [{
+                         price: selectedVariant?.price || 0,
+                         sale_price: selectedVariant?.salePrice ?? null
+                       }]
                     }
-                    return willShow;
-                  });
-                }}
-                className="w-full sm:w-auto rounded-xl border border-slate-200 bg-slate-50 px-4 text-xs font-bold text-slate-600 hover:border-slate-300 hover:bg-slate-100"
-              >
-                <Flag className="h-3.5 w-3.5" />
-                <span className="sm:hidden">Báo cáo</span>
-              </Button>
-            </div>
+                  }
+                }));
+              }}
+              className="border-emerald-600 text-emerald-600 hover:bg-emerald-50 bg-emerald-50/30 gap-2 h-9 px-4 text-xs font-bold flex-1 md:flex-none"
+            >
+              <MessageSquare className="h-4 w-4" />
+              Chat Ngay
+            </Button>
+            <a href={`/shops/${activeShop.shopSlug}`} className="inline-flex h-9 items-center justify-center gap-2 rounded-md border border-slate-200 bg-white px-4 text-xs font-bold text-slate-600 hover:bg-slate-100 transition-colors shadow-sm flex-1 md:flex-none">
+              <Store className="h-4 w-4" />
+              Xem Shop
+            </a>
+          </div>
+        </div>
 
-            {/* SPECIFICATIONS GRID */}
-            <div className="grid grid-cols-2 gap-2 text-xs pt-2">
-              <div className="rounded-xl border border-slate-100 bg-slate-50/60 p-2.5">
-                <span className="text-slate-400 font-medium">Thương hiệu:</span>
-                <p className="font-bold text-slate-800 mt-0.5 truncate">{product.brand || "Chính hãng"}</p>
-              </div>
-              <div className="rounded-xl border border-slate-100 bg-slate-50/60 p-2.5">
-                <span className="text-slate-400 font-medium">Xuất xứ:</span>
-                <p className="font-bold text-slate-800 mt-0.5 truncate">{product.origin || "Việt Nam"}</p>
-              </div>
-              <div className="rounded-xl border border-slate-100 bg-slate-50/60 p-2.5">
-                <span className="text-slate-400 font-medium">Bảo hành:</span>
-                <p className="font-bold text-slate-800 mt-0.5 truncate">{product.warranty || "12 tháng"}</p>
-              </div>
-              <div className="rounded-xl border border-slate-100 bg-slate-50/60 p-2.5">
-                <span className="text-slate-400 font-medium">Vận chuyển:</span>
-                <p className="font-bold text-slate-800 mt-0.5 truncate">Giao hàng toàn quốc</p>
-              </div>
-            </div>
+        <div className="flex-1 flex justify-around w-full gap-4 text-sm mt-4 md:mt-0">
+          <div className="flex md:flex-row flex-col md:items-center gap-1 md:gap-4">
+            <span className="text-slate-500 whitespace-nowrap">Đánh Giá</span>
+            <span className="font-bold text-rose-500">{shopStats.reviews || product.reviewCount || 0}</span>
+          </div>
+          <div className="flex md:flex-row flex-col md:items-center gap-1 md:gap-4">
+            <span className="text-slate-500 whitespace-nowrap">Đã Bán</span>
+            <span className="font-bold text-rose-500">{shopStats.totalSold || activeShop.totalSold || 0}</span>
+          </div>
+          <div className="flex md:flex-row flex-col md:items-center gap-1 md:gap-4">
+            <span className="text-slate-500 whitespace-nowrap">Sản Phẩm</span>
+            <span className="font-bold text-rose-500">{shopStats.products || 0}</span>
+          </div>
+          <div className="flex md:flex-row flex-col md:items-center gap-1 md:gap-4">
+            <span className="text-slate-500 whitespace-nowrap">Tham Gia</span>
+            <span className="font-bold text-rose-500">
+              {getJoinDuration(shopStats.approvedAt || activeShop.approvedAt)}
+            </span>
           </div>
         </div>
       </div>
@@ -742,11 +786,80 @@ export default function ProductDetailPage() {
       {/* REPORT PANEL IF TOGGLED */}
       {showReport && <ReportProductPanel product={product} onClose={() => setShowReport(false)} />}
 
+      {/* DETAILS PANEL */}
+      <div className="rounded-3xl border border-slate-200/80 bg-white p-6 sm:p-8 shadow-sm space-y-6">
+        <h2 className="font-heading text-base font-medium text-slate-800 bg-slate-50 p-4 rounded-sm uppercase tracking-wide">
+          Chi Tiết Sản Phẩm
+        </h2>
+        <div className="space-y-4 text-sm px-4">
+          <div className="flex">
+            <div className="w-[150px] sm:w-[200px] text-slate-500 font-medium">Danh Mục</div>
+            <div className="flex-1 text-blue-600 flex items-center gap-1.5 flex-wrap">
+              <a href="/" className="hover:underline">Shepoo</a>
+              {product.categoryIds && product.categoryIds.length > 0 ? (
+                product.categoryIds.map((id, index) => {
+                  const cat = store.state.categories?.find((c) => c.id === id);
+                  if (!cat) return null;
+                  return (
+                    <Fragment key={id}>
+                      <ChevronRight className="h-3 w-3 text-slate-400" />
+                      <a href={`/categories/${cat.slug || cat.id}`} className="hover:underline">
+                        {cat.name}
+                      </a>
+                    </Fragment>
+                  );
+                })
+              ) : (
+                <>
+                  <ChevronRight className="h-3 w-3 text-slate-400" />
+                  <span>Chưa phân loại</span>
+                </>
+              )}
+            </div>
+          </div>
+          <div className="flex">
+            <div className="w-[150px] sm:w-[200px] text-slate-500 font-medium">Số sản phẩm còn lại</div>
+            <div className="flex-1 text-slate-800">
+              {totalStock > 0 ? totalStock : "CÒN HÀNG"}
+            </div>
+          </div>
+          <div className="flex">
+            <div className="w-[150px] sm:w-[200px] text-slate-500 font-medium">Thương hiệu</div>
+            <div className="flex-1 text-slate-800">
+              {product.brand || "simple"}
+            </div>
+          </div>
+          <div className="flex">
+            <div className="w-[150px] sm:w-[200px] text-slate-500 font-medium">Xuất xứ</div>
+            <div className="flex-1 text-slate-800">
+              {product.origin || "Việt Nam"}
+            </div>
+          </div>
+          <div className="flex">
+            <div className="w-[150px] sm:w-[200px] text-slate-500 font-medium">Bảo hành</div>
+            <div className="flex-1 text-slate-800">
+              {product.warranty || "12 tháng"}
+            </div>
+          </div>
+          <div className="flex">
+            <div className="w-[150px] sm:w-[200px] text-slate-500 font-medium">Vận chuyển</div>
+            <div className="flex-1 text-slate-800">
+              Giao hàng toàn quốc
+            </div>
+          </div>
+          <div className="flex">
+            <div className="w-[150px] sm:w-[200px] text-slate-500 font-medium">Gửi từ</div>
+            <div className="flex-1 text-slate-800">
+              {activeShop.pickupAddress || "Tỉnh Bắc Ninh"}
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* DESCRIPTION PANEL */}
-      <div className="rounded-3xl border border-slate-200/80 bg-white p-6 sm:p-8 shadow-sm space-y-4">
-        <h2 className="font-heading text-lg font-black text-slate-900 flex items-center gap-2 border-b border-slate-100 pb-3">
-          <Info className="h-5 w-5 text-emerald-600" />
-          <span>Mô Tả Sản Phẩm</span>
+      <div className="rounded-3xl border border-slate-200/80 bg-white p-6 sm:p-8 shadow-sm space-y-6">
+        <h2 className="font-heading text-base font-medium text-slate-800 bg-slate-50 p-4 rounded-sm uppercase tracking-wide">
+          Mô Tả Sản Phẩm
         </h2>
         <div className="prose prose-slate max-w-none text-xs sm:text-sm leading-relaxed text-slate-600 space-y-3">
           <p className="font-semibold text-slate-800">{product.shortDescription}</p>
@@ -773,16 +886,32 @@ function ReportProductPanel({ product, onClose }: { product: Product; onClose: (
   const { showToast } = store;
   const [reasonType, setReasonType] = useState("Hàng giả / Nhái thương hiệu");
   const [description, setDescription] = useState("");
-  const [images, setImages] = useState<string[]>([]);
+  const [imageFiles, setImageFiles] = useState<File[]>([]);
+  const [previewUrls, setPreviewUrls] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const [previewIndex, setPreviewIndex] = useState(0);
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (files && files.length > 0) {
-      // Create mock/preview URLs for uploaded image evidence
-      const newUrls = Array.from(files).map((f) => URL.createObjectURL(f));
-      setImages((prev) => [...prev, ...newUrls]);
+      const newFiles = Array.from(files);
+      setImageFiles((prev) => [...prev, ...newFiles]);
+      const newUrls = newFiles.map((f) => URL.createObjectURL(f));
+      setPreviewUrls((prev) => [...prev, ...newUrls]);
     }
+    // reset input so same file can be selected again
+    e.target.value = "";
+  };
+
+  const handleRemoveImage = (index: number) => {
+    setImageFiles((prev) => prev.filter((_, i) => i !== index));
+    setPreviewUrls((prev) => {
+      const newUrls = [...prev];
+      URL.revokeObjectURL(newUrls[index]);
+      newUrls.splice(index, 1);
+      return newUrls;
+    });
   };
 
   const handleSubmit = async () => {
@@ -792,11 +921,24 @@ function ReportProductPanel({ product, onClose }: { product: Product; onClose: (
     }
     setSubmitting(true);
     try {
+      // 1. Upload images first
+      const uploadedUrls: string[] = [];
+      const { uploadImage } = await import("@/services/upload-api");
+      for (const file of imageFiles) {
+        try {
+          const url = await uploadImage(file);
+          uploadedUrls.push(url);
+        } catch (uploadErr) {
+          console.error("Lỗi khi upload ảnh:", uploadErr);
+        }
+      }
+
+      // 2. Submit report
       await store.submitViolationReport({
         productId: product.id,
         reasonType,
         description,
-        imageUrls: images
+        imageUrls: uploadedUrls
       });
       showToast(`Đã gửi báo cáo vi phạm cho sản phẩm "${product.name}" thành công!`, "success");
       onClose();
@@ -816,9 +958,18 @@ function ReportProductPanel({ product, onClose }: { product: Product; onClose: (
           </span>
           Gửi Báo Cáo Vi Phạm Sản Phẩm
         </h3>
-        <span className="text-xs font-semibold text-rose-600 bg-rose-100/80 px-2.5 py-1 rounded-full border border-rose-200">
-          Bảo mật & Ẩn danh
-        </span>
+        <div className="flex items-center gap-3">
+          <span className="hidden sm:inline-flex text-xs font-semibold text-rose-600 bg-rose-100/80 px-2.5 py-1 rounded-full border border-rose-200">
+            Bảo mật & Ẩn danh
+          </span>
+          <button 
+            type="button"
+            onClick={onClose}
+            className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-100 rounded-full transition-colors"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
       </div>
 
       <div className="grid gap-4 md:grid-cols-3">
@@ -836,35 +987,100 @@ function ReportProductPanel({ product, onClose }: { product: Product; onClose: (
           </Select>
         </Field>
 
-        <Field label="Hình ảnh bằng chứng">
-          <Input 
-            type="file" 
-            multiple 
-            accept="image/*" 
-            onChange={handleImageUpload} 
-            className="rounded-xl bg-white border-rose-200 focus:border-rose-400 text-xs" 
-          />
-        </Field>
-
-        <div className="flex items-end">
-          <Button
-            disabled={submitting}
-            className="w-full rounded-xl bg-rose-600 text-white font-bold hover:bg-rose-700 active:scale-[0.98] transition-all shadow-sm shadow-rose-600/20"
-            onClick={handleSubmit}
-          >
-            {submitting ? "Đang gửi..." : "Gửi Báo Cáo"}
-          </Button>
-        </div>
-
-        {images.length > 0 && (
-          <div className="md:col-span-3 flex gap-2 overflow-x-auto py-1">
-            {images.map((url, idx) => (
-              <div key={idx} className="relative h-14 w-14 rounded-lg overflow-hidden border border-rose-200 bg-white">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={url} alt="Bằng chứng" className="h-full w-full object-cover" />
+        <div className="md:col-span-3">
+          <label className="text-xs font-bold text-slate-700 mb-2 block">
+            Hình ảnh bằng chứng
+          </label>
+          <div className="flex flex-wrap gap-3">
+            {previewUrls.map((url, idx) => (
+              <div key={idx} className="relative h-20 w-20 shrink-0 rounded-xl overflow-hidden border border-rose-200 bg-white group">
+                <button 
+                  type="button"
+                  onClick={() => {
+                    setPreviewIndex(idx);
+                    setPreviewImage(url);
+                  }}
+                  className="h-full w-full block cursor-zoom-in"
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={url} alt="Bằng chứng" className="h-full w-full object-cover transition-transform group-hover:scale-110" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleRemoveImage(idx)}
+                  className="absolute top-1 right-1 h-6 w-6 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center text-rose-500 shadow-sm opacity-0 group-hover:opacity-100 transition-opacity hover:bg-rose-50 hover:text-rose-600"
+                >
+                  <XCircle className="h-4 w-4" />
+                </button>
               </div>
             ))}
+            
+            <label className="flex h-20 w-20 cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-rose-200 bg-rose-50/50 hover:bg-rose-50 text-rose-500 transition-colors">
+              <Plus className="h-6 w-6" />
+              <span className="text-[10px] font-bold mt-1">Tải ảnh</span>
+              <input 
+                type="file" 
+                multiple 
+                accept="image/*" 
+                onChange={handleImageUpload} 
+                className="hidden" 
+              />
+            </label>
           </div>
+        </div>
+
+        {previewImage && typeof document !== "undefined" && createPortal(
+          <div
+            className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-900/90 p-4 backdrop-blur-sm animate-in fade-in duration-200"
+            onClick={() => setPreviewImage(null)}
+            role="dialog"
+            aria-modal="true"
+          >
+            <button
+              type="button"
+              onClick={() => setPreviewImage(null)}
+              className="absolute right-4 top-4 rounded-full bg-white/10 p-2 text-white hover:bg-white/20 transition-colors"
+            >
+              <X className="h-5 w-5" />
+            </button>
+
+            {previewUrls.length > 1 && (
+              <>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const next = (previewIndex - 1 + previewUrls.length) % previewUrls.length;
+                    setPreviewIndex(next);
+                    setPreviewImage(previewUrls[next]);
+                  }}
+                  className="absolute left-4 md:left-8 rounded-full bg-white/10 p-2 text-white hover:bg-white/20 transition-colors"
+                >
+                  <ChevronLeft className="h-6 w-6" />
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const next = (previewIndex + 1) % previewUrls.length;
+                    setPreviewIndex(next);
+                    setPreviewImage(previewUrls[next]);
+                  }}
+                  className="absolute right-4 md:right-8 rounded-full bg-white/10 p-2 text-white hover:bg-white/20 transition-colors"
+                >
+                  <ChevronRight className="h-6 w-6" />
+                </button>
+              </>
+            )}
+
+            <img
+              src={previewImage}
+              alt="Ảnh bằng chứng"
+              className="max-h-[90vh] max-w-[min(96vw,56rem)] rounded-xl object-contain shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            />
+          </div>,
+          document.body
         )}
 
         <div className="md:col-span-3">
@@ -876,6 +1092,25 @@ function ReportProductPanel({ product, onClose }: { product: Product; onClose: (
               className="rounded-xl bg-white border-rose-200 focus:border-rose-400 focus:ring-rose-400/20 min-h-[90px]" 
             />
           </Field>
+        </div>
+
+        <div className="md:col-span-3 pt-2 flex flex-col-reverse sm:flex-row items-center justify-end gap-3">
+          <Button
+            type="button"
+            variant="ghost"
+            className="w-full sm:w-auto px-6 rounded-xl font-bold text-slate-500 hover:text-slate-700 hover:bg-slate-100"
+            onClick={onClose}
+          >
+            Hủy Bỏ
+          </Button>
+          <Button
+            type="button"
+            disabled={submitting}
+            className="w-full sm:w-auto px-8 rounded-xl bg-rose-600 text-white font-bold hover:bg-rose-700 active:scale-[0.98] transition-all shadow-sm shadow-rose-600/20"
+            onClick={handleSubmit}
+          >
+            {submitting ? "Đang gửi..." : "Gửi Báo Cáo"}
+          </Button>
         </div>
       </div>
     </div>

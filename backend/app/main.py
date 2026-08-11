@@ -102,6 +102,7 @@ from api.engagement.notification_api import router as notifications_router
 from api.search.search_api import router as search_router
 
 from api.common.upload_api import router as upload_router
+from api.shipping.shipping_api import router as shipping_router
 
 app.include_router(auth_router)
 app.include_router(seller_router)
@@ -122,6 +123,7 @@ app.include_router(seller_chat_router, prefix="/api/seller-chat")
 app.include_router(notifications_router, prefix="/notifications", tags=["notifications"])
 app.include_router(search_router)
 app.include_router(upload_router, prefix="/api")
+app.include_router(shipping_router)
 
 
 

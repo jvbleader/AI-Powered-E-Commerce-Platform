@@ -61,11 +61,17 @@ export default function ShopDetailPage() {
         <div className="flex flex-col gap-5 md:flex-row md:items-start md:justify-between">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
             <div className="relative h-20 w-20 shrink-0">
-              <img
-                src={shop.logoUrl}
-                alt={shop.shopName}
-                className="h-20 w-20 rounded-panel border border-line object-cover"
-              />
+              {shop.logoUrl ? (
+                <img
+                  src={shop.logoUrl}
+                  alt={shop.shopName}
+                  className="h-20 w-20 rounded-panel border border-line object-cover"
+                />
+              ) : (
+                <div className="h-20 w-20 rounded-panel border border-line bg-slate-200 flex items-center justify-center font-bold text-slate-500 text-3xl">
+                  {shop.shopName.charAt(0).toUpperCase()}
+                </div>
+              )}
               <div className="absolute -bottom-1 -right-1 rounded-full bg-primary p-0.5 text-white">
                 <ShieldCheck className="h-4 w-4" />
               </div>
@@ -101,13 +107,11 @@ export default function ShopDetailPage() {
               <p className="text-muted">Đã bán</p>
               <p className="mt-1 font-bold text-ink sm:text-sm">{(shop.totalSold || 0).toLocaleString("vi-VN")}</p>
             </div>
-            <div className="rounded-panel border border-line bg-canvas p-3 text-center">
-              <p className="text-muted">Phí vận chuyển</p>
-              <p className="mt-1 font-bold text-primary sm:text-sm">{formatVnd(shop.shippingFee || 0)}</p>
-            </div>
-            <div className="col-span-2 rounded-panel border border-line bg-canvas p-3 text-center sm:col-span-1">
+            <div className="col-span-2 rounded-panel border border-line bg-canvas p-3 text-center sm:col-span-2">
               <p className="text-muted">Đơn vị vận chuyển</p>
-              <p className="mt-1 font-bold text-ink sm:text-sm">{shop.shippingProviderName || "Tiêu chuẩn"}</p>
+              <p className="mt-1 font-bold text-ink sm:text-sm">
+                {shop.shippingProviders?.length ? shop.shippingProviders.map(p => p.name).join(", ") : "Chưa cấu hình"}
+              </p>
             </div>
           </div>
         </div>

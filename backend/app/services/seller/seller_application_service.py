@@ -27,6 +27,7 @@ from repositories.seller.seller_profile_repository import (
 )
 from repositories.user.user_repository import get_user_by_id
 from repositories.user.user_role_repository import add_role_by_user_id
+from repositories.shipping.shipping_provider_repository import get_shipping_providers_by_public_ids
 from services.engagement.notification_service import send_notification
 
 
@@ -89,10 +90,18 @@ async def submit_seller_application(
 
     shop_slug = await _create_unique_shop_slug(data.shop_name, db)
 
+    shipping_providers = await get_shipping_providers_by_public_ids(data.shipping_provider_public_ids, db)
+    if not shipping_providers:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Các đơn vị vận chuyển được chọn không hợp lệ.",
+        )
+
     seller_profile = await create_seller_profile(
         user_id=user.id,
         status="PENDING",
         shop_name=data.shop_name,
+        shop_logo_url=data.shop_logo_url,
         shop_slug=shop_slug,
         phone=data.phone,
         email=data.email,
@@ -101,7 +110,8 @@ async def submit_seller_application(
         bank_name=data.bank_name,
         bank_account_number=data.bank_account_number,
         bank_account_name=data.bank_account_name,
-        shipping_fee=data.shipping_fee,
+        shipping_providers=shipping_providers,
+        shop_description=data.shop_description,
         db=db,
     )
 
@@ -131,7 +141,7 @@ async def update_my_seller_application(
             detail="Bạn chưa gửi yêu cầu mở shop.",
         )
 
-    if seller_profile.status not in ("PENDING", "REJECTED"):
+    if seller_profile.status not in ("PENDING", "REJECTED", "APPROVED"):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Bạn không thể thực hiện thao tác này.",
@@ -150,11 +160,19 @@ async def update_my_seller_application(
     if data.shop_name != seller_profile.shop_name:
         shop_slug = await _create_unique_shop_slug(data.shop_name, db)
 
+    shipping_providers = await get_shipping_providers_by_public_ids(data.shipping_provider_public_ids, db)
+    if not shipping_providers:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Các đơn vị vận chuyển được chọn không hợp lệ.",
+        )
+
     if seller_profile.status == "REJECTED":
         seller_profile.status = "PENDING"
         seller_profile.rejected_reason = None
 
     seller_profile.shop_name = data.shop_name
+    seller_profile.shop_logo_url = data.shop_logo_url
     seller_profile.shop_slug = shop_slug
     seller_profile.phone = data.phone
     seller_profile.email = data.email
@@ -163,7 +181,8 @@ async def update_my_seller_application(
     seller_profile.bank_name = data.bank_name
     seller_profile.bank_account_name = data.bank_account_name
     seller_profile.bank_account_number = data.bank_account_number
-    seller_profile.shipping_fee = data.shipping_fee
+    seller_profile.shipping_providers = shipping_providers
+    seller_profile.shop_description = data.shop_description
 
     return seller_profile
 

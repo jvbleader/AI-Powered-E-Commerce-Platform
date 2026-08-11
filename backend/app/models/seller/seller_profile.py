@@ -28,7 +28,6 @@ class SellerProfile(Base):
             "status IN ('PENDING', 'APPROVED', 'REJECTED', 'SUSPENDED', 'CLOSED')",
             name="ck_seller_profiles_status",
         ),
-        CheckConstraint("shipping_fee >= 0", name="ck_seller_profiles_shipping_fee"),
         Index("ix_seller_profiles_status", "status"),
         Index("ix_seller_profiles_created_at", "created_at"),
     )
@@ -64,16 +63,6 @@ class SellerProfile(Base):
         nullable=True,
     )
     bank_account_name: Mapped[str | None] = mapped_column(String(150), nullable=True)
-    shipping_fee: Mapped[Decimal] = mapped_column(
-        Numeric(12, 2),
-        nullable=False,
-        default=Decimal("0.00"),
-        server_default=text("0.00"),
-    )
-    shipping_provider_name: Mapped[str | None] = mapped_column(
-        String(150),
-        nullable=True,
-    )
     status: Mapped[str] = mapped_column(
         String(30),
         nullable=False,
@@ -114,4 +103,8 @@ class SellerProfile(Base):
     payouts: Mapped[list["SellerPayout"]] = relationship(back_populates="seller")
     moderation_logs: Mapped[list["ModerationLog"]] = relationship(
         back_populates="seller",
+    )
+    shipping_providers: Mapped[list["ShippingProvider"]] = relationship(
+        secondary="seller_shipping_providers",
+        back_populates="sellers",
     )

@@ -66,10 +66,13 @@ redis_data/
 #CodeGraph
 .codegraph/
 
+.superpowers
+
 /backend/database
 
 docker-compose.tunnel.yml
 
-/scripts
+# /scripts
+
 */tests
 /docs/other

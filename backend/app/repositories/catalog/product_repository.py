@@ -445,7 +445,7 @@ async def get_public_products(
         base_filter.options(
             selectinload(Product.images),
             selectinload(Product.variants).selectinload(ProductVariant.inventory),
-            selectinload(Product.seller),
+            selectinload(Product.seller).selectinload(SellerProfile.shipping_providers),
             selectinload(Product.categories),
         )
         .offset(skip)
@@ -510,7 +510,7 @@ async def get_public_product_detail(
         .options(
             selectinload(Product.images),
             selectinload(Product.variants).selectinload(ProductVariant.inventory),
-            selectinload(Product.seller),
+            selectinload(Product.seller).selectinload(SellerProfile.shipping_providers),
             selectinload(Product.categories),
         )
     )
@@ -555,7 +555,7 @@ async def get_recommended_products(
     items_query = base_filter.options(
         selectinload(Product.images),
         selectinload(Product.variants).selectinload(ProductVariant.inventory),
-        selectinload(Product.seller),
+        selectinload(Product.seller).selectinload(SellerProfile.shipping_providers),
         selectinload(Product.categories),
     ).limit(limit)
 
@@ -579,7 +579,7 @@ async def get_recommended_products(
             .options(
                 selectinload(Product.images),
                 selectinload(Product.variants).selectinload(ProductVariant.inventory),
-                selectinload(Product.seller),
+                selectinload(Product.seller).selectinload(SellerProfile.shipping_providers),
                 selectinload(Product.categories),
             )
             .limit(needed)

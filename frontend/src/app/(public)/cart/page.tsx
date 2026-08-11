@@ -66,7 +66,9 @@ export default function CartPage() {
                 <Panel key={group.shop.id}>
                   <div className="mb-3 flex items-center justify-between gap-3">
                     <a href={`/shops/${group.shop.shopSlug}`} className="font-bold text-ink">{group.shop.shopName}</a>
-                    <span className="text-sm text-muted">Phí ship {formatVnd(group.shop.shippingFee)}</span>
+                    <span className="text-sm text-muted">
+                      {group.shop.shippingProviders?.length ? `${group.shop.shippingProviders.length} đơn vị VC` : "Chưa cấu hình đơn vị VC"}
+                    </span>
                   </div>
                   <div className="space-y-3">
                     {group.rows.map((row) => (
@@ -83,7 +85,7 @@ export default function CartPage() {
                           <a href={`/shops/${group.shop.shopSlug}/products/${row.product.slug}`} className="font-bold text-ink hover:text-primary hover:underline">
                             {row.product.name}
                           </a>
-                          <p className="text-sm text-muted">Biến thể: {row.variant.variantName}</p>
+                          <p className="text-sm text-muted">Phân loại: {row.variant.variantName}</p>
                           {row.unavailable ? <p className="mt-1 text-sm font-semibold text-coral">{row.reason}</p> : null}
                           <PriceDisplay price={row.variant.price} salePrice={row.variant.salePrice} compact />
                         </div>

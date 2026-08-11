@@ -16,8 +16,11 @@ async def get_seller_profile_by_id(
 async def get_seller_profile_by_user_id(
     user_id: int, db: AsyncSession
 ) -> SellerProfile:
+    from sqlalchemy.orm import selectinload
     result = await db.execute(
-        select(SellerProfile).where(SellerProfile.user_id == user_id)
+        select(SellerProfile)
+        .options(selectinload(SellerProfile.shipping_providers))
+        .where(SellerProfile.user_id == user_id)
     )
     return result.scalar_one_or_none()
 
@@ -43,8 +46,11 @@ async def get_seller_profile_by_shop_name(
 async def get_seller_profile_by_shop_slug(
     shop_slug: str, db: AsyncSession
 ) -> SellerProfile:
+    from sqlalchemy.orm import selectinload
     result = await db.execute(
-        select(SellerProfile).where(SellerProfile.shop_slug == shop_slug)
+        select(SellerProfile)
+        .options(selectinload(SellerProfile.shipping_providers))
+        .where(SellerProfile.shop_slug == shop_slug)
     )
     return result.scalar_one_or_none()
 
@@ -61,13 +67,16 @@ async def create_seller_profile(
     bank_name: str,
     bank_account_number: str,
     bank_account_name: str,
-    shipping_fee: float,
+    shipping_providers: list,
     db: AsyncSession,
+    shop_logo_url: str | None = None,
+    shop_description: str | None = None,
 ):
     seller_profile = SellerProfile(
         user_id=user_id,
         status=status,
         shop_name=shop_name,
+        shop_logo_url=shop_logo_url,
         shop_slug=shop_slug,
         phone=phone,
         email=email,
@@ -76,7 +85,8 @@ async def create_seller_profile(
         bank_name=bank_name,
         bank_account_number=bank_account_number,
         bank_account_name=bank_account_name,
-        shipping_fee=shipping_fee,
+        shipping_providers=shipping_providers,
+        shop_description=shop_description,
     )
 
     db.add(seller_profile)
@@ -90,10 +100,12 @@ async def get_seller_profile_list(
 ):
     offset = (page - 1) * limit
 
+    from sqlalchemy.orm import selectinload
     result = None
     if status:
         result = await db.execute(
             select(SellerProfile)
+            .options(selectinload(SellerProfile.shipping_providers))
             .where(SellerProfile.status == status)
             .order_by(SellerProfile.created_at.desc())
             .offset(offset)
@@ -102,6 +114,7 @@ async def get_seller_profile_list(
     else:
         result = await db.execute(
             select(SellerProfile)
+            .options(selectinload(SellerProfile.shipping_providers))
             .order_by(SellerProfile.created_at.desc())
             .offset(offset)
             .limit(limit)
@@ -114,8 +127,9 @@ async def get_seller_profile_list(
 async def get_sellers_by_ids(
     seller_ids: list[int], db: AsyncSession
 ) -> list[SellerProfile]:
+    from sqlalchemy.orm import selectinload
     result = await db.execute(
-        select(SellerProfile).where(SellerProfile.id.in_(seller_ids))
+        select(SellerProfile).options(selectinload(SellerProfile.shipping_providers)).where(SellerProfile.id.in_(seller_ids))
     )
     return list(result.scalars().all())
 
@@ -159,4 +173,70 @@ async def get_shop_stats(seller_id: int, db: AsyncSession) -> dict:
         "review_count": review_count or 0,
         "average_rating": round(float(avg_rating or 0), 2)
     }
+
+async def get_featured_shops(
+    db: AsyncSession, limit: int = 10, days: int = 7
+) -> list[SellerProfile]:
+    from models.order import Order
+    from models.base import utc_now
+    from datetime import timedelta
+    from sqlalchemy import func, desc
+    from sqlalchemy.orm import selectinload
+
+    since_date = utc_now() - timedelta(days=days)
+    
+    order_count_subq = (
+        select(Order.seller_id, func.count(Order.id).label("completed_orders_count"))
+        .where(
+            Order.order_status == "COMPLETED",
+            Order.created_at >= since_date
+        )
+        .group_by(Order.seller_id)
+        .subquery()
+    )
+    
+    query = (
+        select(SellerProfile)
+        .join(order_count_subq, SellerProfile.id == order_count_subq.c.seller_id)
+        .where(SellerProfile.status == "APPROVED")
+        .order_by(desc(order_count_subq.c.completed_orders_count))
+        .limit(limit)
+        .options(selectinload(SellerProfile.shipping_providers))
+    )
+    
+    result = await db.execute(query)
+    shops = list(result.scalars().all())
+
+    # Fallback if not enough shops found (e.g. dev environment or no recent sales)
+    if len(shops) < limit:
+        needed = limit - len(shops)
+        existing_ids = [s.id for s in shops]
+        
+        fallback_order_count_subq = (
+            select(Order.seller_id, func.count(Order.id).label("all_time_completed"))
+            .where(Order.order_status == "COMPLETED")
+            .group_by(Order.seller_id)
+            .subquery()
+        )
+        
+        fallback_query = (
+            select(SellerProfile)
+            .outerjoin(fallback_order_count_subq, SellerProfile.id == fallback_order_count_subq.c.seller_id)
+            .where(SellerProfile.status == "APPROVED")
+        )
+        if existing_ids:
+            fallback_query = fallback_query.where(SellerProfile.id.notin_(existing_ids))
+            
+        fallback_query = (
+            fallback_query
+            .order_by(desc(func.coalesce(fallback_order_count_subq.c.all_time_completed, 0)))
+            .limit(needed)
+            .options(selectinload(SellerProfile.shipping_providers))
+        )
+        
+        fallback_res = await db.execute(fallback_query)
+        fallback_shops = list(fallback_res.scalars().all())
+        shops.extend(fallback_shops)
+
+    return shops
 

@@ -41,6 +41,8 @@ type SellerInfo = {
   total_sold: number;
   shipping_fee: number;
   pickup_address?: string | null;
+  shipping_providers?: any[];
+  approved_at?: string | null;
 };
 
 type ImagePublicResponse = {
@@ -152,19 +154,27 @@ export const normalizeProduct = (
   if (backendProduct.seller) {
     shop = {
       id: sellerId,
+      publicId: backendProduct.seller.public_id,
       userId: "",
       shopName: backendProduct.seller.shop_name,
       shopSlug: backendProduct.seller.shop_slug,
-      logoUrl: backendProduct.seller.shop_logo_url ?? "https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?auto=format&fit=crop&w=240&q=80",
-      description: "",
+      logoUrl: backendProduct.seller.shop_logo_url ?? "",
+      description: backendProduct.seller.shop_description || "",
       phone: "",
       email: "",
       pickupAddress: backendProduct.seller.pickup_address ?? "",
-      shippingFee: Number(backendProduct.seller.shipping_fee ?? 0),
-      shippingProviderName: "",
+      shippingProviders: backendProduct.seller.shipping_providers?.map((p: any) => ({
+        publicId: p.public_id,
+        code: p.code,
+        name: p.name,
+        fixedFee: Number(p.fixed_fee),
+        logoUrl: p.logo_url,
+        active: Boolean(p.active)
+      })) ?? [],
       status: "APPROVED",
       totalSold: backendProduct.seller.total_sold,
-      totalRevenue: 0
+      totalRevenue: 0,
+      approvedAt: backendProduct.seller.approved_at ?? undefined
     };
   } else {
     shop = {
@@ -172,13 +182,12 @@ export const normalizeProduct = (
       userId: "",
       shopName: "Cửa hàng chính hãng",
       shopSlug: "shop",
-      logoUrl: "https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?auto=format&fit=crop&w=240&q=80",
+      logoUrl: "",
       description: "",
       phone: "",
       email: "",
       pickupAddress: "",
-      shippingFee: 0,
-      shippingProviderName: "Giao hàng nhanh",
+      shippingProviders: [],
       status: "APPROVED",
       totalSold: 0,
       totalRevenue: 0
@@ -232,20 +241,58 @@ export async function fetchPublicShop(shopSlug: string) {
       userId: "",
       shopName: response.shop_name,
       shopSlug: response.shop_slug,
-      logoUrl: response.shop_logo_url || "https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?auto=format&fit=crop&w=240&q=80",
-      description: response.shop_description || "Chào mừng bạn đến với cửa hàng của chúng tôi!",
+      logoUrl: response.shop_logo_url || "",
+      description: response.shop_description || "",
       phone: response.phone || "",
       email: response.email || "",
       pickupAddress: response.pickup_address || "",
-      shippingFee: response.shipping_fee || 0,
-      shippingProviderName: response.shipping_provider_name || "Giao hàng nhanh",
+      shippingProviders: response.shipping_providers?.map((p: any) => ({
+        publicId: p.public_id,
+        name: p.name,
+        code: p.code,
+        fixedFee: p.fixed_fee,
+        logoUrl: p.logo_url
+      })) || [],
       status: response.status || "APPROVED",
       totalSold: response.total_sold || 0,
-      totalRevenue: 0
+      totalRevenue: 0,
+      approvedAt: response.approved_at || undefined,
+      reviewCount: response.review_count || 0,
+      productCount: response.product_count || 0
     };
     return { ok: true, shop };
   } catch (error) {
     return { ok: false, message: error instanceof ApiError ? error.message : "Không tìm thấy thông tin cửa hàng." };
+  }
+}
+
+export async function fetchFeaturedShops(limit: number = 10) {
+  try {
+    const response = await apiFetch<any[]>(`/shops/featured?limit=${limit}`);
+    const shops: Shop[] = response.map(r => ({
+      id: r.id?.toString() || r.shop_slug,
+      userId: "",
+      shopName: r.shop_name,
+      shopSlug: r.shop_slug,
+      logoUrl: r.shop_logo_url || "",
+      description: r.shop_description || "",
+      phone: r.phone || "",
+      email: r.email || "",
+      pickupAddress: r.pickup_address || "",
+      shippingProviders: r.shipping_providers?.map((p: any) => ({
+        publicId: p.public_id,
+        name: p.name,
+        code: p.code,
+        fixedFee: p.fixed_fee,
+        logoUrl: p.logo_url
+      })) || [],
+      status: r.status || "APPROVED",
+      totalSold: r.total_sold || 0,
+      totalRevenue: 0
+    }));
+    return { ok: true, shops };
+  } catch (error) {
+    return { ok: false, message: error instanceof ApiError ? error.message : "Không thể tải danh sách cửa hàng nổi bật." };
   }
 }
 

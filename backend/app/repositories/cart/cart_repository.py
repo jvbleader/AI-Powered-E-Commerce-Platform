@@ -6,6 +6,7 @@ from models.cart import Cart
 from models.cart import CartItem
 from models.catalog import ProductVariant
 from models.catalog import Product
+from models.seller import SellerProfile
 
 
 async def get_cart_by_user_id(db: AsyncSession, user_id: int) -> Cart | None:
@@ -13,7 +14,7 @@ async def get_cart_by_user_id(db: AsyncSession, user_id: int) -> Cart | None:
         select(Cart)
         .options(
             selectinload(Cart.items).selectinload(CartItem.variant).selectinload(ProductVariant.inventory),
-            selectinload(Cart.items).selectinload(CartItem.variant).selectinload(ProductVariant.product).selectinload(Product.seller),
+            selectinload(Cart.items).selectinload(CartItem.variant).selectinload(ProductVariant.product).selectinload(Product.seller).selectinload(SellerProfile.shipping_providers),
             selectinload(Cart.items).selectinload(CartItem.variant).selectinload(ProductVariant.product).selectinload(Product.images),
             selectinload(Cart.items).selectinload(CartItem.variant).selectinload(ProductVariant.product).selectinload(Product.categories),
             selectinload(Cart.items).selectinload(CartItem.variant).selectinload(ProductVariant.product).selectinload(Product.variants).selectinload(ProductVariant.inventory)

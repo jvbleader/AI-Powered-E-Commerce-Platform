@@ -127,7 +127,7 @@ def get_agent_tools(db: AsyncSession) -> List[Any]:
 
     @tool
     async def get_product_details(product_id: int) -> str:
-        """Lấy thông tin chi tiết của một sản phẩm bằng ID. Sử dụng khi khách hàng hỏi về thông số kỹ thuật, mô tả chi tiết hoặc danh sách biến thể (màu sắc, size)."""
+        """Lấy thông tin chi tiết của một sản phẩm bằng ID. Sử dụng khi khách hàng hỏi về thông số kỹ thuật, mô tả chi tiết hoặc danh sách phân loại (màu sắc, size)."""
         try:
             stmt = (
                 select(Product)
@@ -193,7 +193,7 @@ def get_agent_tools(db: AsyncSession) -> List[Any]:
 
     @tool
     async def check_inventory(variant_id: int) -> str:
-        """Kiểm tra chính xác số lượng tồn kho khả dụng hiện tại của một biến thể sản phẩm. Sử dụng khi khách hỏi về số lượng còn hàng."""
+        """Kiểm tra chính xác số lượng tồn kho khả dụng hiện tại của một phân loại sản phẩm. Sử dụng khi khách hỏi về số lượng còn hàng."""
         try:
             stmt = (
                 select(ProductVariant)

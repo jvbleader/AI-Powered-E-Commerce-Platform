@@ -184,7 +184,7 @@ function InventoryContent() {
             <Box className="h-5 w-5" />
           </div>
           <div>
-            <p className="text-xs text-muted font-medium">Tổng số biến thể</p>
+            <p className="text-xs text-muted font-medium">Tổng số phân loại</p>
             <p className="text-lg font-bold text-ink">{totalVariantsCount}</p>
           </div>
         </Panel>
@@ -262,7 +262,7 @@ function InventoryContent() {
             <div className="relative flex-1">
               <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted" />
               <Input
-                placeholder="Tìm theo tên biến thể, SKU, hoặc tên sản phẩm..."
+                placeholder="Tìm theo tên phân loại, SKU, hoặc tên sản phẩm..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="pl-9 h-9"

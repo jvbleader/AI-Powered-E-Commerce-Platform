@@ -24,7 +24,7 @@ from services.engagement.notification_service import send_notification
 
 
 def generate_order_code() -> str:
-    return f"ORD-{secrets.token_hex(4).upper()}"
+    return f"ORD-{secrets.token_hex(6).upper()}"
 
 
 async def _process_checkout(
@@ -34,6 +34,7 @@ async def _process_checkout(
     customer_note: str | None,
     db: AsyncSession,
     payment_method: str | None = None,
+    shop_shipping_map: Dict[str, str] | None = None,
 ) -> List[Order]:
     if not items_to_checkout:
         raise HTTPException(
@@ -80,6 +81,37 @@ async def _process_checkout(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Không tìm thấy Seller {seller_id}",
             )
+
+        # Find shipping provider
+        provider_pub_id = None
+        if shop_shipping_map:
+            provider_pub_id = shop_shipping_map.get(seller.public_id)
+        
+        selected_provider = None
+        if provider_pub_id:
+            for p in seller.shipping_providers:
+                if p.public_id == provider_pub_id and p.active:
+                    selected_provider = p
+                    break
+            
+            if not selected_provider:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Shop {seller.shop_name} không hỗ trợ đơn vị vận chuyển đã chọn",
+                )
+        else:
+            # Fallback to the first available provider if not specified
+            if not seller.shipping_providers:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Shop {seller.shop_name} chưa cài đặt đơn vị vận chuyển",
+                )
+            selected_provider = next((p for p in seller.shipping_providers if p.active), None)
+            if not selected_provider:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Shop {seller.shop_name} không có đơn vị vận chuyển nào khả dụng",
+                )
 
         subtotal_amount = Decimal("0.00")
         order_items = []
@@ -140,7 +172,7 @@ async def _process_checkout(
                 ),
             )
 
-        shipping_fee = seller.shipping_fee
+        shipping_fee = selected_provider.fixed_fee
         total_amount = subtotal_amount + shipping_fee
 
         order = Order(
@@ -161,6 +193,14 @@ async def _process_checkout(
 
         # Thêm thông tin Shipment
         from models.order import Shipment
+        from sqlalchemy import select
+
+        while True:
+            digits = "".join(secrets.choice("0123456789") for _ in range(12))
+            tracking_code = f"{selected_provider.code}VN{digits}"
+            result = await db.execute(select(Shipment.id).where(Shipment.tracking_code == tracking_code))
+            if not result.scalar_one_or_none():
+                break
 
         shipment = Shipment(
             receiver_name=address.receiver_name,
@@ -170,6 +210,8 @@ async def _process_checkout(
             ward=address.ward,
             detail_address=address.detail_address,
             address_type=address.address_type,
+            shipping_provider_id=selected_provider.id,
+            tracking_code=tracking_code,
         )
         order.shipment = shipment
 
@@ -229,8 +271,10 @@ async def checkout_from_cart(user: User, data: CheckoutCartRequest, db: AsyncSes
         for ci in cart_items
     ]
 
+    shop_shipping_map = {sp.shop_public_id: sp.shipping_provider_public_id for sp in data.shipping_providers}
+    
     orders = await _process_checkout(
-        user, items_to_checkout, data.address_id, data.customer_note, db, data.payment_method
+        user, items_to_checkout, data.address_id, data.customer_note, db, data.payment_method, shop_shipping_map
     )
     for o in orders:
         await db.refresh(o, ["items", "seller", "shipment"])
@@ -248,14 +292,20 @@ async def checkout_direct(user: User, data: CheckoutDirectRequest, db: AsyncSess
         if not variant:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Không tìm thấy biến thể sản phẩm {req_item.variant_id} hoặc ngừng kinh doanh",
+                detail=f"Không tìm thấy phân loại sản phẩm {req_item.variant_id} hoặc ngừng kinh doanh",
             )
         items_to_checkout.append(
             {"variant": variant, "quantity": req_item.quantity, "cart_item_id": None}
         )
 
+    shop_shipping_map = None
+    if data.shipping_provider_public_id and variants:
+        # Get seller_public_id from the first variant (assuming single shop for direct checkout)
+        first_variant = list(variants.values())[0]
+        shop_shipping_map = {first_variant.product.seller.public_id: data.shipping_provider_public_id}
+
     orders = await _process_checkout(
-        user, items_to_checkout, data.address_id, data.customer_note, db, data.payment_method
+        user, items_to_checkout, data.address_id, data.customer_note, db, data.payment_method, shop_shipping_map
     )
     for o in orders:
         await db.refresh(o, ["items", "seller", "shipment"])

@@ -17,7 +17,9 @@ import {
   ChevronRight,
   User,
   ShoppingBag,
-  RefreshCw
+  RefreshCw,
+  X,
+  ChevronLeft
 } from "lucide-react";
 import { Section } from "@/components/ui/containers";
 import { EmptyState } from "@/components/ui/feedback";
@@ -34,6 +36,10 @@ export default function AdminViolationReportsPage() {
   const [showConfirmResolve, setShowConfirmResolve] = useState<boolean>(false);
   const [refreshKey, setRefreshKey] = useState<number>(0);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
+
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const [previewImages, setPreviewImages] = useState<string[]>([]);
+  const [previewIndex, setPreviewIndex] = useState(0);
 
   // Fetch reports from Backend API on mount if available, or fall back to store/sample data
   useEffect(() => {
@@ -473,13 +479,19 @@ export default function AdminViolationReportsPage() {
                         <div className="text-xs font-bold text-rose-900">Ảnh chứng minh đính kèm ({selectedReport.imageUrls.length}):</div>
                         <div className="grid grid-cols-3 gap-2">
                           {selectedReport.imageUrls.map((url, i) => (
-                            <a key={i} href={url} target="_blank" rel="noreferrer" className="block relative h-24 rounded-xl overflow-hidden border border-rose-200 bg-white group">
+                            <button
+                              key={i} 
+                              type="button"
+                              onClick={() => {
+                                setPreviewImages(selectedReport.imageUrls || []);
+                                setPreviewIndex(i);
+                                setPreviewImage(url);
+                              }}
+                              className="block relative h-24 rounded-xl overflow-hidden border border-rose-200 bg-white group cursor-zoom-in"
+                            >
                               {/* eslint-disable-next-line @next/next/no-img-element */}
                               <img src={url} alt="Bằng chứng" className="h-full w-full object-cover group-hover:scale-105 transition-transform" />
-                              <div className="absolute inset-0 bg-slate-900/20 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                                <ExternalLink className="h-5 w-5 text-white" />
-                              </div>
-                            </a>
+                            </button>
                           ))}
                         </div>
                       </div>
@@ -578,6 +590,59 @@ export default function AdminViolationReportsPage() {
           </div>
         )}
       </div>
+
+      {previewImage && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/90 p-4 backdrop-blur-sm animate-in fade-in duration-200"
+          onClick={() => setPreviewImage(null)}
+          role="dialog"
+          aria-modal="true"
+        >
+          <button
+            type="button"
+            onClick={() => setPreviewImage(null)}
+            className="absolute right-4 top-4 rounded-full bg-white/10 p-2 text-white hover:bg-white/20 transition-colors"
+          >
+            <X className="h-5 w-5" />
+          </button>
+
+          {previewImages.length > 1 && (
+            <>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const next = (previewIndex - 1 + previewImages.length) % previewImages.length;
+                  setPreviewIndex(next);
+                  setPreviewImage(previewImages[next]);
+                }}
+                className="absolute left-4 md:left-8 rounded-full bg-white/10 p-2 text-white hover:bg-white/20 transition-colors"
+              >
+                <ChevronLeft className="h-6 w-6" />
+              </button>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const next = (previewIndex + 1) % previewImages.length;
+                  setPreviewIndex(next);
+                  setPreviewImage(previewImages[next]);
+                }}
+                className="absolute right-4 md:right-8 rounded-full bg-white/10 p-2 text-white hover:bg-white/20 transition-colors"
+              >
+                <ChevronRight className="h-6 w-6" />
+              </button>
+            </>
+          )}
+
+          <img
+            src={previewImage}
+            alt="Ảnh bằng chứng"
+            className="max-h-[90vh] max-w-[min(96vw,56rem)] rounded-xl object-contain shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
+      )}
     </Section>
   );
 }

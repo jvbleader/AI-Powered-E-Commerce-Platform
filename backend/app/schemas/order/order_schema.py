@@ -15,6 +15,11 @@ class ShippingAddressPayload(BaseModel):
     address_type: str = "HOME"
 
 
+class ShopShippingProvider(BaseModel):
+    shop_public_id: str = Field(description="Public ID của shop")
+    shipping_provider_public_id: str = Field(description="ID công khai của đơn vị vận chuyển được chọn")
+
+
 class CheckoutCartRequest(BaseModel):
     cart_item_ids: List[int] = Field(
         description="Danh sách ID của các cart item (không phải variant_id)"
@@ -27,10 +32,14 @@ class CheckoutCartRequest(BaseModel):
         default=None,
         description="Phương thức thanh toán dự kiến: MOCK, VNPAY, ...",
     )
+    shipping_providers: List[ShopShippingProvider] = Field(
+        description="Đơn vị vận chuyển được chọn cho từng shop",
+        default_factory=list,
+    )
 
 
 class CheckoutDirectItem(BaseModel):
-    variant_id: int = Field(description="ID của biến thể sản phẩm")
+    variant_id: int = Field(description="ID của phân loại sản phẩm")
     quantity: int = Field(gt=0, description="Số lượng mua")
 
 
@@ -44,6 +53,7 @@ class CheckoutDirectRequest(BaseModel):
         default=None,
         description="Phương thức thanh toán dự kiến: MOCK, VNPAY, ...",
     )
+    shipping_provider_public_id: str = Field(description="ID công khai của đơn vị vận chuyển được chọn")
 
 
 class OrderItemResponse(BaseModel):
@@ -93,7 +103,9 @@ class UserInfo(BaseModel):
 
 
 class ShipmentResponse(BaseModel):
-    shipping_provider_name: Optional[str]
+    shipping_provider_id: Optional[int] = None
+    shipping_provider_name: Optional[str] = None
+    tracking_code: Optional[str] = None
     receiver_name: str
     receiver_phone: str
     province: str

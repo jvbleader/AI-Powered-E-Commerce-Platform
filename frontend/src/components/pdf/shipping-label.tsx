@@ -188,12 +188,13 @@ export interface ShippingLabelData {
   barcodeDataUrl: string;
   qrCodeDataUrl: string;
   routingCode: string;
+  logoUrl?: string;
 }
 
 export function ShippingLabelDocument({ labels }: { labels: ShippingLabelData[] }) {
   return (
     <Document>
-      {labels.map(({ order, barcodeDataUrl, qrCodeDataUrl, routingCode }) => {
+      {labels.map(({ order, barcodeDataUrl, qrCodeDataUrl, routingCode, logoUrl }) => {
         const address = order.shipment;
         const codAmount = order.paymentStatus === "PAID" ? 0 : order.totalAmount;
         
@@ -206,6 +207,9 @@ export function ShippingLabelDocument({ labels }: { labels: ShippingLabelData[] 
         const dateObj = new Date(order.createdAt);
         const dateStr = `${dateObj.getDate().toString().padStart(2, '0')}-${(dateObj.getMonth() + 1).toString().padStart(2, '0')}-${dateObj.getFullYear()}`;
         const timeStr = `${dateObj.getHours().toString().padStart(2, '0')}:${dateObj.getMinutes().toString().padStart(2, '0')}`;
+        
+        const trackingCode = order.shipment?.trackingCode || order.orderCode;
+        const providerName = order.shipment?.shippingProviderName || "SuperXpress";
 
         return (
           <Page key={order.id} size="A6" style={styles.page}>
@@ -214,13 +218,17 @@ export function ShippingLabelDocument({ labels }: { labels: ShippingLabelData[] 
               {/* Header */}
               <View style={styles.headerRow}>
                 <View style={styles.logoBox}>
-                  <Text style={styles.logoText}>SuperXpress</Text>
-                  <Text style={styles.logoSub}>Thương mại điện tử</Text>
+                  {logoUrl ? (
+                    <Image src={logoUrl} style={{ width: 60, height: 25, objectFit: "contain" }} />
+                  ) : (
+                    <Text style={styles.logoText}>{providerName}</Text>
+                  )}
+                  {!logoUrl && <Text style={styles.logoSub}>Thương mại điện tử</Text>}
                 </View>
                 <View style={styles.barcodeBox}>
                   {barcodeDataUrl && <Image src={barcodeDataUrl} style={styles.barcodeImage} />}
                   <View style={styles.barcodeTextRow}>
-                    <Text style={styles.textNormal}>Mã vận đơn:  <Text style={styles.textBold}>{order.orderCode}</Text></Text>
+                    <Text style={styles.textNormal}>Mã vận đơn:  <Text style={styles.textBold}>{trackingCode}</Text></Text>
                     <Text style={styles.textNormal}>Mã đơn hàng: <Text style={styles.textBold}>{order.orderCode}</Text></Text>
                   </View>
                 </View>

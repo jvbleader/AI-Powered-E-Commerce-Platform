@@ -4,14 +4,20 @@ from pydantic import BaseModel, Field
 from decimal import Decimal
 
 
+from schemas.shipping.shipping_provider_schema import ShippingProviderResponse
+
 class SellerInfo(BaseModel):
     id: int
+    public_id: str = ""
     shop_name: str
     shop_slug: str
     shop_logo_url: Optional[str] = None
+    shop_description: Optional[str] = None
     pickup_address: Optional[str] = None
     total_sold: int = 0
     shipping_fee: Decimal = Decimal("0.00")
+    shipping_providers: List[ShippingProviderResponse] = Field(default_factory=list)
+    approved_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True

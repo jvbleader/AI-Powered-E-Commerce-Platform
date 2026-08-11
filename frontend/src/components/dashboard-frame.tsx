@@ -167,9 +167,22 @@ export function DashboardFrame({
           </div>
           <div className="flex items-center gap-2">
             {kind === "seller" && store.getCurrentShop() ? (
-              <div className="flex flex-col items-end mr-2">
-                <span className="text-sm font-medium text-ink leading-tight">{store.getCurrentShop()?.shopName}</span>
-                <span className="text-xs text-muted leading-tight">{store.getCurrentUser()?.fullName}</span>
+              <div className="flex items-center gap-2 mr-2">
+                {store.getCurrentShop()?.logoUrl ? (
+                  <img
+                    src={store.getCurrentShop()?.logoUrl}
+                    alt={store.getCurrentShop()?.shopName}
+                    className="h-8 w-8 rounded-full object-cover border border-line"
+                  />
+                ) : (
+                  <div className="h-8 w-8 rounded-full bg-primary text-white flex items-center justify-center font-bold text-sm">
+                    {store.getCurrentShop()?.shopName.charAt(0).toUpperCase()}
+                  </div>
+                )}
+                <div className="flex flex-col items-end">
+                  <span className="text-sm font-medium text-ink leading-tight">{store.getCurrentShop()?.shopName}</span>
+                  <span className="text-xs text-muted leading-tight">{store.getCurrentUser()?.fullName}</span>
+                </div>
               </div>
             ) : (
               <span className="text-sm text-muted mr-2">{store.getCurrentUser()?.fullName ?? "Khách"}</span>

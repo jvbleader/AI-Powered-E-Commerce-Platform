@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import List, Optional
 from fastapi import APIRouter, Depends, Query, HTTPException, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,6 +17,13 @@ from dependencies.auth import CurrentUserOptional
 router = APIRouter(prefix="", tags=["Public Products"])
 
 
+class ShippingProviderPublic(BaseModel):
+    public_id: str
+    name: str
+    code: str
+    fixed_fee: float
+    logo_url: Optional[str] = None
+
 class ShopPublicDetailResponse(BaseModel):
     id: int
     shop_name: str
@@ -25,13 +33,13 @@ class ShopPublicDetailResponse(BaseModel):
     phone: Optional[str] = None
     email: Optional[str] = None
     pickup_address: Optional[str] = None
-    shipping_fee: float = 0.0
-    shipping_provider_name: Optional[str] = None
+    shipping_providers: List[ShippingProviderPublic] = []
     status: str
     total_sold: int = 0
     product_count: int = 0
     average_rating: float = 0.0
     review_count: int = 0
+    approved_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True
@@ -98,6 +106,41 @@ async def get_product_recommendations(
     )
 
 
+@router.get("/shops/featured", response_model=List[ShopPublicDetailResponse])
+async def get_featured_shops(db: DBSession, limit: int = Query(10, ge=1, le=50)):
+    shops = await seller_profile_repo.get_featured_shops(db, limit)
+    result = []
+    for seller in shops:
+        stats = await seller_profile_repo.get_shop_stats(seller.id, db)
+        result.append(
+            ShopPublicDetailResponse(
+                id=seller.id,
+                shop_name=seller.shop_name,
+                shop_slug=seller.shop_slug,
+                shop_logo_url=seller.shop_logo_url,
+                shop_description=seller.shop_description,
+                phone=seller.phone,
+                email=seller.email,
+                pickup_address=seller.pickup_address,
+                shipping_providers=[
+                    ShippingProviderPublic(
+                        public_id=p.public_id,
+                        name=p.name,
+                        code=p.code,
+                        fixed_fee=float(p.fixed_fee),
+                        logo_url=p.logo_url,
+                    )
+                    for p in (seller.shipping_providers or [])
+                ],
+                status=seller.status,
+                total_sold=stats["total_sold"],
+                product_count=stats["product_count"],
+                average_rating=stats["average_rating"],
+                review_count=stats["review_count"],
+            )
+        )
+    return result
+
 @router.get("/shops/{shop_slug}", response_model=ShopPublicDetailResponse)
 async def get_public_shop_detail(
     shop_slug: str, db: DBSession
@@ -117,13 +160,22 @@ async def get_public_shop_detail(
         phone=seller.phone,
         email=seller.email,
         pickup_address=seller.pickup_address,
-        shipping_fee=float(seller.shipping_fee or 0),
-        shipping_provider_name=seller.shipping_provider_name,
+        shipping_providers=[
+            ShippingProviderPublic(
+                public_id=p.public_id,
+                name=p.name,
+                code=p.code,
+                fixed_fee=float(p.fixed_fee),
+                logo_url=p.logo_url,
+            )
+            for p in seller.shipping_providers
+        ],
         status=seller.status,
         total_sold=stats["total_sold"],
         product_count=stats["product_count"],
         average_rating=stats["average_rating"],
-        review_count=stats["review_count"]
+        review_count=stats["review_count"],
+        approved_at=seller.approved_at
     )
 
 

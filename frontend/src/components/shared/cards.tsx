@@ -163,7 +163,13 @@ export function ShopCard({ shop }: { shop: Shop }) {
     >
       <div className="flex items-start gap-3">
         <div className="relative overflow-hidden rounded-xl">
-          <img src={shop.logoUrl} alt={shop.shopName} className="h-14 w-14 object-cover transition-transform duration-500 group-hover:scale-110" />
+          {shop.logoUrl ? (
+            <img src={shop.logoUrl} alt={shop.shopName} className="h-14 w-14 object-cover transition-transform duration-500 group-hover:scale-110" />
+          ) : (
+            <div className="h-14 w-14 bg-slate-200 flex items-center justify-center font-bold text-slate-500 text-xl transition-transform duration-500 group-hover:scale-110">
+              {shop.shopName.charAt(0).toUpperCase()}
+            </div>
+          )}
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
@@ -179,8 +185,8 @@ export function ShopCard({ shop }: { shop: Shop }) {
           <p className="font-bold text-slate-900">{shop.totalSold.toLocaleString("vi-VN")}</p>
         </div>
         <div className="rounded-xl bg-slate-50 p-2.5 transition-colors group-hover:bg-emerald-50/50">
-          <p className="text-xs font-semibold text-slate-400">Phí ship</p>
-          <p className="font-bold text-slate-900">{formatVnd(shop.shippingFee)}</p>
+          <p className="text-xs font-semibold text-slate-400">Đơn vị VC</p>
+          <p className="font-bold text-slate-900">{shop.shippingProviders?.length || 0} đơn vị</p>
         </div>
       </div>
     </Link>

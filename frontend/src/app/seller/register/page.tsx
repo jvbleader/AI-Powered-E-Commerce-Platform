@@ -6,12 +6,14 @@ import { RefreshCcw, Store } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ErrorState } from "@/components/ui/feedback";
 import { Field, Input } from "@/components/ui/input";
+import { MultiSelect } from "@/components/ui/multi-select";
 import { Panel, Section } from "@/components/ui/containers";
 import { StatusBadge } from "@/components/ui/badge";
 import { sellerStatusLabel } from "@/lib/helpers";
 import { useMarketplaceStore } from "@/store/use-marketplace-store";
-import type { SellerApplication, SellerStatus } from "@/types/models";
+import type { SellerApplication, SellerStatus, ShippingProvider } from "@/types/models";
 import Unauthorized from "@/components/shared/unauthorized-page";
+import { shippingApi } from "@/services/shipping-api";
 
 export default function SellerRegisterPage() {
   const store = useMarketplaceStore();
@@ -25,13 +27,15 @@ export default function SellerRegisterPage() {
     taxCode: "",
     bankName: "",
     bankAccountNumber: "",
-    bankAccountName: store.getCurrentUser()?.fullName ?? ""
+    bankAccountName: store.getCurrentUser()?.fullName ?? "",
+    shippingProviderPublicIds: []
   });
   const [mode, setMode] = useState<"create" | "update">("create");
   const [applicationStatus, setApplicationStatus] = useState<SellerStatus | undefined>();
   const [loadingApplication, setLoadingApplication] = useState(true);
   const [savingApplication, setSavingApplication] = useState(false);
   const [formError, setFormError] = useState("");
+  const [shippingProviders, setShippingProviders] = useState<ShippingProvider[]>([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -77,7 +81,8 @@ export default function SellerRegisterPage() {
             bankAccountNumber: application.bankAccountNumber,
             bankAccountName: application.bankAccountName,
             shopSlug: application.shopSlug,
-            status
+            status,
+            shippingProviderPublicIds: application.shippingProviders?.map((p: any) => p.publicId) ?? []
           });
         } else {
           setMode("create");
@@ -86,6 +91,10 @@ export default function SellerRegisterPage() {
       .finally(() => {
         if (!cancelled) setLoadingApplication(false);
       });
+      
+    shippingApi.getProviders().then((res) => {
+      if (!cancelled) setShippingProviders(res);
+    });
 
     return () => {
       cancelled = true;
@@ -176,6 +185,20 @@ export default function SellerRegisterPage() {
               <Field label="Mã số thuế" hint="10-14 ký tự">
                 <Input value={form.taxCode} onChange={updateField("taxCode")} placeholder="0312345678" />
               </Field>
+              <div className="md:col-span-2">
+                <Field label="Đơn vị vận chuyển">
+                  <MultiSelect
+                    options={shippingProviders.map(p => ({
+                      label: p.fixedFee ? `${p.name} (${Number(p.fixedFee).toLocaleString("vi-VN")}đ)` : p.name,
+                      value: p.publicId
+                    }))}
+                    value={form.shippingProviderPublicIds ?? []}
+                    onChange={(val) => setForm(prev => ({ ...prev, shippingProviderPublicIds: val }))}
+                    placeholder="Chọn đơn vị vận chuyển..."
+                    className="mt-2"
+                  />
+                </Field>
+              </div>
               <div className="md:col-span-2">
                 <Field label="Địa chỉ lấy hàng" hint="10-200 ký tự">
                   <Input value={form.pickupAddress} onChange={updateField("pickupAddress")} placeholder="Số nhà, phường/xã, quận/huyện, tỉnh/thành" />

@@ -113,7 +113,7 @@ export function QuickInventoryModal({ product, onClose }: QuickInventoryModalPro
           </div>
 
           {variants.length === 0 ? (
-            <p className="text-center text-sm text-muted py-6">Không tìm thấy biến thể nào cho sản phẩm này.</p>
+            <p className="text-center text-sm text-muted py-6">Không tìm thấy phân loại nào cho sản phẩm này.</p>
           ) : (
             <div className="space-y-3">
               {variants.map((v) => {
