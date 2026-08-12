@@ -17,6 +17,7 @@ from schemas.search.search_schema import (
 )
 from search.pipeline.pipeline import SearchPipeline
 from search.strategies import ProductSearchStrategy, ShopSearchStrategy
+from ai.embeddings import generate_product_embedding
 
 logger = logging.getLogger(__name__)
 
@@ -61,6 +62,9 @@ async def recreate_products_index() -> None:
 async def index_product(product_data: dict) -> None:
     es = get_es_client()
     try:
+        if "embedding" not in product_data:
+            product_data["embedding"] = await generate_product_embedding(product_data)
+            
         await es.index(
             index=PRODUCT_INDEX_ALIAS,
             id=str(product_data["id"]),
@@ -82,6 +86,33 @@ async def bulk_index_products(products: list[dict]) -> None:
     if not products:
         return
     es = get_es_client()
+    
+    products_missing_embeddings = [p for p in products if "embedding" not in p]
+    if products_missing_embeddings:
+        # Fetch existing embeddings from ES
+        ids_to_fetch = [str(p["id"]) for p in products_missing_embeddings]
+        try:
+            res = await es.mget(index=PRODUCT_INDEX_ALIAS, body={"ids": ids_to_fetch}, _source=["embedding"], ignore=[404, 400])
+            existing_embs = {}
+            if "docs" in res:
+                for doc in res["docs"]:
+                    if doc.get("found") and "embedding" in doc.get("_source", {}):
+                        existing_embs[doc["_id"]] = doc["_source"]["embedding"]
+            
+            for p in products_missing_embeddings:
+                p_id = str(p["id"])
+                if p_id in existing_embs:
+                    p["embedding"] = existing_embs[p_id]
+                else:
+                    p["embedding"] = await generate_product_embedding(p)
+        except Exception as e:
+            logger.warning(f"Failed to fetch existing embeddings: {e}")
+            for p in products_missing_embeddings:
+                try:
+                    p["embedding"] = await generate_product_embedding(p)
+                except Exception:
+                    pass
+
     actions = [
         {
             "_index": PRODUCT_INDEX_ALIAS,

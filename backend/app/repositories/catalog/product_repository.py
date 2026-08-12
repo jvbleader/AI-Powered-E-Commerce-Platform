@@ -602,3 +602,25 @@ async def get_variants_for_checkout(
     )
     result = await db.execute(stmt)
     return list(result.scalars().all())
+
+async def get_product_by_slug(db: AsyncSession, product_slug: str) -> Optional[Product]:
+    filters = [
+        or_(
+            Product.slug == product_slug,
+            Product.public_id == product_slug,
+            Product.id == (int(product_slug) if product_slug.isdigit() else -1),
+        ),
+        Product.status.in_(["ACTIVE", "OUT_OF_STOCK"]),
+        SellerProfile.status == "APPROVED",
+    ]
+    query = (
+        select(Product)
+        .join(SellerProfile, Product.seller_id == SellerProfile.id)
+        .filter(*filters)
+        .options(
+            selectinload(Product.categories),
+            selectinload(Product.seller),
+        )
+    )
+    result = await db.execute(query)
+    return result.scalar_one_or_none()

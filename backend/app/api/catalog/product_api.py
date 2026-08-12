@@ -105,6 +105,30 @@ async def get_product_recommendations(
         db=db, user_id=user_id, limit=limit
     )
 
+@router.get("/products/{product_slug}/similar", response_model=ProductListResponse)
+async def get_similar_products(
+    product_slug: str,
+    db: DBSession,
+    limit: int = Query(10, ge=1, le=50),
+    page: int = Query(1, ge=1),
+):
+    """Có thể bạn cũng thích - Dựa trên sản phẩm hiện tại"""
+    return await product_public_service.get_semantic_similar_products(
+        db=db, product_slug=product_slug, limit=limit, page=page
+    )
+
+@router.get("/products/{product_slug}/shop-similar", response_model=ProductListResponse)
+async def get_shop_similar_products(
+    product_slug: str,
+    db: DBSession,
+    limit: int = Query(6, ge=1, le=50),
+    page: int = Query(1, ge=1),
+):
+    """Các sản phẩm khác của shop - Dựa trên sản phẩm hiện tại"""
+    return await product_public_service.get_semantic_shop_similar_products(
+        db=db, product_slug=product_slug, limit=limit, page=page
+    )
+
 
 @router.get("/shops/featured", response_model=List[ShopPublicDetailResponse])
 async def get_featured_shops(db: DBSession, limit: int = Query(10, ge=1, le=50)):

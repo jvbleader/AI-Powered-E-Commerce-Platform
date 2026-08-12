@@ -76,7 +76,10 @@ export function ProductCard({
   shop,
   categories = [],
   onAdd,
-  className
+  className,
+  hideShop,
+  hideAddToCart,
+  compactStats
 }: {
   product: Product;
   variants: ProductVariant[];
@@ -84,6 +87,9 @@ export function ProductCard({
   categories?: Category[];
   onAdd?: (variantId: string) => void;
   className?: string;
+  hideShop?: boolean;
+  hideAddToCart?: boolean;
+  compactStats?: boolean;
 }) {
   const [imageLoaded, setImageLoaded] = useState(false);
 
@@ -123,20 +129,24 @@ export function ProductCard({
         <div className={cn("space-y-2 p-2.5 transition-opacity", isOutOfStock && "opacity-60")}>
           <h3 className="line-clamp-2 min-h-10 text-sm font-bold leading-5 text-slate-800 group-hover:text-emerald-700 transition-colors duration-200">{product.name}</h3>
 
-          {shop ? (
+          {!hideShop && shop ? (
             <p className="flex items-center gap-1 truncate text-xs text-slate-500">
               <Store className="h-3.5 w-3.5 text-emerald-600 group-hover:scale-110 transition-transform duration-200" aria-hidden="true" />
               {shop.shopName}
             </p>
           ) : null}
           <PriceDisplay price={priceRange.min} salePrice={primaryVariant?.salePrice} compact />
-          <div className="flex items-center justify-between gap-2 pt-1 border-t border-slate-100">
-            <RatingStars rating={product.averageRating} count={product.reviewCount} />
-            <span className="text-xs font-semibold text-slate-600">Đã bán <span className="text-emerald-600 font-bold">{product.soldCount.toLocaleString("vi-VN")}</span></span>
+          <div className={cn("pt-1 border-t border-slate-100", compactStats ? "flex flex-col gap-1.5" : "flex items-center justify-between gap-2")}>
+            <RatingStars rating={product.averageRating || 0} count={product.reviewCount || 0} />
+            <span className="text-xs text-slate-600 font-medium">
+              {compactStats 
+                ? ((product.soldCount || 0) >= 1000 ? `${Math.floor((product.soldCount || 0)/1000)}k+ đã bán` : `${(product.soldCount || 0).toLocaleString("vi-VN")} đã bán`) 
+                : <>Đã bán <span className="text-emerald-600 font-bold">{(product.soldCount || 0).toLocaleString("vi-VN")}</span></>}
+            </span>
           </div>
         </div>
       </Link>
-      {primaryVariant && onAdd ? (
+      {!hideAddToCart && primaryVariant && onAdd ? (
         <div className={cn("border-t border-slate-100 p-3 bg-slate-50/50 transition-opacity", isOutOfStock && "opacity-60")}>
           <Button
             className="w-full"

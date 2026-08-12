@@ -5,7 +5,7 @@ from search.config.analyzer import ANALYZER_CONFIG
 logger = logging.getLogger(__name__)
 
 # Bump when mapping / analyzer / document contract changes so startup recreates indices
-SEARCH_INDEX_VERSION = "2"
+SEARCH_INDEX_VERSION = "3"
 
 PRODUCT_INDEX_ALIAS = "products_current"
 PRODUCT_INDEX_V1 = "products_v1"
@@ -87,7 +87,13 @@ PRODUCT_INDEX_MAPPING = {
         "sold_count": {"type": "integer"},
         "status": {"type": "keyword"},
         "created_at": {"type": "date"},
-        "thumbnail": {"type": "keyword", "index": False}
+        "thumbnail": {"type": "keyword", "index": False},
+        "embedding": {
+            "type": "dense_vector",
+            "dims": 1024,
+            "index": True,
+            "similarity": "cosine"
+        }
     }
 }
 

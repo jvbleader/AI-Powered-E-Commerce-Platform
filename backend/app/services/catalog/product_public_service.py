@@ -305,3 +305,58 @@ async def get_product_recommendations(
 ) -> List[ProductPublicResponse]:
     items = await product_repo.get_recommended_products(db, user_id, limit)
     return items
+
+import services.search.recommendation_service as recommendation_service
+from schemas.search.search_schema import ProductSearchDocument
+
+async def get_semantic_similar_products(
+    db: AsyncSession, product_slug: str, limit: int = 10, page: int = 1
+) -> ProductListResponse:
+    product = await product_repo.get_product_by_slug(db, product_slug)
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found")
+
+    es_docs, total = await recommendation_service.get_similar_products(db, product, limit, page)
+    
+    # Cap total at 152 for semantic similar products as per requirements
+    total = min(total, 152)
+
+    docs = [ProductSearchDocument(**doc) for doc in es_docs]
+    product_public_ids = [doc.public_id for doc in docs]
+    primary_variants = await product_repo.get_primary_variants_by_product_public_ids(
+        db, product_public_ids
+    )
+
+    items = [_map_es_doc_to_public(doc, primary_variants) for doc in docs]
+    return ProductListResponse(
+        items=items,
+        total=total,
+        page=page,
+        size=limit,
+        aggregations={},
+    )
+
+async def get_semantic_shop_similar_products(
+    db: AsyncSession, product_slug: str, limit: int = 6, page: int = 1
+) -> ProductListResponse:
+    product = await product_repo.get_product_by_slug(db, product_slug)
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found")
+
+    es_docs, total = await recommendation_service.get_shop_similar_products(
+        db, product, limit, page
+    )
+    docs = [ProductSearchDocument(**doc) for doc in es_docs]
+    product_public_ids = [doc.public_id for doc in docs]
+    primary_variants = await product_repo.get_primary_variants_by_product_public_ids(
+        db, product_public_ids
+    )
+
+    items = [_map_es_doc_to_public(doc, primary_variants) for doc in docs]
+    return ProductListResponse(
+        items=items,
+        total=total,
+        page=page,
+        size=limit,
+        aggregations={},
+    )

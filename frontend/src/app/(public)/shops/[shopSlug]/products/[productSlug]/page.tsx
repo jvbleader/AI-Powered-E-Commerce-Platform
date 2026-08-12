@@ -47,6 +47,8 @@ import { useMarketplaceStore } from "@/store/use-marketplace-store";
 import NotFoundPage from "@/components/shared/not-found-page";
 import type { Product, ProductVariant, Shop } from "@/types/models";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ShopSimilarProducts } from "@/components/product/shop-similar-products";
+import { SemanticSimilarProducts } from "@/components/product/semantic-similar-products";
 
 const getJoinDuration = (approvedAt?: string) => {
   if (!approvedAt) return "Mới đây";
@@ -877,6 +879,13 @@ export default function ProductDetailPage() {
         </h2>
         <ReviewsModule product={product} />
       </div>
+
+      {/* SHOP SIMILAR PRODUCTS */}
+      <ShopSimilarProducts productSlug={productSlug} shopSlug={activeShop.shopSlug} />
+
+      {/* SEMANTIC SIMILAR PRODUCTS */}
+      <SemanticSimilarProducts productSlug={productSlug} />
+
     </main>
   );
 }
