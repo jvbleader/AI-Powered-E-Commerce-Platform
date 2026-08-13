@@ -62,3 +62,16 @@ async def generate_product_embedding(product_data: Dict[str, Any]) -> List[float
     except Exception as e:
         logger.error(f"Error generating embedding for product {product_data.get('id')}: {e}")
         raise
+
+async def generate_query_embedding(query: str) -> List[float]:
+    """
+    Generates an embedding vector for a search query.
+    """
+    try:
+        model = get_embeddings_model()
+        vector = await model.aembed_query(query)
+        return vector
+    except Exception as e:
+        logger.error(f"Error generating embedding for query '{query}': {e}")
+        raise
+

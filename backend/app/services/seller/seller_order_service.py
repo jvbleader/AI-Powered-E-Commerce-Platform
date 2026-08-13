@@ -40,13 +40,14 @@ async def get_seller_orders(
     user: User,
     db: AsyncSession,
     status_filter: Optional[str] = None,
+    customer_id: Optional[int] = None,
     skip: int = 0,
     limit: int = 100,
 ) -> OrderListResponse:
     seller_profile = await _get_active_seller_profile(user, db)
 
     items, total = await get_orders_by_seller_and_status(
-        db, seller_profile.id, status_filter, skip, limit
+        db, seller_profile.id, status_filter, customer_id, skip, limit
     )
 
     return OrderListResponse(

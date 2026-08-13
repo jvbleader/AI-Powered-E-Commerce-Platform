@@ -13,12 +13,15 @@ async def get_orders_by_seller_and_status(
     db: AsyncSession,
     seller_id: int,
     status: Optional[str] = None,
+    customer_id: Optional[int] = None,
     skip: int = 0,
     limit: int = 100,
 ) -> tuple[List[Order], int]:
     query = select(Order).filter(Order.seller_id == seller_id)
     if status:
         query = query.filter(Order.order_status == status)
+    if customer_id:
+        query = query.filter(Order.user_id == customer_id)
 
     # Get total count
     count_query = select(func.count()).select_from(query.subquery())
@@ -29,6 +32,7 @@ async def get_orders_by_seller_and_status(
     items_query = (
         query.options(
             selectinload(Order.items).selectinload(OrderItem.review),
+            selectinload(Order.items).selectinload(OrderItem.product),
             selectinload(Order.shipment).selectinload(Shipment.shipping_provider),
             selectinload(Order.user),
         )
@@ -49,6 +53,7 @@ async def get_order_by_public_id_and_seller(
         select(Order)
         .options(
             selectinload(Order.items).selectinload(OrderItem.review),
+            selectinload(Order.items).selectinload(OrderItem.product),
             selectinload(Order.shipment).selectinload(Shipment.shipping_provider),
             selectinload(Order.user),
         )
@@ -126,6 +131,7 @@ async def get_user_orders(db: AsyncSession, user_id: int) -> list[Order]:
         select(Order)
         .options(
             selectinload(Order.items).selectinload(OrderItem.review),
+            selectinload(Order.items).selectinload(OrderItem.product),
             selectinload(Order.seller),
             selectinload(Order.shipment).selectinload(Shipment.shipping_provider),
         )
@@ -143,6 +149,7 @@ async def get_order_by_code_and_user(
         select(Order)
         .options(
             selectinload(Order.items).selectinload(OrderItem.review),
+            selectinload(Order.items).selectinload(OrderItem.product),
             selectinload(Order.seller),
             selectinload(Order.shipment).selectinload(Shipment.shipping_provider),
         )
@@ -158,8 +165,10 @@ async def get_order_by_code_and_user(
 async def get_orders_by_codes_and_user(
     db: AsyncSession, order_codes: list[str], user_id: int
 ) -> list[Order]:
-    stmt = select(Order).where(
-        Order.order_code.in_(order_codes), Order.user_id == user_id
+    stmt = (
+        select(Order)
+        .options(selectinload(Order.payment_order))
+        .where(Order.order_code.in_(order_codes), Order.user_id == user_id)
     )
     res = await db.execute(stmt)
     return list(res.scalars().all())

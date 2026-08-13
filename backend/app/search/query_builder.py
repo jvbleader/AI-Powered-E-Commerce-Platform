@@ -19,6 +19,20 @@ class QueryBuilder:
         self._size = 20
         self._source = None
         self._minimum_should_match = 0
+        self._knn = None
+
+    def add_knn(
+        self, field: str, query_vector: list[float], k: int = 100, num_candidates: int = 100, boost: float = 1.0
+    ) -> "QueryBuilder":
+        if query_vector:
+            self._knn = {
+                "field": field,
+                "query_vector": query_vector,
+                "k": k,
+                "num_candidates": num_candidates,
+                "boost": boost,
+            }
+        return self
 
     def add_multi_match(
         self,
@@ -183,6 +197,9 @@ class QueryBuilder:
             "from": self._from_idx,
             "size": self._size,
         }
+
+        if self._knn:
+            body["knn"] = self._knn
 
         if self._sort:
             body["sort"] = self._sort

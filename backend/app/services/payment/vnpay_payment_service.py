@@ -172,8 +172,6 @@ async def create_vnpay_payment(
             f"Số tiền thanh toán VNPay tối thiểu là {VNPAY_MIN_AMOUNT:,.0f} VND",
         )
     payment.payment_gateway = "VNPAY"
-    # Align DB expiry with VNPay payment link TTL (default create_payment uses 1 day).
-    payment.expires_at = utc_now() + timedelta(minutes=settings.VNPAY_TIMEOUT_MINUTES)
 
     try:
         client = VNPayClient()
@@ -220,13 +218,21 @@ async def rebuild_vnpay_payment_url(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Không tìm thấy giao dịch")
     if payment.payment_method != "VNPAY":
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Không phải giao dịch VNPay")
-    if payment.payment_status != "PENDING":
+    if payment.payment_status not in ("PENDING", "FAILED"):
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
-            f"Giao dịch không còn chờ thanh toán (trạng thái: {payment.payment_status})",
+            f"Giao dịch không thể thanh toán lại (trạng thái: {payment.payment_status})",
         )
+    if payment.expires_at and payment.expires_at < utc_now():
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Giao dịch đã hết hạn thanh toán")
 
-    payment.expires_at = utc_now() + timedelta(minutes=settings.VNPAY_TIMEOUT_MINUTES)
+    for po in payment.order_links:
+        if po.order.order_status == "CANCELLED":
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Đơn hàng đã bị huỷ")
+            
+    if payment.payment_status == "FAILED":
+        payment.payment_status = "PENDING"
+        payment.failed_at = None
 
     try:
         client = VNPayClient()

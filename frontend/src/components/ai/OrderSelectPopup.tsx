@@ -22,9 +22,11 @@ type OrderSelectPopupProps = {
   isOpen: boolean;
   onClose: () => void;
   onSelect: (order: Order) => void;
+  mode?: 'CUSTOMER' | 'SELLER';
+  customerId?: number;
 };
 
-export function OrderSelectPopup({ shopId, isOpen, onClose, onSelect }: OrderSelectPopupProps) {
+export function OrderSelectPopup({ shopId, isOpen, onClose, onSelect, mode = 'CUSTOMER', customerId }: OrderSelectPopupProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
@@ -49,16 +51,22 @@ export function OrderSelectPopup({ shopId, isOpen, onClose, onSelect }: OrderSel
     setLoading(true);
     const fetchOrders = async () => {
       try {
-        // Since the backend /orders endpoint currently returns all orders for the user and doesn't take shop_id query param,
-        // we'll fetch all and filter them locally.
-        const res = await apiFetch<any>(`/orders`);
-        const allOrders = res.items || (Array.isArray(res) ? res : []);
-        // Assuming order has seller.id or shop_id, if not we just show all
-        const filtered = allOrders
-          .filter((o: any) => o.seller?.id === shopId || !o.seller)
-          .map((o: any) => ({ ...o, id: o.order_code || o.id || "" }));
-        setOrders(filtered);
-        // We've already called setOrders(filtered) above.
+        if (mode === 'SELLER') {
+          const res = await apiFetch<any>(`/seller/orders?customer_id=${customerId}`);
+          const allOrders = res.items || (Array.isArray(res) ? res : []);
+          const mapped = allOrders.map((o: any) => ({ ...o, id: o.order_code || o.id || "" }));
+          setOrders(mapped);
+        } else {
+          // Since the backend /orders endpoint currently returns all orders for the user and doesn't take shop_id query param,
+          // we'll fetch all and filter them locally.
+          const res = await apiFetch<any>(`/orders`);
+          const allOrders = res.items || (Array.isArray(res) ? res : []);
+          // Assuming order has seller.id or shop_id, if not we just show all
+          const filtered = allOrders
+            .filter((o: any) => o.seller?.id === shopId || !o.seller)
+            .map((o: any) => ({ ...o, id: o.order_code || o.id || "" }));
+          setOrders(filtered);
+        }
       } catch (err) {
         console.error(err);
       } finally {
@@ -78,9 +86,13 @@ export function OrderSelectPopup({ shopId, isOpen, onClose, onSelect }: OrderSel
   const getStatusText = (status: string) => {
     const statusMap: Record<string, string> = {
       'PENDING': 'Chờ xác nhận',
+      'PLACED': 'Đã đặt hàng',
       'PROCESSING': 'Đang xử lý',
+      'READY_TO_SHIP': 'Sẵn sàng giao',
       'SHIPPING': 'Đang giao',
       'DELIVERED': 'Đã giao',
+      'COMPLETED': 'Hoàn thành',
+      'DELIVERY_FAILED': 'Giao thất bại',
       'CANCELLED': 'Đã hủy',
       'RETURNED': 'Trả hàng',
     };
@@ -88,19 +100,13 @@ export function OrderSelectPopup({ shopId, isOpen, onClose, onSelect }: OrderSel
   };
 
   return (
-    <div ref={popupRef} className="absolute bottom-[72px] left-4 w-[320px] h-[380px] z-[60] bg-white flex flex-col rounded-2xl overflow-hidden shadow-2xl shadow-slate-900/10 border border-slate-200 animate-in slide-in-from-bottom-2 fade-in duration-200">
-      <div className="flex items-center justify-between p-3 border-b border-line">
-        <h3 className="font-heading font-medium text-slate-900">Chọn đơn hàng</h3>
-        <button onClick={onClose} className="p-1 hover:bg-slate-100 rounded-full text-slate-500">
-          <X className="w-5 h-5" />
-        </button>
-      </div>
-      <div className="p-3 border-b border-line relative">
-        <Search className="absolute left-6 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+    <div ref={popupRef} className="absolute bottom-[72px] left-4 w-[360px] h-[340px] z-[60] bg-white flex flex-col rounded-2xl overflow-hidden shadow-2xl shadow-slate-900/10 border border-slate-200 animate-in slide-in-from-bottom-2 fade-in duration-200">
+      <div className="px-3 py-2 border-b border-line relative bg-slate-50">
+        <Search className="absolute left-6 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
         <input 
           type="text" 
           placeholder="Tìm theo mã đơn hàng..." 
-          className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-line rounded-lg text-sm focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
+          className="w-full pl-8 pr-3 py-1.5 bg-white border border-line rounded-lg text-sm focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
         />
@@ -115,20 +121,108 @@ export function OrderSelectPopup({ shopId, isOpen, onClose, onSelect }: OrderSel
         ) : (
           <div className="space-y-2">
             {orders.map(order => {
+              const orderDate = order.created_at ? new Date(order.created_at).toLocaleDateString('vi-VN') : '';
+              const orderCode = order.order_code ? order.order_code.toUpperCase() : (order.id || "").slice(0, 8).toUpperCase();
+              
+              // Helper to get status color and icon
+              const getStatusDisplay = (status: string) => {
+                const isCompleted = status === 'COMPLETED' || status === 'DELIVERED';
+                const isCancelled = status === 'CANCELLED' || status === 'RETURNED' || status === 'DELIVERY_FAILED';
+                
+                const labels: Record<string, string> = {
+                  PLACED: 'Chờ xác nhận',
+                  READY_TO_SHIP: 'Chờ lấy hàng',
+                  SHIPPING: 'Đang giao',
+                  COMPLETED: 'Hoàn thành',
+                  DELIVERED: 'Đã giao',
+                  CANCELLED: 'Đã hủy',
+                  DELIVERY_FAILED: 'Giao thất bại',
+                  RETURNED: 'Trả hàng'
+                };
+                
+                return {
+                  text: labels[status] || status,
+                  colorClass: isCompleted ? "text-green-700 bg-green-100" : isCancelled ? "text-red-700 bg-red-100" : "text-orange-700 bg-orange-100",
+                };
+              };
+              
+              const statusDisplay = getStatusDisplay((order as any).order_status || order.status || '');
+              const totalItems = order.items?.reduce((acc, item) => acc + (item.quantity || 1), 0) || 0;
+
               return (
-                <div key={order.id} className="flex gap-3 p-2 hover:bg-slate-50 rounded-lg border border-transparent hover:border-slate-200 transition-colors group">
-                  <img src={order.items?.[0]?.thumbnail_url || order.items?.[0]?.product_image_snapshot || '/placeholder.png'} alt="Order" className="w-16 h-16 object-cover rounded border border-line" />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-slate-900 truncate">Đơn hàng #{order.id.slice(0, 8).toUpperCase()}</p>
-                    <p className="text-sm text-emerald-600 font-medium mt-1">{order.total_amount?.toLocaleString('vi-VN')}đ</p>
+                <div key={order.id} className="flex flex-col p-3 hover:bg-slate-50 rounded-lg border border-slate-200 hover:border-emerald-300 transition-colors group bg-white shadow-sm mb-3">
+                  {/* Header: Order Code & Status */}
+                  <div className="flex items-center justify-between border-b border-dashed border-slate-200 pb-2 mb-2">
+                    <div className="flex items-center gap-1.5 text-slate-700">
+                      <Package className="w-4 h-4" />
+                      <span className="font-semibold text-sm">#{orderCode}</span>
+                    </div>
+                    <div className="flex items-center">
+                      <span className={`text-[10px] px-2 py-0.5 rounded font-bold uppercase ${statusDisplay.colorClass}`}>
+                        {statusDisplay.text}
+                      </span>
+                    </div>
                   </div>
-                  <div className="flex items-center">
+
+                  {/* Body: Product Items */}
+                  <div className="flex flex-col gap-3">
+                    {order.items?.map((item, idx) => {
+                      const image = item.thumbnail_url || item.product_image_snapshot || '/placeholder.png';
+                      // Try to use product_id for the product link if slug is missing
+                      const productHref = (item as any).product_slug ? `/products/${(item as any).product_slug}` : `/products/${(item as any).product_id || ''}`;
+                      const productName = (item as any).product_name_snapshot || item.product_name || '';
+                      const variantName = (item as any).variant_name_snapshot || (item as any).variant_name || '';
+                      const price = (item as any).unit_price || item.price || 0;
+                      
+                      return (
+                        <div key={idx} className="flex gap-3">
+                          <a href={productHref} target="_blank" rel="noopener noreferrer" className="shrink-0">
+                            <img src={image} alt={productName} className="w-16 h-16 object-cover rounded border border-slate-100 bg-slate-50" />
+                          </a>
+                          <div className="flex-1 min-w-0 flex flex-col">
+                            <div className="flex justify-between items-start gap-2">
+                              <a href={productHref} target="_blank" rel="noopener noreferrer" className="text-sm text-slate-800 font-medium line-clamp-2 hover:text-emerald-600 transition-colors">
+                                {productName}
+                              </a>
+                              <span className="text-sm font-medium whitespace-nowrap">{Number(price).toLocaleString('vi-VN')}đ</span>
+                            </div>
+                            <div className="flex justify-between items-center mt-auto">
+                              <span className="text-xs text-slate-500 line-clamp-1 mr-2">{variantName}</span>
+                              <span className="text-xs text-slate-500 whitespace-nowrap">x {item.quantity}</span>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Footer: Total & Actions */}
+                  <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between">
+                    <div>
+                      <span className="text-sm text-slate-500">Tổng Cộng</span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className="text-sm text-slate-500">{totalItems} sản phẩm | </span>
+                      <span className="text-base font-bold text-red-500">{Number(order.total_amount || 0).toLocaleString('vi-VN')}đ</span>
+                    </div>
+                  </div>
+                  
+                  {/* Action Buttons always visible */}
+                  <div className="flex justify-end gap-2 mt-3 pt-3 border-t border-slate-100">
+                    <a 
+                      href={mode === 'SELLER' ? `/seller/orders/${orderCode}` : `/account/orders/${orderCode}`} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="px-4 py-1.5 bg-white border border-slate-200 text-slate-600 rounded-md text-sm font-medium hover:bg-slate-50 transition-colors"
+                    >
+                      Chi Tiết
+                    </a>
                     <button 
                       onClick={() => {
-                        onSelect({ ...order, id: order.order_code || order.id });
+                        onSelect(order);
                         onClose();
                       }}
-                      className="px-3 py-1.5 bg-white border border-emerald-500 text-emerald-600 rounded-md text-sm font-medium opacity-0 group-hover:opacity-100 transition-opacity hover:bg-emerald-50"
+                      className="px-4 py-1.5 bg-emerald-600 text-white rounded-md text-sm font-medium hover:bg-emerald-700 transition-colors shadow-sm"
                     >
                       Gửi
                     </button>

@@ -33,8 +33,8 @@ export default function ProductListing({
   const searchParams = useSearchParams();
 
   const [keyword, setKeyword] = useState(initialKeyword);
-  const [sort, setSort] = useState<"newest" | "price_asc" | "price_desc" | "best_selling" | "high_rating">(
-    (searchParams.get("sort") as any) || "newest"
+  const [sort, setSort] = useState<"relevance" | "newest" | "price_asc" | "price_desc" | "best_selling" | "high_rating">(
+    (searchParams.get("sort") as any) || "relevance"
   );
   const [sellerId, setSellerId] = useState<string[]>(searchParams.get("seller_id") ? searchParams.get("seller_id")!.split(",") : []);
   const [rating, setRating] = useState(searchParams.get("rating") || "");
@@ -59,7 +59,7 @@ export default function ProductListing({
   useEffect(() => {
     const params = new URLSearchParams(searchParams.toString());
     
-    if (sort !== "newest") params.set("sort", sort); else params.delete("sort");
+    if (sort !== "relevance") params.set("sort", sort); else params.delete("sort");
     if (sellerId.length > 0) params.set("seller_id", sellerId.join(",")); else params.delete("seller_id");
     if (rating) params.set("rating", rating); else params.delete("rating");
     if (minPrice) params.set("min_price", minPrice); else params.delete("min_price");
@@ -267,6 +267,7 @@ export default function ProductListing({
         action={
           <div className="flex gap-2">
             <Select value={sort} onChange={(event) => { setSort(event.target.value as any); setPage(1); }} className="w-44">
+              <option value="relevance">Liên quan</option>
               <option value="newest">Mới nhất</option>
               <option value="price_asc">Giá tăng</option>
               <option value="price_desc">Giá giảm</option>

@@ -14,11 +14,15 @@ function ShopSearchContent() {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [fetchedQuery, setFetchedQuery] = useState<string | null>(null);
+
+  const isLoading = query ? (loading || query !== fetchedQuery) : false;
 
   useEffect(() => {
     if (!query) {
       setItems([]);
       setTotal(0);
+      setFetchedQuery("");
       return;
     }
 
@@ -31,12 +35,14 @@ function ShopSearchContent() {
         if (cancelled) return;
         setItems(res.items || []);
         setTotal(res.total || 0);
+        setFetchedQuery(query);
       })
       .catch(() => {
         if (cancelled) return;
         setError("Không tải được danh sách shop. Vui lòng thử lại.");
         setItems([]);
         setTotal(0);
+        setFetchedQuery(query);
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -53,7 +59,7 @@ function ShopSearchContent() {
         Tìm Shop{query ? <> &quot;{query}&quot;</> : null}
       </h1>
       <p className="mt-1 text-sm text-slate-500">
-        {loading ? "Đang tìm..." : `${total} shop phù hợp`}
+        {isLoading ? "Đang tìm..." : `${total} shop phù hợp`}
       </p>
 
       {error && (
@@ -62,7 +68,7 @@ function ShopSearchContent() {
         </div>
       )}
 
-      {!loading && !error && query && items.length === 0 && (
+      {!isLoading && !error && query && items.length === 0 && (
         <div className="mt-16 text-center text-slate-500">
           <Store className="mx-auto h-10 w-10 text-slate-300" />
           <p className="mt-3 text-sm">Không tìm thấy shop nào cho &quot;{query}&quot;</p>
@@ -72,7 +78,7 @@ function ShopSearchContent() {
         </div>
       )}
 
-      <div className="mt-6 space-y-3">
+      <div className={`mt-6 space-y-3 ${isLoading ? "opacity-50 pointer-events-none transition-opacity" : ""}`}>
         {items.map((shop) => (
           <Link
             key={shop.public_id}

@@ -32,7 +32,8 @@ import { EmptyState } from "@/components/ui/feedback";
 import { CyberProductGridSkeleton, HeroSpotlightSkeleton, ShopCardSkeleton } from "@/components/ui/skeletons";
 import { Skeleton } from "@/components/ui/skeleton";
 import { RatingStars } from "@/components/shared/cards";
-import { fetchRecommendedProducts, fetchPublicProducts, fetchFeaturedShops } from "@/services/product-api";
+import { fetchTodaySuggestions, fetchFeaturedShops } from "@/services/product-api";
+import { getSearchHistory } from "@/lib/search-history";
 import { useMarketplaceStore } from "@/store/use-marketplace-store";
 import { BRAND_NAME } from "@/lib/constants";
 import type { Product, ProductVariant, Shop } from "@/types/models";
@@ -143,13 +144,12 @@ export default function HomePageComponent() {
   const store = useMarketplaceStore();
   const router = useRouter();
 
-  const [bestSellers, setBestSellers] = useState<Product[]>([]);
-  const [newest, setNewest] = useState<Product[]>([]);
+  const [suggestions, setSuggestions] = useState<Product[]>([]);
+  const [hasMoreSuggestions, setHasMoreSuggestions] = useState(false);
   const [localVariants, setLocalVariants] = useState<ProductVariant[]>([]);
   const [localShops, setLocalShops] = useState<Shop[]>([]);
   const [featuredShops, setFeaturedShops] = useState<Shop[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<"recommended" | "newest">("recommended");
 
   const [currentHeroSlide, setCurrentHeroSlide] = useState(0);
   const [isAutoPlaying, setIsAutoPlaying] = useState(true);
@@ -170,11 +170,13 @@ export default function HomePageComponent() {
     let isMounted = true;
     const loadHomeData = async () => {
       setLoading(true);
-      const [recommendRes, newestRes, featuredRes] = await Promise.all([
-        fetchRecommendedProducts(20),
-        fetchPublicProducts({ sort_by: "newest", size: 20 }),
+      const keywords = getSearchHistory();
+      
+      const [suggestionsRes, featuredRes] = await Promise.all([
+        fetchTodaySuggestions(keywords, 1, 48),
         fetchFeaturedShops(10)
       ]);
+      
       if (isMounted) {
         if (featuredRes.ok && featuredRes.shops) {
           setFeaturedShops(featuredRes.shops);
@@ -192,34 +194,15 @@ export default function HomePageComponent() {
             return Array.from(shopMap.values());
           });
         }
-        if (recommendRes.ok && recommendRes.products) {
-          setBestSellers(recommendRes.products);
+        if (suggestionsRes.ok && suggestionsRes.products) {
+          setSuggestions(suggestionsRes.products);
+          setHasMoreSuggestions((suggestionsRes.total || 0) > 48 || suggestionsRes.products.length === 48);
           setLocalVariants((prev) => {
-            const combined = [...prev, ...(recommendRes.variants || [])];
+            const combined = [...prev, ...(suggestionsRes.variants || [])];
             return Array.from(new Map(combined.map((v) => [v.id, v])).values());
           });
           setLocalShops((prev) => {
-            const combined = [...prev, ...(recommendRes.shops || [])];
-            const shopMap = new Map();
-            for (const s of combined) {
-              const existing = shopMap.get(s.id);
-              if (existing && !s.description && existing.description) {
-                shopMap.set(s.id, { ...s, description: existing.description });
-              } else {
-                shopMap.set(s.id, s);
-              }
-            }
-            return Array.from(shopMap.values());
-          });
-        }
-        if (newestRes.ok && newestRes.products) {
-          setNewest(newestRes.products);
-          setLocalVariants((prev) => {
-            const combined = [...prev, ...(newestRes.variants || [])];
-            return Array.from(new Map(combined.map((v) => [v.id, v])).values());
-          });
-          setLocalShops((prev) => {
-            const combined = [...prev, ...(newestRes.shops || [])];
+            const combined = [...prev, ...(suggestionsRes.shops || [])];
             const shopMap = new Map();
             for (const s of combined) {
               const existing = shopMap.get(s.id);
@@ -241,19 +224,14 @@ export default function HomePageComponent() {
     };
   }, [store.ready]);
 
-  const activeBestSellers = bestSellers.filter(p => {
-    const isHidden = store.state.hiddenProductIds.includes(p.id) || store.state.hiddenProductIds.includes(p.slug);
-    const globalP = store.state.products.find(sp => sp.id === p.id);
-    return !isHidden && (globalP ? globalP.status !== "HIDDEN" : p.status !== "HIDDEN");
-  });
-  const activeNewest = newest.filter(p => {
+  const activeSuggestions = suggestions.filter(p => {
     const isHidden = store.state.hiddenProductIds.includes(p.id) || store.state.hiddenProductIds.includes(p.slug);
     const globalP = store.state.products.find(sp => sp.id === p.id);
     return !isHidden && (globalP ? globalP.status !== "HIDDEN" : p.status !== "HIDDEN");
   });
 
   const approvedShops = featuredShops.filter((shop) => shop.status === "APPROVED");
-  const heroProduct = activeBestSellers[0];
+  const heroProduct = activeSuggestions[0];
   const heroShop = heroProduct ? localShops.find((shop) => shop.id === heroProduct.sellerId) : undefined;
   const heroVariant = heroProduct ? localVariants.find((v) => v.productId === heroProduct.id) : undefined;
 
@@ -491,43 +469,36 @@ export default function HomePageComponent() {
         <div className="flex flex-col gap-4 border-b border-slate-200 pb-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <span className="text-xs font-bold uppercase tracking-wider text-emerald-700">Cyber Selection</span>
-            <h2 className="font-heading text-2xl font-extrabold text-slate-900">Sản Phẩm Tuyển Chọn</h2>
-          </div>
-
-          <div className="flex items-center gap-2 rounded-xl bg-slate-100 p-1 border border-slate-200">
-            <button
-              onClick={() => setActiveTab("recommended")}
-              className={`rounded-lg px-4 py-2 text-xs font-bold transition-all ${
-                activeTab === "recommended" ? "bg-white text-emerald-700 shadow-sm" : "text-slate-600 hover:text-slate-900"
-              }`}
-            >
-              Nổi Bật
-            </button>
-            <button
-              onClick={() => setActiveTab("newest")}
-              className={`rounded-lg px-4 py-2 text-xs font-bold transition-all ${
-                activeTab === "newest" ? "bg-white text-emerald-700 shadow-sm" : "text-slate-600 hover:text-slate-900"
-              }`}
-            >
-              Mới Nhất
-            </button>
+            <h2 className="font-heading text-2xl font-extrabold text-slate-900">Gợi Ý Hôm Nay</h2>
           </div>
         </div>
 
         <div className="mt-6">
           {loading ? (
-            <CyberProductGridSkeleton count={20} />
-          ) : (activeTab === "recommended" ? activeBestSellers : activeNewest).length > 0 ? (
-            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
-              {(activeTab === "recommended" ? activeBestSellers : activeNewest).map((product) => (
-                <CyberProductCard
-                  key={product.id}
-                  product={product}
-                  variant={localVariants.find((v) => v.productId === product.id)}
-                  shop={localShops.find((s) => s.id === product.sellerId)}
-                />
-              ))}
-            </div>
+            <CyberProductGridSkeleton count={24} />
+          ) : activeSuggestions.length > 0 ? (
+            <>
+              <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
+                {activeSuggestions.map((product) => (
+                  <CyberProductCard
+                    key={product.id}
+                    product={product}
+                    variant={localVariants.find((v) => v.productId === product.id)}
+                    shop={localShops.find((s) => s.id === product.sellerId)}
+                  />
+                ))}
+              </div>
+              
+              {hasMoreSuggestions && (
+                <div className="mt-8 flex justify-center">
+                  <Link href="/suggestions?page=2">
+                    <Button variant="outline" className="px-8 font-bold border-emerald-200 text-emerald-700 hover:bg-emerald-50">
+                      Xem Thêm
+                    </Button>
+                  </Link>
+                </div>
+              )}
+            </>
           ) : (
             <EmptyState title="Chưa có sản phẩm phù hợp" />
           )}

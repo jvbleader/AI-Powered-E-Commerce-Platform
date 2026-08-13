@@ -61,6 +61,7 @@ class OrderItemResponse(BaseModel):
     product_id: Optional[int]
     variant_id: Optional[int]
     product_name_snapshot: str
+    product_slug: Optional[str] = None
     variant_name_snapshot: str
     product_image_snapshot: Optional[str]
     seller_name_snapshot: str

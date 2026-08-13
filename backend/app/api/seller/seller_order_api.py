@@ -22,13 +22,14 @@ async def get_orders_api(
     user: CurrentUser,
     db: DBSession,
     status: Optional[str] = Query(None),
+    customer_id: Optional[int] = Query(None),
     page: int = Query(1, ge=1),
     limit: int = Query(10, ge=1, le=100),
 ) -> OrderListResponse:
     skip = (page - 1) * limit
     result = None
     try:
-        result = await get_seller_orders(user, db, status, skip, limit)
+        result = await get_seller_orders(user, db, status, customer_id, skip, limit)
         await db.commit()
     except Exception:
         await db.rollback()

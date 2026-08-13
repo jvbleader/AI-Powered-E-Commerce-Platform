@@ -233,6 +233,36 @@ export async function fetchPublicProducts(params: FetchProductsParams) {
   }
 }
 
+export async function fetchTodaySuggestions(keywords: string[], page: number = 1, size: number = 48) {
+  try {
+    const query = new URLSearchParams();
+    if (keywords && keywords.length > 0) {
+      query.set("keywords", keywords.slice(0, 5).join(","));
+    }
+    query.set("page", page.toString());
+    query.set("limit", size.toString());
+
+    const response = await apiFetch<ProductListResponse>(`/products/suggestions/today?${query.toString()}`);
+    
+    const products: Product[] = [];
+    const variants: ProductVariant[] = [];
+    const shops: Shop[] = [];
+    
+    response.items.forEach((item) => {
+      const normalized = normalizeProduct(item);
+      products.push(normalized.product);
+      variants.push(...normalized.variants);
+      if (normalized.shop && !shops.some(s => s.id === normalized.shop!.id)) {
+        shops.push(normalized.shop);
+      }
+    });
+
+    return { ok: true, products, variants, shops, total: response.total, page: response.page };
+  } catch (error) {
+    return { ok: false, message: error instanceof ApiError ? error.message : "Không thể tải danh sách gợi ý." };
+  }
+}
+
 export async function fetchPublicShop(shopSlug: string) {
   try {
     const response = await apiFetch<any>(`/shops/${shopSlug}`);

@@ -360,11 +360,11 @@ export const createPaymentFromOrders = (
 
 export const canCustomerCancel = (order: Order) => order.orderStatus === "PLACED" || order.orderStatus === "READY_TO_SHIP";
 
-export const canSellerCancel = (order: Order) => order.orderStatus === "PLACED";
+export const canSellerCancel = (order: Order) => order.orderStatus === "PLACED" && !order.sellerConfirmed;
 
 export const canCustomerConfirmReceipt = (order: Order) => order.orderStatus === "SHIPPING";
 
-export const canSellerConfirm = (order: Order) => order.orderStatus === "PLACED";
+export const canSellerConfirm = (order: Order) => order.orderStatus === "PLACED" && !order.sellerConfirmed;
 
 export const canSellerShip = (order: Order) => order.orderStatus === "READY_TO_SHIP";
 

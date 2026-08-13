@@ -116,6 +116,7 @@ export function ChatWidget() {
   // Drafts
   const [productDraft, setProductDraft] = useState<any>(null);
   const [orderDraft, setOrderDraft] = useState<any>(null);
+  const [previewProduct, setPreviewProduct] = useState<any>(null);
   const [replyingToMessage, setReplyingToMessage] = useState<any>(null);
   const showToast = useMarketplaceStore((s) => s.showToast);
 
@@ -566,7 +567,14 @@ export function ChatWidget() {
         <div ref={panelRef} className="chat-widget-panel fixed bottom-0 right-2 z-50 flex h-[min(600px,calc(100vh-48px))] w-[800px] max-w-[calc(100vw-16px)] flex-col overflow-hidden rounded-t-xl border border-b-0 border-slate-200 bg-white shadow-2xl animate-in fade-in slide-in-from-bottom-3 duration-200">
           {/* Header chung */}
           <div className="flex shrink-0 items-center justify-between border-b border-slate-200 bg-white px-4 py-1.5">
-            <h2 className="font-heading text-sm font-bold leading-none text-primary">Chat</h2>
+            <h2 className="font-heading text-sm font-bold leading-none text-primary flex items-center gap-1.5">
+              Chat
+              {sellerUnreadCount > 0 && (
+                <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-emerald-100 px-1.5 text-[11px] font-black text-emerald-700">
+                  {sellerUnreadCount}
+                </span>
+              )}
+            </h2>
             <button
               onClick={handleCloseWidget}
               className="rounded p-1 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
@@ -688,6 +696,7 @@ export function ChatWidget() {
                       }
                       onReply={handleReplyToMessage}
                       onScrollToMessage={scrollToMessage}
+                      onClickProduct={setPreviewProduct}
                     />
                     <div ref={messagesEndRef} className="h-px shrink-0" aria-hidden />
                   </ChatScrollArea>
@@ -700,13 +709,13 @@ export function ChatWidget() {
                             "flex flex-col overflow-hidden pl-2 border-l-4",
                             replyingToMessage.sender_type === 'CUSTOMER' ? "border-orange-500" : "border-teal-500"
                           )}>
-                            <span className={cn("font-semibold text-xs", replyingToMessage.sender_type === 'CUSTOMER' ? "text-orange-500" : "text-teal-600")}>
-                              {replyingToMessage.sender_type === 'CUSTOMER' ? "Bạn" : (currentShopSession?.shop_name || "Shop")}
-                            </span>
-                            <span className="truncate max-w-[200px] text-slate-600 text-xs mt-0.5">
-                              <ReplyPreviewContent type={replyingToMessage.attachment_type} id={replyingToMessage.attachment_id} fallback={replyingToMessage.content} />
-                            </span>
-                          </div>
+                             <span className={cn("font-semibold text-xs", replyingToMessage.sender_type === 'CUSTOMER' ? "text-orange-500" : "text-teal-600")}>
+                               {replyingToMessage.sender_type === 'CUSTOMER' ? "Bạn" : (currentShopSession?.shop_name || "Shop")}
+                             </span>
+                             <span className="truncate max-w-[200px] text-slate-600 text-xs mt-0.5">
+                               <ReplyPreviewContent type={replyingToMessage.attachment_type} id={replyingToMessage.attachment_id} fallback={replyingToMessage.content} />
+                             </span>
+                           </div>
                          <button onClick={() => setReplyingToMessage(null)} className="p-1 text-slate-400 hover:text-slate-600">
                            <X className="w-4 h-4" />
                          </button>
@@ -714,51 +723,50 @@ export function ChatWidget() {
                     )}
                     {/* Draft Preview */}
                     {productDraft && (
-                       <div className="p-3 bg-slate-50 border-b border-line flex justify-between items-start">
-                         <div>
-                            <p className="text-xs text-slate-500 mb-2">Bạn đang trao đổi với Người bán về sản phẩm này</p>
-                            <div className="flex gap-3 bg-white p-2 rounded-lg border border-slate-200 shadow-sm items-center">
-                               <img src={productDraft.images?.find((i: any) => i.is_thumbnail)?.image_url || productDraft.images?.[0]?.image_url || '/placeholder.png'} className="w-12 h-12 rounded object-cover border border-slate-100" />
-                               <div>
-                                 <p className="text-sm font-medium text-slate-900 line-clamp-1">{productDraft.name}</p>
-                                 <p className="text-sm text-emerald-600 font-bold">{(productDraft.variants?.[0]?.sale_price || productDraft.variants?.[0]?.price || 0).toLocaleString('vi-VN')}đ</p>
-                               </div>
-                               <button 
-                                 className="ml-4 px-3 py-1 bg-white border border-slate-200 rounded text-xs font-medium text-slate-700 hover:bg-slate-50"
-                                 onClick={() => setShowProductPopup(true)}
-                               >
-                                 Thay đổi
-                               </button>
-                            </div>
-                         </div>
-                         <button onClick={() => setProductDraft(null)} className="p-1 text-slate-400 hover:text-slate-600">
-                           <X className="w-5 h-5" />
-                         </button>
-                      </div>
-                    )}
+          <div className="p-3 bg-slate-50 border-t border-slate-100 flex justify-between items-start z-10 relative shadow-[0_-4px_6px_-1px_rgb(0,0,0,0.05)]">
+            <div>
+              <p className="text-xs text-slate-500 mb-2 font-medium">Bạn đang chuẩn bị gửi sản phẩm này</p>
+              <div className="flex gap-3 bg-white p-2.5 rounded-lg border border-slate-200 shadow-sm items-center hover:border-emerald-200 transition-colors">
+                <img src={productDraft.images?.find((i: any) => i.is_thumbnail)?.image_url || productDraft.images?.[0]?.image_url || '/placeholder.png'} className="w-12 h-12 rounded object-cover border border-slate-100" />
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-slate-900 line-clamp-1">{productDraft.name}</p>
+                  <p className="text-sm text-emerald-600 font-bold mt-0.5">{Number(productDraft.variants?.[0]?.sale_price || productDraft.variants?.[0]?.price || 0).toLocaleString('vi-VN')}đ</p>
+                </div>
+                <button 
+                  className="ml-3 px-3 py-1.5 bg-white border border-slate-200 rounded-md text-xs font-medium text-slate-700 hover:bg-slate-50 hover:text-slate-900 transition-colors"
+                  onClick={() => setShowProductPopup(true)}
+                >
+                  Thay đổi
+                </button>
+              </div>
+            </div>
+            <button onClick={() => setProductDraft(null)} className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-200/50 rounded-full transition-colors ml-2">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        )}
                     {orderDraft && (
-                       <div className="p-3 bg-slate-50 border-b border-line flex justify-between items-start">
-                         <div>
-                            <p className="text-xs text-slate-500 mb-2">Bạn đang thắc mắc về đơn hàng này</p>
-                            <div className="flex gap-3 bg-white p-2 rounded-lg border border-slate-200 shadow-sm items-center">
-                               <img src={orderDraft.items?.[0]?.productImageSnapshot || orderDraft.items?.[0]?.thumbnail_url || orderDraft.items?.[0]?.product_image_snapshot || '/placeholder.png'} className="w-12 h-12 rounded object-cover border border-slate-100" />
-                               <div>
-                                 <p className="text-sm font-medium text-slate-900 line-clamp-1">Đơn hàng #{(orderDraft.orderCode || orderDraft.order_code || orderDraft.id || '').slice(0, 8).toUpperCase()}</p>
-                                 <p className="text-sm text-emerald-600 font-bold">{(orderDraft.totalAmount || orderDraft.total_amount || 0).toLocaleString('vi-VN')}đ</p>
-                               </div>
-                               <button 
-                                 type="button"
-                                 className="ml-4 px-3 py-1 bg-white border border-slate-200 rounded text-xs font-medium text-slate-700 hover:bg-slate-50"
-                                 onClick={() => setShowOrderPopup(true)}
-                               >
-                                 Thay đổi
-                               </button>
-                            </div>
-                         </div>
-                         <button type="button" onClick={() => setOrderDraft(null)} className="p-1 text-slate-400 hover:text-slate-600">
-                           <X className="w-5 h-5" />
-                         </button>
-                      </div>
+          <div className="p-3 bg-slate-50 border-t border-slate-100 flex justify-between items-start z-10 relative shadow-[0_-4px_6px_-1px_rgb(0,0,0,0.05)]">
+            <div>
+              <p className="text-xs text-slate-500 mb-2 font-medium">Bạn đang chuẩn bị gửi đơn hàng này</p>
+              <div className="flex gap-3 bg-white p-2.5 rounded-lg border border-slate-200 shadow-sm items-center hover:border-emerald-200 transition-colors">
+                <img src={orderDraft.items?.[0]?.product_image_snapshot || orderDraft.items?.[0]?.thumbnail_url || '/placeholder.png'} className="w-12 h-12 rounded object-cover border border-slate-100" />
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-slate-900 line-clamp-1">#{orderDraft.order_code ? orderDraft.order_code.toUpperCase() : (orderDraft.id || '').slice(0, 8).toUpperCase()}</p>
+                  <p className="text-sm text-emerald-600 font-bold mt-0.5">{Number(orderDraft.total_amount || 0).toLocaleString('vi-VN')}đ</p>
+                </div>
+                <button 
+                  className="ml-3 px-3 py-1.5 bg-white border border-slate-200 rounded-md text-xs font-medium text-slate-700 hover:bg-slate-50 hover:text-slate-900 transition-colors"
+                  onClick={() => setShowOrderPopup(true)}
+                >
+                  Thay đổi
+                </button>
+              </div>
+            </div>
+            <button onClick={() => setOrderDraft(null)} className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-200/50 rounded-full transition-colors ml-2">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
                     )}
                     <SellerComposerInput
                       key={activeShopId}
@@ -835,6 +843,33 @@ export function ChatWidget() {
               )
             )}
           </div>
+          </div>
+        </div>
+      )}
+      
+      {previewProduct && (
+        <div className="fixed inset-0 bg-slate-900/50 z-[100] flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-sm w-full overflow-hidden flex flex-col">
+            <div className="flex items-center justify-between p-3 border-b border-slate-100">
+              <h3 className="font-bold text-slate-900 text-sm">Chi tiết sản phẩm</h3>
+              <button onClick={() => setPreviewProduct(null)} className="text-slate-400 hover:text-slate-600 p-1">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-4 flex flex-col gap-3">
+              <img src={previewProduct.thumbnailUrl} alt={previewProduct.name} className="w-full aspect-square object-cover rounded-lg bg-slate-100 border border-slate-200" />
+              <p className="font-medium text-slate-800 leading-snug">{previewProduct.name}</p>
+              <div className="flex items-baseline gap-2">
+                <span className="text-lg font-bold text-emerald-600">
+                  {previewProduct.variants?.[0]?.salePrice ? Number(previewProduct.variants[0].salePrice).toLocaleString('vi-VN') : Number(previewProduct.variants?.[0]?.price || 0).toLocaleString('vi-VN')}đ
+                </span>
+                {previewProduct.variants?.[0]?.salePrice && (
+                  <span className="text-sm text-slate-400 line-through">
+                    {Number(previewProduct.variants[0].price).toLocaleString('vi-VN')}đ
+                  </span>
+                )}
+              </div>
+            </div>
           </div>
         </div>
       )}

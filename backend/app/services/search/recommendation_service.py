@@ -181,3 +181,151 @@ async def fallback_category_search(product: Product, limit: int) -> Tuple[List[d
         return [hit["_source"] for hit in hits], len(hits)
     except Exception:
         return [], 0
+
+
+async def get_suggestions_by_keywords(
+    db: AsyncSession, keywords: List[str], limit: int = 48, page: int = 1
+) -> Tuple[List[dict], int]:
+    from ai.embeddings import generate_query_embedding
+    import repositories.seller.seller_profile_repository as seller_profile_repo
+
+    es = get_es_client()
+    
+    # 1. Allocation calculation
+    num_kw = len(keywords)
+    if num_kw == 0:
+        hot_offset = (page - 1) * limit
+        alloc_kw = []
+    else:
+        # Standard ratio for 48: 16 Hot, 32 Semantic
+        ratio_hot = 16
+        ratio_sem = limit - ratio_hot
+        hot_offset = (page - 1) * ratio_hot
+        
+        base_alloc = ratio_sem // num_kw
+        remainder = ratio_sem % num_kw
+        alloc_kw = [base_alloc] * num_kw
+        alloc_kw[0] += remainder # Give remainder to the most recent keyword
+
+    # 2. Fetch Hot Products
+    # Fetch top 50 hot shops
+    featured_shops = await seller_profile_repo.get_featured_shops(db, limit=50)
+    hot_shop_ids = [shop.id for shop in featured_shops]
+
+    hot_body = {
+        "query": {
+            "function_score": {
+                "query": {
+                    "term": {"status": "ACTIVE"}
+                },
+                "functions": [
+                    {
+                        "field_value_factor": {
+                            "field": "sold_count",
+                            "modifier": "log1p",
+                            "factor": 1.2
+                        },
+                        "weight": 3.0
+                    },
+                    {
+                        "field_value_factor": {
+                            "field": "average_rating",
+                            "factor": 1.0
+                        },
+                        "weight": 1.5
+                    }
+                ],
+                "score_mode": "sum",
+                "boost_mode": "multiply"
+            }
+        },
+        "from": hot_offset,
+        "size": limit
+    }
+    
+    # Add gauss decay for new products ONLY if seller_id is in hot_shop_ids
+    if hot_shop_ids:
+        hot_body["query"]["function_score"]["functions"].append({
+            "filter": {
+                "terms": {"seller_id": hot_shop_ids}
+            },
+            "gauss": {
+                "created_at": {
+                    "origin": "now",
+                    "scale": "30d",
+                    "offset": "7d",
+                    "decay": 0.5
+                }
+            },
+            "weight": 2.0
+        })
+
+    hot_hits = []
+    try:
+        res = await es.search(index=PRODUCT_INDEX_ALIAS, body=hot_body)
+        hot_hits = [hit["_source"] for hit in res.get("hits", {}).get("hits", [])]
+    except Exception as e:
+        logger.error(f"Error fetching hot products for suggestions: {e}")
+
+    # 3. Fetch Semantic Products
+    sem_hits_list = []
+    for i, kw in enumerate(keywords):
+        kw_size = alloc_kw[i]
+        kw_from = (page - 1) * kw_size
+        
+        try:
+            kw_emb = await generate_query_embedding(kw)
+            body = {
+                "query": {
+                    "bool": {
+                        "must": [
+                            {
+                                "knn": {
+                                    "field": "embedding",
+                                    "query_vector": kw_emb,
+                                    "num_candidates": 100
+                                }
+                            },
+                            {"term": {"status": "ACTIVE"}}
+                        ]
+                    }
+                },
+                "from": kw_from,
+                "size": kw_size,
+                "_source": {"excludes": ["embedding"]}
+            }
+            res = await es.search(index=PRODUCT_INDEX_ALIAS, body=body)
+            sem_hits_list.extend([hit["_source"] for hit in res.get("hits", {}).get("hits", [])])
+        except Exception as e:
+            logger.error(f"Error fetching semantic products for keyword {kw}: {e}")
+
+    # 4. Mix and Deduplicate
+    mixed_results = []
+    seen_ids = set()
+    
+    sem_idx = 0
+    hot_idx = 0
+    
+    while len(mixed_results) < limit and (sem_idx < len(sem_hits_list) or hot_idx < len(hot_hits)):
+        target_sem = 6 if hot_idx >= len(hot_hits) else 4
+        
+        added_sem = 0
+        while added_sem < target_sem and sem_idx < len(sem_hits_list) and len(mixed_results) < limit:
+            item = sem_hits_list[sem_idx]
+            sem_idx += 1
+            if item["id"] not in seen_ids:
+                seen_ids.add(item["id"])
+                mixed_results.append(item)
+                added_sem += 1
+                
+        target_hot = 6 - added_sem
+        added_hot = 0
+        while added_hot < target_hot and hot_idx < len(hot_hits) and len(mixed_results) < limit:
+            item = hot_hits[hot_idx]
+            hot_idx += 1
+            if item["id"] not in seen_ids:
+                seen_ids.add(item["id"])
+                mixed_results.append(item)
+                added_hot += 1
+    
+    return mixed_results, limit * 5 # arbitrary total for pagination to work

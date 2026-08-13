@@ -32,10 +32,18 @@ def _normalize_sort(sort_by: str | None) -> str:
 
 
 class ProductSearchStrategy(BaseSearchStrategy):
-    def build_query(self, processed_query: str, filters: dict, page: int, size: int, sort_by: str) -> dict:
+    def build_query(self, processed_query: str, filters: dict, page: int, size: int, sort_by: str, query_vector: list[float] = None) -> dict:
         builder = QueryBuilder()
         builder.set_pagination(page, size)
         sort_by = _normalize_sort(sort_by)
+
+        if query_vector and sort_by == "relevance":
+            builder.add_knn(
+                field="embedding",
+                query_vector=query_vector,
+                k=size * 2,
+                num_candidates=100
+            )
 
         if processed_query:
             fuzziness = (

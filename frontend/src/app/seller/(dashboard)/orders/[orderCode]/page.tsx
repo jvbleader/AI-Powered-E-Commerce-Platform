@@ -91,7 +91,7 @@ export default function SellerOrderDetailPage() {
               >
                 <Copy className="h-4 w-4" />
               </button>
-              <StatusBadge status={order.orderStatus} label={orderStatusLabel[order.orderStatus]} />
+              <StatusBadge status={order.orderStatus} label={order.sellerConfirmed && order.orderStatus === "PLACED" ? "Đã xác nhận (chờ TT)" : orderStatusLabel[order.orderStatus]} />
             </div>
             <p className="text-xs text-slate-500 mt-1">
               Ngày đặt: <span className="font-semibold text-slate-700">{formatDate(order.createdAt)}</span>

@@ -11,6 +11,8 @@ import { useChatMediaDraft } from "@/hooks/useChatMediaDraft";
 import { formatChatListTime } from "@/lib/chat-message-layout";
 import { SellerMessageList } from "@/components/ai/SellerMessageList";
 import { SellerDashboardComposer } from "@/components/seller/SellerDashboardComposer";
+import { ProductSelectPopup } from "@/components/ai/ProductSelectPopup";
+import { OrderSelectPopup } from "@/components/ai/OrderSelectPopup";
 import { apiFetch } from "@/services/api";
 
 export function ChatDashboard() {
@@ -106,7 +108,7 @@ export function ChatDashboard() {
           )}
         </div>
       </div>
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className="flex-1 flex flex-col min-w-0 relative">
         {activeSessionId ? (
           <ActiveChatArea
             conversationId={activeSessionId}
@@ -153,6 +155,15 @@ function ActiveChatAreaInner({
   const { messages, isConnected, sendMessage, markAsRead } = useSellerChat(null, conversationId, "SELLER");
   const [replyingToMessage, setReplyingToMessage] = useState<SellerMessage | null>(null);
   const [previewProduct, setPreviewProduct] = useState<any>(null);
+  
+  const [showProductPopup, setShowProductPopup] = useState(false);
+  const [showOrderPopup, setShowOrderPopup] = useState(false);
+  const [productDraft, setProductDraft] = useState<any>(null);
+  const [orderDraft, setOrderDraft] = useState<any>(null);
+
+  const { sessions } = useSellerChatInboxContext();
+  const session = sessions.find((s) => s.id === conversationId);
+
   const scrollRef = useRef<HTMLDivElement>(null);
   const [mediaError, setMediaError] = useState<string | null>(null);
   const markedReadRef = useRef<string | null>(null);
@@ -246,7 +257,35 @@ function ActiveChatAreaInner({
   const handleSend = useCallback(
     async (text: string): Promise<boolean> => {
       const trimmed = text.trim();
-      if (!trimmed && !hasMediaDraft) return false;
+      if (!trimmed && !productDraft && !orderDraft && !hasMediaDraft) return false;
+
+      if (productDraft) {
+        const productAttachmentId = String(productDraft.public_id || productDraft.id || "");
+        if (productAttachmentId && productAttachmentId !== "undefined") {
+          if (trimmed) {
+            sendMessage("[Sản phẩm]", "PRODUCT", productAttachmentId);
+            sendMessage(trimmed, undefined, undefined, replyingToMessage?.id);
+          } else {
+            sendMessage("[Sản phẩm]", "PRODUCT", productAttachmentId, replyingToMessage?.id);
+          }
+        }
+        setProductDraft(null);
+        setReplyingToMessage(null);
+        return true;
+      }
+
+      if (orderDraft) {
+        const orderCode = orderDraft.orderCode || orderDraft.order_code || orderDraft.id;
+        if (trimmed) {
+          sendMessage("[Đơn hàng]", "ORDER", String(orderCode));
+          sendMessage(trimmed, undefined, undefined, replyingToMessage?.id);
+        } else {
+          sendMessage("[Đơn hàng]", "ORDER", String(orderCode), replyingToMessage?.id);
+        }
+        setOrderDraft(null);
+        setReplyingToMessage(null);
+        return true;
+      }
 
       if (hasMediaDraft) {
         const sent = await sendMediaDraft(trimmed);
@@ -259,7 +298,7 @@ function ActiveChatAreaInner({
       setReplyingToMessage(null);
       return true;
     },
-    [hasMediaDraft, sendMediaDraft, sendMessage, replyingToMessage?.id]
+    [hasMediaDraft, sendMediaDraft, sendMessage, replyingToMessage?.id, productDraft, orderDraft]
   );
 
   return (
@@ -331,8 +370,58 @@ function ActiveChatAreaInner({
             </button>
           </div>
         )}
+        
+        {/* Draft Preview */}
+        {productDraft && (
+          <div className="p-3 bg-slate-50 border-b border-line flex justify-between items-start">
+            <div>
+              <p className="text-xs text-slate-500 mb-2">Bạn đang chuẩn bị gửi sản phẩm này</p>
+              <div className="flex gap-3 bg-white p-2 rounded-lg border border-slate-200 shadow-sm items-center">
+                <img src={productDraft.images?.find((i: any) => i.is_thumbnail)?.image_url || productDraft.images?.[0]?.image_url || '/placeholder.png'} className="w-12 h-12 rounded object-cover border border-slate-100" />
+                <div>
+                  <p className="text-sm font-medium text-slate-900 line-clamp-1">{productDraft.name}</p>
+                  <p className="text-sm text-emerald-600 font-bold">{Number(productDraft.variants?.[0]?.sale_price || productDraft.variants?.[0]?.price || 0).toLocaleString('vi-VN')}đ</p>
+                </div>
+                <button 
+                  className="ml-4 px-3 py-1 bg-white border border-slate-200 rounded text-xs font-medium text-slate-700 hover:bg-slate-50"
+                  onClick={() => setShowProductPopup(true)}
+                >
+                  Thay đổi
+                </button>
+              </div>
+            </div>
+            <button onClick={() => setProductDraft(null)} className="p-1 text-slate-400 hover:text-slate-600">
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+        )}
+        {orderDraft && (
+          <div className="p-3 bg-slate-50 border-b border-line flex justify-between items-start">
+            <div>
+              <p className="text-xs text-slate-500 mb-2">Bạn đang chuẩn bị gửi đơn hàng này</p>
+              <div className="flex gap-3 bg-white p-2 rounded-lg border border-slate-200 shadow-sm items-center">
+                <img src={orderDraft.items?.[0]?.productImageSnapshot || orderDraft.items?.[0]?.thumbnail_url || orderDraft.items?.[0]?.product_image_snapshot || '/placeholder.png'} className="w-12 h-12 rounded object-cover border border-slate-100" />
+                <div>
+                  <p className="text-sm font-medium text-slate-900 line-clamp-1">#{orderDraft.orderCode || orderDraft.order_code ? (orderDraft.orderCode || orderDraft.order_code).toUpperCase() : (orderDraft.id || '').slice(0, 8).toUpperCase()}</p>
+                  <p className="text-sm text-emerald-600 font-bold">{Number(orderDraft.totalAmount || orderDraft.total_amount || 0).toLocaleString('vi-VN')}đ</p>
+                </div>
+                <button 
+                  type="button"
+                  className="ml-4 px-3 py-1 bg-white border border-slate-200 rounded text-xs font-medium text-slate-700 hover:bg-slate-50"
+                  onClick={() => setShowOrderPopup(true)}
+                >
+                  Thay đổi
+                </button>
+              </div>
+            </div>
+            <button type="button" onClick={() => setOrderDraft(null)} className="p-1 text-slate-400 hover:text-slate-600">
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+        )}
+
         {mediaError && (
-          <div className="px-4 pb-2">
+          <div className="px-4 pb-2 mt-2">
             <p className="text-xs text-red-600 whitespace-pre-line">{mediaError}</p>
           </div>
         )}
@@ -355,8 +444,31 @@ function ActiveChatAreaInner({
           onAddMedia={openAddPicker}
           openImagePicker={openImagePicker}
           openVideoPicker={openVideoPicker}
+          hasProductDraft={Boolean(productDraft)}
+          hasOrderDraft={Boolean(orderDraft)}
+          onToggleProductPopup={() => setShowProductPopup((p) => !p)}
+          onToggleOrderPopup={() => setShowOrderPopup((p) => !p)}
         />
       </div>
+
+      {session?.shop_id && (
+        <ProductSelectPopup 
+          isOpen={showProductPopup} 
+          shopId={session.shop_id} 
+          onClose={() => setShowProductPopup(false)}
+          onSelect={(product) => setProductDraft(product)}
+        />
+      )}
+      {session?.shop_id && session?.customer_id && (
+        <OrderSelectPopup 
+          isOpen={showOrderPopup} 
+          shopId={session.shop_id} 
+          mode="SELLER"
+          customerId={session.customer_id}
+          onClose={() => setShowOrderPopup(false)}
+          onSelect={(order) => setOrderDraft(order)}
+        />
+      )}
 
       {previewProduct && (
         <div className="fixed inset-0 bg-slate-900/50 z-[100] flex items-center justify-center p-4">
@@ -381,13 +493,13 @@ function ActiveChatAreaInner({
               <div className="flex items-baseline gap-2">
                 <span className="text-lg font-bold text-emerald-600">
                   {previewProduct.variants?.[0]?.salePrice
-                    ? previewProduct.variants[0].salePrice.toLocaleString("vi-VN")
-                    : (previewProduct.variants?.[0]?.price || 0).toLocaleString("vi-VN")}
+                    ? Number(previewProduct.variants[0].salePrice).toLocaleString("vi-VN")
+                    : Number(previewProduct.variants?.[0]?.price || 0).toLocaleString("vi-VN")}
                   đ
                 </span>
                 {previewProduct.variants?.[0]?.salePrice && (
                   <span className="text-sm text-slate-400 line-through">
-                    {previewProduct.variants[0].price.toLocaleString("vi-VN")}đ
+                    {Number(previewProduct.variants[0].price).toLocaleString("vi-VN")}đ
                   </span>
                 )}
               </div>

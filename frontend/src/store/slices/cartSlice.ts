@@ -37,8 +37,15 @@ export const createCartSlice: StateCreator<MarketplaceStore, [], [], any> = (set
       }
       try {
         await selectAllCartApi(false);
-        const apiItem = await addToCartApi(variantId, quantity);
-        await updateCartItemApi(apiItem.id, undefined, true);
+        const existingItem = state.cartItems.find((item: any) => item.variantId === variantId);
+        
+        if (existingItem) {
+          await updateCartItemApi(Number(existingItem.id), quantity, true);
+        } else {
+          const apiItem = await addToCartApi(variantId, quantity);
+          await updateCartItemApi(apiItem.id, quantity, true);
+        }
+        
         await get().refreshCart();
         return { ok: true, message: "Đã chuẩn bị đơn hàng." };
       } catch (e: any) {

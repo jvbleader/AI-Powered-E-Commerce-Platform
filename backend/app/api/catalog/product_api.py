@@ -94,6 +94,28 @@ async def get_products(
     return result
 
 
+@router.get("/products/suggestions/today", response_model=ProductListResponse)
+async def get_today_suggestions(
+    db: DBSession,
+    keywords: Optional[str] = Query(None, description="Comma-separated list of recent search keywords"),
+    page: int = Query(1, ge=1),
+    limit: int = Query(48, ge=1, le=100),
+):
+    keyword_list = []
+    if keywords:
+        keyword_list = [k.strip() for k in keywords.split(",") if k.strip()]
+        # Limit to max 5 keywords
+        keyword_list = keyword_list[:5]
+        
+    result = await product_public_service.get_today_suggestions(
+        db=db,
+        keywords=keyword_list,
+        limit=limit,
+        page=page,
+    )
+    return result
+
+
 @router.get("/products/recommendations", response_model=List[ProductPublicResponse])
 async def get_product_recommendations(
     current_user: CurrentUserOptional,

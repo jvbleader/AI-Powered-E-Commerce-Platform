@@ -17,7 +17,7 @@ from schemas.search.search_schema import (
 )
 from search.pipeline.pipeline import SearchPipeline
 from search.strategies import ProductSearchStrategy, ShopSearchStrategy
-from ai.embeddings import generate_product_embedding
+from ai.embeddings import generate_product_embedding, generate_query_embedding
 
 logger = logging.getLogger(__name__)
 
@@ -309,15 +309,32 @@ async def search_products(req: SearchRequest) -> SearchResponse:
     filters.pop("limit", None)
     filters.pop("sort", None)
 
+    query_vector = None
+    if processed_query:
+        try:
+            query_vector = await generate_query_embedding(processed_query)
+        except Exception as e:
+            logger.warning(f"Failed to generate query embedding, falling back to lexical search: {e}")
+
     final_query = strategy.build_query(
         processed_query=processed_query,
         filters=filters,
         page=req.page,
         size=req.limit,
         sort_by=req.sort or "relevance",
+        query_vector=query_vector
     )
 
     try:
+        if "_source" not in final_query:
+            final_query["_source"] = {"excludes": ["embedding"]}
+        elif isinstance(final_query["_source"], list):
+            final_query["_source"] = {"includes": final_query["_source"], "excludes": ["embedding"]}
+        elif isinstance(final_query["_source"], dict):
+            excludes = final_query["_source"].get("excludes", [])
+            if "embedding" not in excludes:
+                excludes.append("embedding")
+                final_query["_source"]["excludes"] = excludes
         resp = await es.search(
             index=PRODUCT_INDEX_ALIAS,
             body=final_query,

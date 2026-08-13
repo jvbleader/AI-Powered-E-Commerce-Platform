@@ -61,19 +61,13 @@ export function ProductSelectPopup({ shopId, isOpen, onClose, onSelect }: Produc
   if (!isOpen) return null;
 
   return (
-    <div ref={popupRef} className="absolute bottom-[72px] left-4 w-[320px] h-[380px] z-[60] bg-white flex flex-col rounded-2xl overflow-hidden shadow-2xl shadow-slate-900/10 border border-slate-200 animate-in slide-in-from-bottom-2 fade-in duration-200">
-      <div className="flex items-center justify-between p-3 border-b border-line">
-        <h3 className="font-heading font-medium text-slate-900">Chọn sản phẩm</h3>
-        <button onClick={onClose} className="p-1 hover:bg-slate-100 rounded-full text-slate-500">
-          <X className="w-5 h-5" />
-        </button>
-      </div>
-      <div className="p-3 border-b border-line relative">
-        <Search className="absolute left-6 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+    <div ref={popupRef} className="absolute bottom-[72px] left-4 w-[360px] h-[340px] z-[60] bg-white flex flex-col rounded-2xl overflow-hidden shadow-2xl shadow-slate-900/10 border border-slate-200 animate-in slide-in-from-bottom-2 fade-in duration-200">
+      <div className="px-3 py-2 border-b border-line relative bg-slate-50">
+        <Search className="absolute left-6 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
         <input 
           type="text" 
           placeholder="Tìm sản phẩm..." 
-          className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-line rounded-lg text-sm focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
+          className="w-full pl-8 pr-3 py-1.5 bg-white border border-line rounded-lg text-sm focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
         />
@@ -93,19 +87,28 @@ export function ProductSelectPopup({ shopId, isOpen, onClose, onSelect }: Produc
               const displayPrice = firstVariant.sale_price || firstVariant.price;
               
               return (
-                <div key={product.public_id} className="flex gap-3 p-2 hover:bg-slate-50 rounded-lg border border-transparent hover:border-slate-200 transition-colors group">
-                  <img src={primaryImage} alt={product.name} className="w-16 h-16 object-cover rounded border border-line" />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-slate-900 truncate">{product.name}</p>
-                    <p className="text-sm text-emerald-600 font-medium mt-1">{displayPrice.toLocaleString('vi-VN')}đ</p>
+                <div key={product.public_id} className="flex flex-col gap-2 p-2 hover:bg-slate-50 rounded-lg border border-slate-100 hover:border-slate-300 transition-colors group">
+                  <div className="flex gap-3">
+                    <a href={`/products/${product.slug}`} target="_blank" rel="noopener noreferrer" className="flex gap-3 flex-1 min-w-0 group/link">
+                      <img src={primaryImage} alt={product.name} className="w-14 h-14 object-cover rounded border border-line" />
+                      <div className="flex-1 min-w-0 flex flex-col justify-center">
+                        <p className="text-sm font-semibold text-slate-900 group-hover/link:text-emerald-600 line-clamp-2 leading-tight transition-colors">{product.name}</p>
+                      </div>
+                    </a>
                   </div>
-                  <div className="flex items-center">
+                  <div className="flex items-center justify-between mt-1">
+                    <div className="flex items-baseline gap-1.5 ml-17">
+                      <p className="text-sm text-emerald-600 font-bold">{Number(displayPrice).toLocaleString('vi-VN')}đ</p>
+                      {firstVariant.sale_price && (
+                        <p className="text-[11px] text-slate-400 line-through">{Number(firstVariant.price).toLocaleString('vi-VN')}đ</p>
+                      )}
+                    </div>
                     <button 
                       onClick={() => {
                         onSelect(product);
                         onClose();
                       }}
-                      className="px-3 py-1.5 bg-white border border-emerald-500 text-emerald-600 rounded-md text-sm font-medium opacity-0 group-hover:opacity-100 transition-opacity hover:bg-emerald-50"
+                      className="px-3 py-1.5 bg-white border border-emerald-500 text-emerald-600 rounded-md text-xs font-medium opacity-0 group-hover:opacity-100 transition-opacity hover:bg-emerald-50"
                     >
                       Gửi
                     </button>

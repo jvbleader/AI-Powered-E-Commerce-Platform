@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Image as ImageIcon, Loader2, Send, Video } from "lucide-react";
+import { Image as ImageIcon, Loader2, Send, Video, ShoppingBag, ClipboardList } from "lucide-react";
 import TextareaAutosize from "react-textarea-autosize";
 import {
   ChatMediaDraftPreview,
@@ -29,6 +29,10 @@ type SellerDashboardComposerProps = {
   onAddMedia: () => void;
   openImagePicker: () => void;
   openVideoPicker: () => void;
+  hasProductDraft: boolean;
+  hasOrderDraft: boolean;
+  onToggleProductPopup: () => void;
+  onToggleOrderPopup: () => void;
 };
 
 /** Ô nhập seller dashboard — state local, không re-render list tin. */
@@ -51,9 +55,13 @@ export function SellerDashboardComposer({
   onAddMedia,
   openImagePicker,
   openVideoPicker,
+  hasProductDraft,
+  hasOrderDraft,
+  onToggleProductPopup,
+  onToggleOrderPopup,
 }: SellerDashboardComposerProps) {
   const [value, setValue] = useState("");
-  const canSend = !mediaUploading && (Boolean(value.trim()) || hasMediaDraft);
+  const canSend = !mediaUploading && (Boolean(value.trim()) || hasMediaDraft || hasProductDraft || hasOrderDraft);
 
   const submit = async () => {
     if (!canSend) return;
@@ -127,6 +135,24 @@ export function SellerDashboardComposer({
                 title={`Gửi video (tối đa ${maxMediaFiles}, 30MB/video)`}
               >
                 <Video className="w-5 h-5" />
+              </button>
+              <button
+                id="product-popup-trigger"
+                type="button"
+                onClick={onToggleProductPopup}
+                className="p-2 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-full transition-colors"
+                title="Gửi Sản phẩm"
+              >
+                <ShoppingBag className="w-5 h-5" />
+              </button>
+              <button
+                id="order-popup-trigger"
+                type="button"
+                onClick={onToggleOrderPopup}
+                className="p-2 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-full transition-colors"
+                title="Gửi Đơn hàng"
+              >
+                <ClipboardList className="w-5 h-5" />
               </button>
             </div>
             <button

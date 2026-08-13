@@ -49,9 +49,13 @@ export function OrderAttachment({ orderId, isSeller }: { orderId: string, isSell
   const getStatusText = (status: string) => {
     const statusMap: Record<string, string> = {
       'PENDING': 'Chờ xác nhận',
+      'PLACED': 'Đã đặt hàng',
       'PROCESSING': 'Đang xử lý',
+      'READY_TO_SHIP': 'Sẵn sàng giao',
       'SHIPPING': 'Đang giao',
       'DELIVERED': 'Đã giao',
+      'COMPLETED': 'Hoàn thành',
+      'DELIVERY_FAILED': 'Giao thất bại',
       'CANCELLED': 'Đã hủy',
       'RETURNED': 'Trả hàng',
     };
@@ -99,7 +103,7 @@ export function OrderAttachment({ orderId, isSeller }: { orderId: string, isSell
       <div className="bg-blue-50 border-b border-blue-100 px-2.5 py-1.5 text-blue-600 text-[11px] font-medium uppercase tracking-wider flex items-center justify-between gap-2">
         <div className="flex items-center gap-1 min-w-0">
            <FileText className="w-3 h-3 shrink-0" />
-           <span className="whitespace-nowrap truncate">Đơn hàng #{order.orderCode?.slice(0, 8).toUpperCase()}</span>
+           <span className="whitespace-nowrap truncate">Đơn hàng</span>
         </div>
         <span className="text-[9px] font-bold bg-white px-1.5 py-0.5 rounded text-blue-700 shrink-0">{getStatusText(order.status)}</span>
       </div>

@@ -56,10 +56,12 @@ export default function PaymentPageClient({ paymentCode }: PaymentPageClientProp
   if (!ready || loading || !payment) return <PaymentLoading />;
 
   const linkedOrders = store.state.orders.filter((order) => payment.orderCodes.includes(order.orderCode));
-  const canPayPayment = payment.paymentStatus === "PENDING" || payment.paymentStatus === "FAILED";
+  const isExpired = new Date(payment.expiresAt).getTime() < Date.now();
+  const hasCancelledOrder = linkedOrders.some((order) => order.orderStatus === "CANCELLED");
+  const canPayPayment = (payment.paymentStatus === "PENDING" || payment.paymentStatus === "FAILED") && !isExpired && !hasCancelledOrder;
   const isVNPay = payment.paymentMethod === "VNPAY";
   const canMockPay = canPayPayment && !isVNPay && payment.paymentMethod === "MOCK";
-  const canResumeVNPay = isVNPay && payment.paymentStatus === "PENDING";
+  const canResumeVNPay = isVNPay && canPayPayment;
 
   function InfoRow({ label, value }: { label: string; value: string }) {
     return (

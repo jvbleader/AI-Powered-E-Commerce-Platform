@@ -15,7 +15,7 @@ import repositories.payment.payment_repository as payment_repository
 
 
 def generate_payment_code() -> str:
-    return f"PAY-{secrets.token_hex(4).upper()}"
+    return f"PAY-{secrets.token_hex(6).upper()}"
 
 
 async def create_payment(
@@ -53,6 +53,11 @@ async def create_payment(
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Đơn hàng {order.order_code} không ở trạng thái chờ thanh toán",
+            )
+        if order.payment_order is not None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Đơn hàng {order.order_code} đã có giao dịch đang chờ xử lý, vui lòng tiếp tục thanh toán giao dịch cũ.",
             )
         total_amount += order.total_amount
 

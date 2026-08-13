@@ -360,3 +360,26 @@ async def get_semantic_shop_similar_products(
         size=limit,
         aggregations={},
     )
+
+async def get_today_suggestions(
+    db: AsyncSession, keywords: List[str], limit: int = 48, page: int = 1
+) -> ProductListResponse:
+    # Get products from recommendation service
+    es_docs, total = await recommendation_service.get_suggestions_by_keywords(
+        db, keywords, limit, page
+    )
+    
+    docs = [ProductSearchDocument(**doc) for doc in es_docs]
+    product_public_ids = [doc.public_id for doc in docs]
+    primary_variants = await product_repo.get_primary_variants_by_product_public_ids(
+        db, product_public_ids
+    )
+
+    items = [_map_es_doc_to_public(doc, primary_variants) for doc in docs]
+    return ProductListResponse(
+        items=items,
+        total=total,
+        page=page,
+        size=limit,
+        aggregations={},
+    )

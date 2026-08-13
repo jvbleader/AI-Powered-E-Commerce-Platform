@@ -77,3 +77,9 @@ class OrderItem(Base):
         if hasattr(self, "__dict__") and "review" in self.__dict__:
             return self.__dict__["review"] is not None
         return False
+
+    @property
+    def product_slug(self) -> str | None:
+        if hasattr(self, "__dict__") and "product" in self.__dict__ and self.product:
+            return self.product.slug
+        return None

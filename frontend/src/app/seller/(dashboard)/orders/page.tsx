@@ -228,7 +228,7 @@ export default function SellerOrdersPage() {
           />,
           <a key="code" className="font-bold text-primary" href={`/seller/orders/${order.orderCode}`}>#{order.orderCode}</a>,
           store.state.shops.find((s) => s.id === order.sellerId)?.shopName ?? "-",
-          <StatusBadge key="st" status={order.orderStatus} label={orderStatusLabel[order.orderStatus]} />,
+          <StatusBadge key="st" status={order.orderStatus} label={order.sellerConfirmed && order.orderStatus === "PLACED" ? "Đã xác nhận (chờ TT)" : orderStatusLabel[order.orderStatus]} />,
           <StatusBadge key="pay" status={order.paymentStatus} label={paymentStatusLabel[order.paymentStatus]} />,
           <span key="total" className="font-semibold">{formatVnd(order.totalAmount)}</span>,
           <div key="note" className="max-w-[150px] truncate text-xs text-slate-500" title={order.customerNote || ""}>
