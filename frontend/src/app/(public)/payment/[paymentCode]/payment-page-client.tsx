@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Panel, Section } from "@/components/ui/containers";
 import { StatusBadge } from "@/components/ui/badge";
 import { useMarketplaceStore } from "@/store/use-marketplace-store";
-import { paymentStatusLabel, paymentMethodLabel, orderStatusLabel, formatVnd, formatDate } from "@/lib/helpers";
+import { paymentStatusLabel, paymentMethodLabel, orderStatusLabel, formatVnd, formatDate, parseApiDateTime } from "@/lib/helpers";
 import { paymentApi } from "@/services/payment-api";
 import NotFoundPage from "@/components/shared/not-found-page";
 import { PaymentLoading } from "./payment-loading";
@@ -56,7 +56,7 @@ export default function PaymentPageClient({ paymentCode }: PaymentPageClientProp
   if (!ready || loading || !payment) return <PaymentLoading />;
 
   const linkedOrders = store.state.orders.filter((order) => payment.orderCodes.includes(order.orderCode));
-  const isExpired = new Date(payment.expiresAt).getTime() < Date.now();
+  const isExpired = (parseApiDateTime(payment.expiresAt)?.getTime() || 0) < Date.now();
   const hasCancelledOrder = linkedOrders.some((order) => order.orderStatus === "CANCELLED");
   const canPayPayment = (payment.paymentStatus === "PENDING" || payment.paymentStatus === "FAILED") && !isExpired && !hasCancelledOrder;
   const isVNPay = payment.paymentMethod === "VNPAY";

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Search, X, Loader2, Package } from 'lucide-react';
 import { apiFetch } from '@/services/api';
+import { formatDate } from '@/lib/helpers';
 
 type Order = {
   id: string;
@@ -121,7 +122,7 @@ export function OrderSelectPopup({ shopId, isOpen, onClose, onSelect, mode = 'CU
         ) : (
           <div className="space-y-2">
             {orders.map(order => {
-              const orderDate = order.created_at ? new Date(order.created_at).toLocaleDateString('vi-VN') : '';
+              const orderDate = order.created_at ? formatDate(order.created_at) : '';
               const orderCode = order.order_code ? order.order_code.toUpperCase() : (order.id || "").slice(0, 8).toUpperCase();
               
               // Helper to get status color and icon

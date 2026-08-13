@@ -37,7 +37,7 @@ export function parseApiDateTime(value?: string | Date): Date | null {
     return Number.isNaN(dateObj.getTime()) ? null : dateObj;
   }
 
-  if (/^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(\.\d+)?$/.test(s)) {
+  if (/^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}(:\d{2})?(\.\d+)?$/.test(s)) {
     s = s.replace(" ", "T") + "Z";
   }
 
@@ -48,14 +48,22 @@ export function parseApiDateTime(value?: string | Date): Date | null {
 export const formatDate = (value?: string | Date) => {
   const dateObj = parseApiDateTime(value);
   if (!dateObj) return "Chưa có";
-  return new Intl.DateTimeFormat("vi-VN", {
-    timeZone: "Asia/Ho_Chi_Minh",
+  
+  const formatter = new Intl.DateTimeFormat("en-GB", {
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
     hour: "2-digit",
-    minute: "2-digit"
-  }).format(dateObj);
+    minute: "2-digit",
+    hour12: false
+  });
+
+  const parts = formatter.formatToParts(dateObj).reduce((acc, part) => {
+    acc[part.type] = part.value;
+    return acc;
+  }, {} as Record<string, string>);
+  
+  return `${parts.hour}:${parts.minute} ${parts.day}/${parts.month}/${parts.year}`;
 };
 
 export const currentPrice = (variant: ProductVariant) => variant.salePrice ?? variant.price;
@@ -195,7 +203,7 @@ export const filterProducts = (
       if (b.reviewCount === 0 && a.reviewCount > 0) return -1;
       return b.averageRating - a.averageRating;
     }
-    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    return (parseApiDateTime(b.createdAt)?.getTime() || 0) - (parseApiDateTime(a.createdAt)?.getTime() || 0);
   });
 };
 
@@ -369,9 +377,9 @@ export const canSellerConfirm = (order: Order) => order.orderStatus === "PLACED"
 export const canSellerShip = (order: Order) => order.orderStatus === "READY_TO_SHIP";
 
 export const statusTone = (status: string) => {
-  if (["ACTIVE", "APPROVED", "PAID", "COMPLETED", "READY_TO_SHIP"].includes(status)) return "success";
-  if (["PENDING", "PLACED", "SHIPPING", "PARTIAL_REFUND_PENDING", "REFUND_PENDING"].includes(status)) return "warning";
-  if (["FAILED", "REJECTED", "SUSPENDED", "LOCKED", "OUT_OF_STOCK", "DELIVERY_FAILED"].includes(status)) return "danger";
-  if (["HIDDEN", "CLOSED", "DELETED", "CANCELLED", "REFUNDED", "PARTIALLY_REFUNDED"].includes(status)) return "neutral";
+  if (["ACTIVE", "APPROVED", "PAID", "COMPLETED"].includes(status)) return "success";
+  if (["PENDING", "PLACED", "READY_TO_SHIP", "SHIPPING", "PARTIAL_REFUND_PENDING", "REFUND_PENDING"].includes(status)) return "warning";
+  if (["FAILED", "REJECTED", "SUSPENDED", "LOCKED", "OUT_OF_STOCK", "DELIVERY_FAILED", "CANCELLED"].includes(status)) return "danger";
+  if (["HIDDEN", "CLOSED", "DELETED", "REFUNDED", "PARTIALLY_REFUNDED"].includes(status)) return "neutral";
   return "neutral";
 };

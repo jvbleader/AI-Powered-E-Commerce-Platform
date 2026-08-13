@@ -25,6 +25,7 @@ import { Section } from "@/components/ui/containers";
 import { EmptyState } from "@/components/ui/feedback";
 import { useMarketplaceStore } from "@/store/use-marketplace-store";
 import type { ViolationReport, ViolationReportStatus } from "@/types/models";
+import { formatDate } from "@/lib/helpers";
 
 export default function AdminViolationReportsPage() {
   const store = useMarketplaceStore();
@@ -319,7 +320,7 @@ export default function AdminViolationReportsPage() {
                       <td className="px-3 py-4">
                         <div className="font-mono text-xs font-bold text-slate-900">{report.id}</div>
                         <div className="text-xs text-slate-400">
-                          {new Date(report.createdAt).toLocaleString("vi-VN")}
+                          {formatDate(report.createdAt)}
                         </div>
                       </td>
                       <td className="px-3 py-4">
@@ -406,7 +407,7 @@ export default function AdminViolationReportsPage() {
                   <div>
                     <span className="text-slate-500">Thời gian gửi: </span>
                     <span className="font-bold text-slate-800">
-                      {new Date(selectedReport.createdAt).toLocaleString("vi-VN")}
+                      {formatDate(selectedReport.createdAt)}
                     </span>
                   </div>
                   <div className="flex items-center gap-2">

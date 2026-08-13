@@ -1,8 +1,8 @@
 "use client";
 
-import { Document, Page, Text, View, StyleSheet, Image, Font } from "@react-pdf/renderer";
+import { Document, Page, Text, View, StyleSheet, Image, Font, Svg, Path } from "@react-pdf/renderer";
 import type { Order } from "@/types/models";
-import { formatVnd } from "@/lib/helpers";
+import { formatVnd, parseApiDateTime } from "@/lib/helpers";
 
 // Register Font for Vietnamese support
 Font.register({
@@ -30,7 +30,7 @@ const styles = StyleSheet.create({
   headerRow: {
     flexDirection: "row",
     borderBottom: "1px solid #000000",
-    height: 50, // reduced from 60
+    height: 60,
   },
   logoBox: {
     width: "35%",
@@ -40,9 +40,14 @@ const styles = StyleSheet.create({
     padding: 4,
   },
   logoText: {
-    fontSize: 16, // reduced from 18
+    fontSize: 18,
     fontWeight: 700,
-    color: "#ee4d2d",
+    color: "#059669",
+  },
+  logoTopWrap: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
   },
   logoSub: {
     fontSize: 7, // reduced from 8
@@ -204,9 +209,22 @@ export function ShippingLabelDocument({ labels }: { labels: ShippingLabelData[] 
           maskedPhone = p.length >= 7 ? p.slice(0, 4) + "***" + p.slice(-3) : p;
         }
 
-        const dateObj = new Date(order.createdAt);
-        const dateStr = `${dateObj.getDate().toString().padStart(2, '0')}-${(dateObj.getMonth() + 1).toString().padStart(2, '0')}-${dateObj.getFullYear()}`;
-        const timeStr = `${dateObj.getHours().toString().padStart(2, '0')}:${dateObj.getMinutes().toString().padStart(2, '0')}`;
+        const dateObj = parseApiDateTime(order.createdAt) || new Date();
+        const formatter = new Intl.DateTimeFormat("en-GB", {
+          day: "2-digit",
+          month: "2-digit",
+          year: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: false
+        });
+        const parts = formatter.formatToParts(dateObj).reduce((acc, part) => {
+          acc[part.type] = part.value;
+          return acc;
+        }, {} as Record<string, string>);
+        
+        const dateStr = `${parts.day}-${parts.month}-${parts.year}`;
+        const timeStr = `${parts.hour}:${parts.minute}`;
         
         const trackingCode = order.shipment?.trackingCode || order.orderCode;
         const providerName = order.shipment?.shippingProviderName || "SuperXpress";
@@ -218,12 +236,12 @@ export function ShippingLabelDocument({ labels }: { labels: ShippingLabelData[] 
               {/* Header */}
               <View style={styles.headerRow}>
                 <View style={styles.logoBox}>
+                  <Image src={typeof window !== "undefined" ? window.location.origin + "/images/platform/shepoo_logo.png" : "/images/platform/shepoo_logo.png"} style={{ width: 90, height: 28, objectFit: "contain" }} />
                   {logoUrl ? (
-                    <Image src={logoUrl} style={{ width: 60, height: 25, objectFit: "contain" }} />
+                    <Image src={logoUrl} style={{ width: 85, height: 28, objectFit: "contain", marginTop: -2 }} />
                   ) : (
-                    <Text style={styles.logoText}>{providerName}</Text>
+                    <Text style={[styles.textBold, { marginTop: 0, color: "#333", fontSize: 10 }]}>{providerName}</Text>
                   )}
-                  {!logoUrl && <Text style={styles.logoSub}>Thương mại điện tử</Text>}
                 </View>
                 <View style={styles.barcodeBox}>
                   {barcodeDataUrl && <Image src={barcodeDataUrl} style={styles.barcodeImage} />}

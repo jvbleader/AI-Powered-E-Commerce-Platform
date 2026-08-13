@@ -34,7 +34,8 @@ import {
 import {
   formatDate,
   getCategoryNames,
-  productStatusLabel
+  productStatusLabel,
+  parseApiDateTime
 } from "@/lib/helpers";
 import {
   fetchProductDetail,
@@ -52,7 +53,7 @@ import { SemanticSimilarProducts } from "@/components/product/semantic-similar-p
 
 const getJoinDuration = (approvedAt?: string) => {
   if (!approvedAt) return "Mới đây";
-  const diffDays = (new Date().getTime() - new Date(approvedAt).getTime()) / (1000 * 60 * 60 * 24);
+  const diffDays = (new Date().getTime() - (parseApiDateTime(approvedAt)?.getTime() || Date.now())) / (1000 * 60 * 60 * 24);
   if (diffDays < 30) return "Mới đây";
   if (diffDays < 365) return `${Math.floor(diffDays / 30)} tháng`;
   return `${Math.floor(diffDays / 365)} năm`;

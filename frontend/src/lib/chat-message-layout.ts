@@ -2,7 +2,6 @@ export type ChatMessageGroupPosition = "single" | "first" | "middle" | "last";
 
 import { parseApiDateTime } from "@/lib/helpers";
 
-const CHAT_TIMEZONE = "Asia/Ho_Chi_Minh";
 
 export function parseChatDate(value?: string | Date): Date | null {
   return parseApiDateTime(value);
@@ -11,12 +10,16 @@ export function parseChatDate(value?: string | Date): Date | null {
 export function formatChatTime(value?: string | Date): string {
   const dateObj = parseChatDate(value);
   if (!dateObj) return "";
-  return new Intl.DateTimeFormat("vi-VN", {
-    timeZone: CHAT_TIMEZONE,
+  const formatter = new Intl.DateTimeFormat("en-GB", {
     hour: "2-digit",
     minute: "2-digit",
-    hour12: false,
-  }).format(dateObj);
+    hour12: false
+  });
+  const parts = formatter.formatToParts(dateObj).reduce((acc, part) => {
+    acc[part.type] = part.value;
+    return acc;
+  }, {} as Record<string, string>);
+  return `${parts.hour}:${parts.minute}`;
 }
 
 /** Thời gian sidebar: hôm nay → giờ, hôm qua → "Hôm qua", lâu hơn → ngày. */
@@ -36,19 +39,22 @@ export function formatChatListTime(value?: string | Date): string {
     return "Hôm qua";
   }
 
-  return new Intl.DateTimeFormat("vi-VN", {
-    timeZone: CHAT_TIMEZONE,
-    day: "numeric",
-    month: "numeric",
-    year: "numeric",
-  }).format(dateObj);
+  const formatter = new Intl.DateTimeFormat("en-GB", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric"
+  });
+  const parts = formatter.formatToParts(dateObj).reduce((acc, part) => {
+    acc[part.type] = part.value;
+    return acc;
+  }, {} as Record<string, string>);
+  return `${parts.day}/${parts.month}/${parts.year}`;
 }
 
 export function formatChatDateSeparator(value?: string | Date): string {
   const dateObj = parseChatDate(value);
   if (!dateObj) return "";
   return new Intl.DateTimeFormat("vi-VN", {
-    timeZone: CHAT_TIMEZONE,
     weekday: "long",
     day: "numeric",
     month: "long",
@@ -59,12 +65,16 @@ export function formatChatDateSeparator(value?: string | Date): string {
 export function getChatDayKey(value?: string | Date): string | null {
   const dateObj = parseChatDate(value);
   if (!dateObj) return null;
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: CHAT_TIMEZONE,
+  const formatter = new Intl.DateTimeFormat("en-GB", {
     year: "numeric",
     month: "2-digit",
-    day: "2-digit",
-  }).format(dateObj);
+    day: "2-digit"
+  });
+  const parts = formatter.formatToParts(dateObj).reduce((acc, part) => {
+    acc[part.type] = part.value;
+    return acc;
+  }, {} as Record<string, string>);
+  return `${parts.year}-${parts.month}-${parts.day}`;
 }
 
 export function isSameChatDay(a?: string | Date, b?: string | Date): boolean {

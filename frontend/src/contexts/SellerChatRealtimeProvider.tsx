@@ -16,6 +16,7 @@ import {
   EMPTY_CHAT_MESSAGES,
   mergeChatMessagesById,
 } from "@/lib/chat-messages";
+import { parseApiDateTime } from "@/lib/helpers";
 import type { SellerSessionSummary } from "@/types/chat";
 import type { SellerMessage } from "@/hooks/useSellerChat";
 
@@ -43,7 +44,7 @@ function sortSessions(sessions: SellerSessionSummary[]) {
   return [...sessions].sort((a, b) => {
     const pinDiff = Number(b.is_pinned) - Number(a.is_pinned);
     if (pinDiff !== 0) return pinDiff;
-    return new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime();
+    return (parseApiDateTime(b.updated_at)?.getTime() || 0) - (parseApiDateTime(a.updated_at)?.getTime() || 0);
   });
 }
 

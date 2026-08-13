@@ -11,7 +11,7 @@ export function Input({
   return (
     <input
       className={cn(
-        "h-10 w-full rounded-panel border border-line bg-white px-3 text-sm text-ink placeholder:text-muted/70 transition focus:border-primary",
+        "h-10 w-full rounded-panel border border-line bg-white px-3 text-sm text-ink placeholder:text-muted/70 transition hover:border-primary focus:border-primary focus:outline-none",
         className
       )}
       {...props}
@@ -26,7 +26,7 @@ export function Textarea({
   return (
     <textarea
       className={cn(
-        "min-h-24 w-full resize-y rounded-panel border border-line bg-white px-3 py-2 text-sm text-ink placeholder:text-muted/70 transition focus:border-primary",
+        "min-h-24 w-full resize-y rounded-panel border border-line bg-white px-3 py-2 text-sm text-ink placeholder:text-muted/70 transition hover:border-primary focus:border-primary focus:outline-none",
         className
       )}
       {...props}
@@ -42,7 +42,7 @@ export function Select({
   return (
     <select
       className={cn(
-        "h-10 w-full rounded-panel border border-line bg-white px-3 text-sm text-ink transition focus:border-primary",
+        "h-10 w-full rounded-panel border border-line bg-white px-3 text-sm text-ink transition hover:border-primary focus:border-primary focus:outline-none cursor-pointer",
         className
       )}
       {...props}

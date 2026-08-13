@@ -12,7 +12,7 @@ import { useMarketplaceStore } from "@/store/use-marketplace-store";
 import Unauthorized from "@/components/shared/unauthorized-page";
 import type { BackendSellerDashboardSummary } from "@/store/slices/types";
 
-const formatGmt7 = (isoString?: string | null) => {
+const formatLocalTime = (isoString?: string | null) => {
   if (!isoString) return "";
   let cleanIso = isoString;
   if (!cleanIso.endsWith("Z") && !cleanIso.includes("+") && !cleanIso.includes("-", 10)) {
@@ -20,17 +20,23 @@ const formatGmt7 = (isoString?: string | null) => {
   }
   const date = new Date(cleanIso);
   if (isNaN(date.getTime())) return isoString;
-  return (
-    date.toLocaleString("vi-VN", {
-      timeZone: "Asia/Ho_Chi_Minh",
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric"
-    }) + " (GMT+7)"
-  );
+
+  const formatter = new Intl.DateTimeFormat("en-GB", {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour12: false
+  });
+
+  const parts = formatter.formatToParts(date).reduce((acc, part) => {
+    acc[part.type] = part.value;
+    return acc;
+  }, {} as Record<string, string>);
+
+  return `${parts.hour}:${parts.minute}:${parts.second} ${parts.day}/${parts.month}/${parts.year}`;
 };
 
 
@@ -145,7 +151,7 @@ export default function SellerDashboardPage() {
       <div className="mb-4 flex items-center justify-between">
         <span className="text-xs text-muted">
           {summary?.updated_at
-            ? `Cập nhật gần nhất: ${formatGmt7(summary.updated_at)}`
+            ? `Cập nhật gần nhất: ${formatLocalTime(summary.updated_at)}`
             : "Chưa đồng bộ thống kê DB"}
         </span>
         <Button

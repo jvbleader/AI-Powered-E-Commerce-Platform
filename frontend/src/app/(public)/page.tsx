@@ -236,7 +236,7 @@ export default function HomePageComponent() {
   const heroVariant = heroProduct ? localVariants.find((v) => v.productId === heroProduct.id) : undefined;
 
   return (
-    <div className="min-h-screen space-y-8 bg-canvas text-slate-900 pb-20 pt-4 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen space-y-8 bg-canvas text-slate-900 pb-20 pt-8 px-4 sm:px-6 lg:px-8">
       {/* SECTION 1: BENTO GRID HERO & SPOTLIGHT */}
       <section className="mx-auto max-w-7xl animate-fade-in-up">
         <div className="grid gap-4 lg:grid-cols-12">
@@ -468,7 +468,6 @@ export default function HomePageComponent() {
       <section className="mx-auto max-w-7xl">
         <div className="flex flex-col gap-4 border-b border-slate-200 pb-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <span className="text-xs font-bold uppercase tracking-wider text-emerald-700">Cyber Selection</span>
             <h2 className="font-heading text-2xl font-extrabold text-slate-900">Gợi Ý Hôm Nay</h2>
           </div>
         </div>

@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import { useParams } from "next/navigation";
-import { ArrowLeft, Copy, User, CreditCard, Receipt, Printer } from "lucide-react";
+import { ArrowLeft, Copy, User, CreditCard, Receipt, Printer, Truck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Panel, Section } from "@/components/ui/containers";
 import { StatusBadge } from "@/components/ui/badge";
@@ -68,13 +68,21 @@ export default function SellerOrderDetailPage() {
   return (
     <Section title={null} className="pt-2">
       <div className="mb-4">
-        <a
-          href="/seller/orders"
-          className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-600 hover:text-emerald-700 transition"
+        <button
+          onClick={() => {
+            // Using window.location.href or router.push triggers nav. 
+            // We use history.back() if possible, else push
+            if (window.history.length > 1) {
+              window.history.back();
+            } else {
+              window.location.href = "/seller/orders";
+            }
+          }}
+          className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-600 hover:text-emerald-700 transition bg-transparent border-none cursor-pointer"
         >
           <ArrowLeft className="h-4 w-4 text-slate-400" />
           Quay lại danh sách đơn hàng
-        </a>
+        </button>
       </div>
 
       <div className="space-y-4">
@@ -143,6 +151,12 @@ export default function SellerOrderDetailPage() {
             <div className="text-xs text-slate-600 leading-relaxed mt-1">
               {order.shipment.detailAddress}, {order.shipment.ward}, {order.shipment.district}, {order.shipment.province}
             </div>
+            {order.shipment?.shippingProviderName && (
+              <div className="text-xs text-slate-600 mt-1 flex items-center gap-1.5 bg-slate-50 p-1.5 rounded border border-line">
+                <Truck className="h-3.5 w-3.5 text-slate-400" />
+                <span className="font-semibold text-slate-700">ĐVVC:</span> {order.shipment.shippingProviderName}
+              </div>
+            )}
             {order.customerNote && (
               <div className="mt-2 bg-amber-50 border border-amber-200 text-amber-800 text-xs p-2 rounded max-h-20 overflow-y-auto">
                 <span className="font-semibold">Ghi chú:</span> {order.customerNote}

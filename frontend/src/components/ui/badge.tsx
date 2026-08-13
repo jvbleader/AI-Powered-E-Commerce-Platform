@@ -18,10 +18,10 @@ export function Badge({
       className={cn(
         "status-pill rounded-full border",
         tone === "success" && "border-emerald-200 bg-emerald-50 text-emerald-800",
-        tone === "warning" && "border-amber-200 bg-amber-50 text-amber-900",
+        tone === "warning" && "border-orange-200 bg-orange-50 text-orange-800",
         tone === "danger" && "border-rose-200 bg-rose-50 text-rose-800",
         tone === "neutral" && "border-slate-200 bg-slate-50 text-slate-600",
-        tone === "info" && "border-sky-200 bg-sky-50 text-sky-800",
+        tone === "info" && "border-blue-200 bg-blue-50 text-blue-800",
         className
       )}
     >

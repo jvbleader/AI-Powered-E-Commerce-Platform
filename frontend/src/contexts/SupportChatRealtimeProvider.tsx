@@ -16,6 +16,7 @@ import {
   EMPTY_CHAT_MESSAGES,
   mergeChatMessagesById,
 } from "@/lib/chat-messages";
+import { parseApiDateTime } from "@/lib/helpers";
 import type {
   SupportConversation,
   SupportMessage,
@@ -42,7 +43,7 @@ function toWsBaseUrl() {
 
 function sortSessions(sessions: SupportSessionSummary[]) {
   return [...sessions].sort(
-    (a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
+    (a, b) => (parseApiDateTime(b.updated_at)?.getTime() || 0) - (parseApiDateTime(a.updated_at)?.getTime() || 0)
   );
 }
 

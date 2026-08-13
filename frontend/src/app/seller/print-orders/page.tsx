@@ -61,11 +61,11 @@ function PrintOrdersContent() {
           const providerName = order.shipment.shippingProviderName?.toLowerCase() || "";
           let logoUrl = "";
           if (providerName.includes("ghn") || providerName.includes("giao hàng nhanh")) {
-            logoUrl = "/images/providers/ghn_logo.jpg";
-          } else if (providerName.includes("spx") || providerName.includes("shepoo express")) {
-            logoUrl = "/images/providers/spx_logo.jpg";
-          } else if (providerName.includes("viettel post")) {
-            logoUrl = "/images/providers/viettel_post_logo.jpg";
+            logoUrl = "/images/providers/ghn_logo.png";
+          } else if (providerName.includes("spx") || providerName.includes("shepoo express") || providerName.includes("shopee")) {
+            logoUrl = "/images/providers/shepoo_express_logo.png";
+          } else if (providerName.includes("viettel post") || providerName.includes("vtp")) {
+            logoUrl = "/images/providers/vtp_logo.png";
           }
 
           if (logoUrl && typeof window !== "undefined") {

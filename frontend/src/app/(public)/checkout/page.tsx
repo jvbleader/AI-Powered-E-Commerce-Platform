@@ -112,7 +112,7 @@ export default function CheckoutPage() {
                       Thêm địa chỉ
                     </Button>
                   ) : (
-                    <div className="mt-4 rounded-panel bg-neutral-50 p-4 dark:bg-neutral-800/50">
+                    <div className="mt-4 rounded-panel bg-neutral-50 p-4">
                       <div className="mb-3 flex items-center justify-between">
                         <h4 className="font-bold">{editingAddress ? "Sửa địa chỉ" : "Địa chỉ mới"}</h4>
                         <Button variant="ghost" className="h-auto p-1 text-sm" onClick={() => { setShowAddressForm(false); setEditingId(null); }}>Hủy</Button>
