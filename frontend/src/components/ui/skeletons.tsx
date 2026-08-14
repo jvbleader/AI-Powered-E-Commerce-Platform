@@ -1,4 +1,4 @@
-import { Skeleton } from "./feedback";
+import { Skeleton } from "./skeleton";
 
 export function ProductCardSkeleton() {
   return (
@@ -52,31 +52,31 @@ export function TableRowSkeleton({ cols = 5 }: { cols?: number }) {
 
 export function CyberProductCardSkeleton() {
   return (
-    <div className="flex flex-col justify-between overflow-hidden rounded-2xl border border-slate-200/80 bg-white/90 p-4">
+    <div className="bento-card flex flex-col justify-between overflow-hidden rounded-2xl border border-slate-200/80 bg-white/90 p-4">
       <div>
         <div className="relative aspect-square w-full overflow-hidden rounded-xl bg-slate-100">
           <Skeleton className="h-full w-full rounded-none" />
         </div>
         <div className="mt-3">
-          <Skeleton className="h-[16px] w-20 mb-1" />
-          <Skeleton className="h-[20px] w-full" />
+          <Skeleton className="h-4 w-20 rounded" />
+          <Skeleton className="h-5 w-5/6 rounded-md mt-1" />
           <div className="mt-1.5 flex items-center justify-between gap-1">
-            <Skeleton className="h-[20px] w-24" />
-            <Skeleton className="h-[16px] w-16" />
+            <Skeleton className="h-4 w-20 rounded" />
+            <Skeleton className="h-4 w-16 rounded" />
           </div>
         </div>
       </div>
       <div className="mt-3 border-t border-slate-100 pt-3">
-        <Skeleton className="h-[16px] w-16 mb-1" />
-        <Skeleton className="h-[28px] w-2/3" />
+        <Skeleton className="h-3.5 w-10 rounded mb-1" />
+        <Skeleton className="h-6 w-24 rounded-md" />
       </div>
     </div>
   );
 }
 
-export function CyberProductGridSkeleton({ count = 5 }: { count?: number }) {
+export function CyberProductGridSkeleton({ count = 48 }: { count?: number }) {
   return (
-    <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
+    <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
       {Array.from({ length: count }).map((_, i) => (
         <CyberProductCardSkeleton key={i} />
       ))}
@@ -91,31 +91,31 @@ export function HeroSpotlightSkeleton() {
         <Skeleton className="h-full w-full rounded-none" />
       </div>
       <div>
-        <Skeleton className="h-3.5 w-32 mb-1.5" />
-        <Skeleton className="h-7 w-[85%]" />
+        <Skeleton className="h-3.5 w-24 rounded mb-1.5" />
+        <Skeleton className="h-5 w-4/5 rounded-md" />
         <div className="mt-2 flex flex-col gap-1.5">
-          <Skeleton className="h-8 w-[140px]" />
+          <Skeleton className="h-7 w-32 rounded-md" />
           <div className="flex items-center gap-3">
-            <Skeleton className="h-4 w-[110px]" />
-            <Skeleton className="h-3.5 w-[80px]" />
+            <Skeleton className="h-3.5 w-24 rounded" />
+            <Skeleton className="h-3.5 w-20 rounded" />
           </div>
         </div>
       </div>
-      <Skeleton className="h-[40px] w-full rounded-xl" />
+      <Skeleton className="h-[38px] w-full rounded-xl" />
     </div>
   );
 }
+
 export function ShopCardSkeleton() {
   return (
-    <div className="bento-card rounded-2xl p-5 flex items-center justify-between bg-white/90 border-slate-200/80">
-      <div className="flex items-center gap-3">
-        <Skeleton className="h-12 w-12 rounded-xl" />
-        <div className="space-y-1.5">
-          <Skeleton className="h-5 w-24" />
-          <Skeleton className="h-4 w-32" />
+    <div className="bento-card rounded-2xl p-5 flex items-center justify-between gap-4 bg-white/90 border-slate-200/80">
+      <div className="flex items-center gap-3 min-w-0">
+        <Skeleton className="h-12 w-12 shrink-0 rounded-xl" />
+        <div className="min-w-0">
+          <Skeleton className="h-4 w-28 rounded-md" />
         </div>
       </div>
-      <Skeleton className="h-[28px] w-[70px] rounded-xl" />
+      <Skeleton className="h-[29px] w-[70px] shrink-0 rounded-xl" />
     </div>
   );
 }

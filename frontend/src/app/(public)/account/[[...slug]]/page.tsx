@@ -102,7 +102,7 @@ export default function AccountPage() {
             {!sidebarCollapsed && (
               <div className="min-w-0 flex-1">
                 <p className="truncate font-bold text-ink text-base">{user.fullName}</p>
-                <p className="text-[11px] font-bold text-primary bg-primary/10 inline-block px-2 py-0.5 rounded uppercase tracking-wider mt-1.5">{roleLabel[store.state.activeRole]}</p>
+                <p className="text-[11px] font-bold text-primary bg-primary/10 inline-block px-2 py-0.5 rounded uppercase tracking-wider mt-1.5">{roleLabel[store.state.activeRole as keyof typeof roleLabel]}</p>
               </div>
             )}
             <button
@@ -139,7 +139,7 @@ export default function AccountPage() {
 
 
   function AccountOverview() {
-    const userOrders = store.state.orders.filter((order) => order.userId === store.getCurrentUser()?.id);
+    const userOrders = store.state.orders.filter((order: any) => order.userId === store.getCurrentUser()?.id);
     return (
       <Section title="Tổng quan tài khoản">
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -152,7 +152,7 @@ export default function AccountPage() {
             <div className="absolute -right-4 -top-4 h-20 w-20 rounded-full bg-sky-500/5 transition-transform duration-500 group-hover:scale-150"></div>
             <MapPin className="h-7 w-7 text-sky-500 mb-4 relative z-10 drop-shadow-sm" />
             <p className="text-sm font-bold text-muted relative z-10">Địa chỉ</p>
-            <p className="mt-1 text-2xl font-black text-ink relative z-10">{store.state.addresses.filter((item) => item.userId === store.getCurrentUser()?.id).length}</p>
+            <p className="mt-1 text-2xl font-black text-ink relative z-10">{store.state.addresses.filter((item: any) => item.userId === store.getCurrentUser()?.id).length}</p>
           </div>
           <div className="group rounded-2xl border border-line bg-white p-5 shadow-sm transition-all hover:-translate-y-1 hover:shadow-md hover:border-amber-500/30 relative overflow-hidden">
             <div className="absolute -right-4 -top-4 h-20 w-20 rounded-full bg-amber-500/5 transition-transform duration-500 group-hover:scale-150"></div>
@@ -300,8 +300,8 @@ export default function AccountPage() {
       e.stopPropagation();
       window.dispatchEvent(new CustomEvent('open-chat-widget', {
         detail: {
-          shopId: order.shopDbId || order.sellerId,
-          shopInfo: { id: order.shopDbId || order.sellerId, name: shopName, avatar: null, shop_slug: order.shopSlug },
+          shopId: (order as any).shopDbId || (order as any).sellerId || (order as any).shopId,
+          shopInfo: { id: (order as any).shopDbId || (order as any).sellerId || (order as any).shopId, name: shopName, avatar: null, shop_slug: (order as any).shopSlug },
           orderDraft: order
         }
       }));
@@ -440,7 +440,7 @@ export default function AccountPage() {
       setVisibleCount(5);
     }, [audience, status]);
 
-    const orders = store.state.orders.filter((order) => {
+    const orders = store.state.orders.filter((order: any) => {
       const belongs = audience === "customer" ? order.userId === store.getCurrentUser()?.id : order.sellerId === store.getCurrentShop()?.id;
       return belongs && (!status || order.orderStatus === status);
     });

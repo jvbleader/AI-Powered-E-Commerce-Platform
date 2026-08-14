@@ -35,9 +35,11 @@ export type FetchProductsParams = {
 // Define matching interfaces for the backend models
 type SellerInfo = {
   id: number;
+  public_id?: string;
   shop_name: string;
   shop_slug: string;
   shop_logo_url: string | null;
+  shop_description?: string | null;
   total_sold: number;
   shipping_fee: number;
   pickup_address?: string | null;
@@ -163,6 +165,8 @@ export const normalizeProduct = (
       phone: "",
       email: "",
       pickupAddress: backendProduct.seller.pickup_address ?? "",
+      shippingFee: Number(backendProduct.seller.shipping_fee ?? 0),
+      shippingProviderName: backendProduct.seller.shipping_providers?.[0]?.name ?? "Tiêu chuẩn",
       shippingProviders: backendProduct.seller.shipping_providers?.map((p: any) => ({
         publicId: p.public_id,
         code: p.code,
@@ -187,6 +191,8 @@ export const normalizeProduct = (
       phone: "",
       email: "",
       pickupAddress: "",
+      shippingFee: 0,
+      shippingProviderName: "Tiêu chuẩn",
       shippingProviders: [],
       status: "APPROVED",
       totalSold: 0,
@@ -276,6 +282,8 @@ export async function fetchPublicShop(shopSlug: string) {
       phone: response.phone || "",
       email: response.email || "",
       pickupAddress: response.pickup_address || "",
+      shippingFee: Number(response.shipping_fee || 0),
+      shippingProviderName: response.shipping_providers?.[0]?.name || "Tiêu chuẩn",
       shippingProviders: response.shipping_providers?.map((p: any) => ({
         publicId: p.public_id,
         name: p.name,
@@ -309,6 +317,8 @@ export async function fetchFeaturedShops(limit: number = 10) {
       phone: r.phone || "",
       email: r.email || "",
       pickupAddress: r.pickup_address || "",
+      shippingFee: Number(r.shipping_fee || 0),
+      shippingProviderName: r.shipping_providers?.[0]?.name || "Tiêu chuẩn",
       shippingProviders: r.shipping_providers?.map((p: any) => ({
         publicId: p.public_id,
         name: p.name,

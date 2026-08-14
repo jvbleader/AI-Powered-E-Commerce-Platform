@@ -39,7 +39,6 @@ import {
 } from "@/lib/helpers";
 import {
   fetchProductDetail,
-  fetchRelatedProducts,
   fetchPublicProducts,
   fetchPublicShop,
 } from "@/services/product-api";
@@ -325,6 +324,8 @@ export default function ProductDetailPage() {
     phone: "",
     email: "",
     pickupAddress: "",
+    shippingFee: 0,
+    shippingProviderName: "Tiêu chuẩn",
     shippingProviders: [],
     status: "APPROVED",
     totalSold: 0,

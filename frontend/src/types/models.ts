@@ -1,5 +1,3 @@
-// Modified frontend/src/types/models.ts - added shopLogoUrl?: string to SellerApplication interface
-
 export type Role = "CUSTOMER" | "SELLER" | "ADMIN" | "SUPPORTER";
 export type UserStatus = "ACTIVE" | "LOCKED" | "DELETED";
 export type SellerStatus = "PENDING" | "APPROVED" | "REJECTED" | "SUSPENDED" | "CLOSED";
@@ -60,8 +58,19 @@ export interface Address {
   isDefault: boolean;
 }
 
+export interface ShippingProvider {
+  id?: number | string;
+  publicId?: string;
+  name: string;
+  code?: string;
+  fixedFee?: number;
+  logoUrl?: string;
+  active?: boolean;
+}
+
 export interface Shop {
   id: string;
+  publicId?: string;
   userId: string;
   shopName: string;
   shopSlug: string;
@@ -70,8 +79,9 @@ export interface Shop {
   phone: string;
   email: string;
   pickupAddress: string;
-  shippingFee: number;
-  shippingProviderName: string;
+  shippingFee?: number;
+  shippingProviderName?: string;
+  shippingProviders?: ShippingProvider[];
   status: SellerStatus;
   rejectedReason?: string;
   totalSold: number;
@@ -97,14 +107,25 @@ export interface SellerApplication {
   status?: SellerStatus;
   rejectedReason?: string;
   approvedAt?: string;
+  shopDescription?: string;
+  shippingProviderPublicIds?: string[];
+  shippingProviders?: ShippingProvider[];
 }
+
 export interface Category {
   id: string;
   name: string;
   slug: string;
+  sortOrder?: number;
+  isDefaultOther?: boolean;
   parentId?: string;
-  level: number;
+  level?: number;
   imageUrl?: string;
+}
+
+export interface Inventory {
+  quantity: number;
+  reservedQuantity: number;
 }
 
 export interface ProductVariant {
@@ -116,13 +137,10 @@ export interface ProductVariant {
   salePrice?: number;
   saleStartAt?: string;
   saleEndAt?: string;
-  imageUrl?: string;
+  imageUrl: string;
   status: VariantStatus;
+  inventory: Inventory;
   tierIndex?: number[];
-  inventory?: {
-    quantity: number;
-    reservedQuantity: number;
-  };
 }
 
 export interface Product {
@@ -130,10 +148,10 @@ export interface Product {
   sellerId: string;
   name: string;
   slug: string;
-  shortDescription?: string;
-  description?: string;
+  shortDescription: string;
+  description: string;
   brand?: string;
-  origin?: string;
+  origin: string;
   warranty?: string;
   status: ProductStatus;
   averageRating: number;
@@ -143,58 +161,196 @@ export interface Product {
   imageUrls: string[];
   thumbnailUrl: string;
   createdAt: string;
-  variantOptions?: {
-    name: string;
-    values: string[];
-  }[];
+  variantOptions?: any[];
+}
+
+export interface CartItem {
+  id: string;
+  variantId: string;
+  quantity: number;
+  isSelected: boolean;
 }
 
 export interface OrderItem {
   id: string;
-  orderId: string;
-  productId: string;
-  variantId: string;
-  quantity: number;
+  orderId?: string;
+  productId?: string;
+  variantId?: string;
+  productNameSnapshot: string;
+  variantNameSnapshot: string;
+  productImageSnapshot: string;
+  sellerNameSnapshot: string;
+  skuSnapshot: string;
   unitPrice: number;
-  totalPrice: number;
-  productName: string;
-  variantName: string;
-  imageUrl: string;
+  originalPriceSnapshot?: number;
+  quantity: number;
+  subtotal: number;
+  totalPrice?: number;
+  productName?: string;
+  variantName?: string;
+  imageUrl?: string;
+  isReviewed?: boolean;
+}
+
+export interface ShipmentSnapshot {
+  shippingProviderId?: number;
+  shippingProviderName?: string;
+  trackingCode?: string;
+  receiverName: string;
+  receiverPhone: string;
+  province: string;
+  district: string;
+  ward: string;
+  detailAddress: string;
+  addressType: AddressType;
+  shippedAt?: string;
+  deliveredAt?: string;
+  failedAt?: string;
+}
+
+export interface TimelineEntry {
+  id: string;
+  oldStatus?: OrderStatus;
+  newStatus: OrderStatus;
+  note: string;
+  createdAt: string;
 }
 
 export interface Order {
   id: string;
+  orderCode: string;
   userId: string;
-  shopId: string;
-  status: OrderStatus;
-  totalAmount: number;
+  sellerId: string;
+  shopDbId?: number;
+  shopName?: string;
+  shopSlug?: string;
+  shopId?: string;
+  orderStatus: OrderStatus;
+  status?: OrderStatus;
+  paymentStatus: PaymentStatus;
+  sellerConfirmed: boolean;
+  sellerConfirmedAt?: string;
+  subtotalAmount: number;
   shippingFee: number;
-  discountAmount: number;
-  finalAmount: number;
-  paymentMethod: string;
-  paymentStatus: string;
-  receiverName: string;
-  phone: string;
-  shippingAddress: string;
+  productDiscountAmount: number;
+  shippingDiscountAmount: number;
+  discountAmount?: number;
+  totalAmount: number;
+  finalAmount?: number;
+  customerNote?: string;
+  paymentMethod?: string;
+  preferredPaymentMethod?: PaymentMethod;
+  paymentExpiresAt: string;
+  sellerConfirmExpiresAt: string;
+  completedAt?: string;
+  cancelledAt?: string;
+  receiverName?: string;
+  phone?: string;
+  shippingAddress?: string;
+  items: OrderItem[];
+  shipment: ShipmentSnapshot;
+  timeline: TimelineEntry[];
   createdAt: string;
-  updatedAt: string;
-  items?: OrderItem[];
+  updatedAt?: string;
+  printCount: number;
 }
 
 export interface Payment {
   id: string;
-  orderId: string;
+  orderId?: string;
+  paymentCode: string;
+  userId: string;
+  paymentMethod: PaymentMethod;
+  method?: PaymentMethod;
+  paymentGateway?: string;
+  paymentStatus: PaymentStatus;
+  status?: PaymentStatus;
   amount: number;
-  method: PaymentMethod;
-  status: PaymentStatus;
+  transactionCode?: string;
   transactionId?: string;
+  expiresAt: string;
   paidAt?: string;
+  failedAt?: string;
+  cancelledAt?: string;
+  orderCodes: string[];
+  createdAt: string;
+}
+
+export interface Notification {
+  id: string;
+  userId: string;
+  title: string;
+  content: string;
+  type: "ORDER" | "PAYMENT" | "SELLER" | "REPORT" | "CHAT";
   createdAt: string;
 }
 
 export interface Conversation {
   id: string;
-  participants: string[];
+  title: string;
+  customerName: string;
+  assignedSupporter: string;
+  status: "OPEN" | "CLOSED";
+  mode: "AI" | "SUPPORTER";
+  lastMessageAt: string;
   lastMessage?: string;
-  updatedAt: string;
+  participants?: string[];
+  updatedAt?: string;
+  messages: {
+    id: string;
+    sender: "CUSTOMER" | "SUPPORTER" | "AI";
+    text: string;
+    createdAt: string;
+    isRead: boolean;
+  }[];
+}
+
+export type ViolationReportStatus = "PENDING" | "REVIEWING" | "RESOLVED" | "REJECTED";
+
+export interface ViolationReport {
+  id: string;
+  reporterId: string;
+  reporterName?: string;
+  reporterEmail?: string;
+  productId: string;
+  productPublicId?: string;
+  productName?: string;
+  productImage?: string;
+  reasonType: string;
+  description: string;
+  imageUrls?: string[];
+  status: ViolationReportStatus;
+  createdAt: string;
+  resolvedAt?: string;
+}
+
+export interface AppState {
+  sidebarCollapsed: boolean;
+  users: User[];
+  shops: Shop[];
+  categories: Category[];
+  products: Product[];
+  variants: ProductVariant[];
+  cartItems: CartItem[];
+  addresses: Address[];
+  orders: Order[];
+  payments: Payment[];
+  notifications: Notification[];
+  conversations: Conversation[];
+  violationReports?: ViolationReport[];
+  hiddenProductIds: string[];
+  sessionUserId?: string;
+  activeRole: Role | "GUEST";
+  activeShop?: Shop | null;
+  lastCheckoutPaymentCode?: string;
+  lastCheckoutOrderCodes?: string[];
+  lastCheckoutPaymentMethod?: PaymentMethod;
+}
+
+export interface VerificationContext {
+  registrationId?: string | null;
+  email: string;
+  phone: string;
+  emailVerified: boolean;
+  phoneVerified: boolean;
 }

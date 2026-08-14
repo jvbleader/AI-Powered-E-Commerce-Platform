@@ -8,7 +8,6 @@ import { fetchCategories } from "@/services/product-api";
 import { useMarketplaceStore } from "@/store/use-marketplace-store";
 import { MarketplaceHeader, MarketplaceFooter } from "@/components/shared/navbar";
 import { AuthHeader } from "@/components/shared/auth-header";
-import { MarketplaceHeaderSkeleton } from "@/components/shared/skeletons";
 import { ChatWidget } from "@/components/ai/ChatWidget";
 import { CustomerChatInboxProvider } from "@/components/ai/CustomerChatInboxProvider";
 
@@ -117,26 +116,16 @@ export default function MarketplaceLayout({
     <div className={`min-h-screen bg-canvas text-slate-900 flex flex-col justify-between ${!isAuthRoute ? "marketplace-layout-shell" : ""}`}>
       {isAuthRoute ? (
         <AuthHeader />
-      ) : !ready ? (
-        <MarketplaceHeaderSkeleton />
       ) : (
         <MarketplaceHeader />
       )}
 
       <ErrorBoundary>{children}</ErrorBoundary>
 
-      {ready && (
-        <>
-          <ChatWidget />
-          <MarketplaceFooter />
-        </>
-      )}
+      <ChatWidget />
+      <MarketplaceFooter />
     </div>
   );
-
-  if (!ready) {
-    return content;
-  }
 
   return (
     <CustomerChatInboxProvider>

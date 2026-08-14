@@ -92,7 +92,7 @@ export default function SellerOrdersPage() {
     if (noteFilter === "no" && order.customerNote) return false;
     if (shippingProviderFilter && order.shipment?.shippingProviderName !== shippingProviderFilter) return false;
     if (productFilters.length > 0) {
-      const match = order.items?.some(item => productFilters.includes(item.productId));
+      const match = order.items?.some(item => item.productId && productFilters.includes(item.productId));
       if (!match) return false;
     }
     return true;
@@ -122,7 +122,7 @@ export default function SellerOrdersPage() {
     actionName: string
   ) => {
     if (selectedOrderIds.size === 0) {
-      showToast("Bạn chưa chọn đơn hàng nào để thực hiện thao tác.", "warning");
+      showToast("Bạn chưa chọn đơn hàng nào để thực hiện thao tác.", "danger");
       return;
     }
 
@@ -162,7 +162,8 @@ export default function SellerOrdersPage() {
     store.state.orders
       .filter(o => o.sellerId === shop?.id)
       .flatMap(o => o.items || [])
-      .map(item => [item.productId, item.productNameSnapshot])
+      .filter(item => item.productId && item.productNameSnapshot)
+      .map(item => [item.productId!, item.productNameSnapshot!])
   )).map(([value, label]) => ({ value, label }));
 
   const availableShippingProviders = Array.from(new Set(

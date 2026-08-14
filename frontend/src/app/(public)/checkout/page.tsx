@@ -32,15 +32,15 @@ export default function CheckoutPage() {
   const rows = store.getCartRows();
   const rawGroups = selectedCheckoutGroups(rows);
   const groups = rawGroups.map(group => {
-    let providerId = shopShippingMap[group.shop.id];
+    let providerId: string | undefined = shopShippingMap[group.shop.id];
     
     // Default to first provider if not selected
     if (!providerId && group.shop.shippingProviders?.length) {
-      providerId = group.shop.shippingProviders[0].publicId;
+      providerId = group.shop.shippingProviders[0].publicId || String(group.shop.shippingProviders[0].id || "");
     }
 
-    const selectedProvider = group.shop.shippingProviders?.find(p => p.publicId === providerId);
-    const shippingFee = selectedProvider ? selectedProvider.fixedFee : 30000;
+    const selectedProvider = group.shop.shippingProviders?.find(p => (p.publicId || String(p.id || "")) === providerId);
+    const shippingFee = selectedProvider?.fixedFee ?? 30000;
     const total = group.subtotal + shippingFee;
     return { ...group, shippingFee, total, selectedProvider, effectiveProviderId: providerId };
   });
@@ -147,21 +147,24 @@ export default function CheckoutPage() {
                   <div className="mt-4 border-t border-line pt-3">
                     <Field label="Đơn vị vận chuyển">
                       <div className="grid gap-2 sm:grid-cols-2 mt-2">
-                        {group.shop.shippingProviders?.map((provider) => (
-                          <label key={provider.publicId} className="flex items-start gap-3 rounded-xl border border-line p-3 cursor-pointer hover:bg-canvas/50">
-                            <input
-                              type="radio"
-                              name={`shipping-${group.shop.id}`}
-                              className="mt-1 h-4 w-4 border-line text-primary focus:ring-primary"
-                              checked={group.effectiveProviderId === provider.publicId}
-                              onChange={() => setShopShippingMap(prev => ({ ...prev, [group.shop.id]: provider.publicId }))}
-                            />
-                            <div>
-                              <p className="font-bold text-ink">{provider.name}</p>
-                              <p className="text-xs text-muted">Phí: {provider.fixedFee.toLocaleString("vi-VN")}đ</p>
-                            </div>
-                          </label>
-                        ))}
+                        {group.shop.shippingProviders?.map((provider) => {
+                          const provId = provider.publicId || String(provider.id || "");
+                          return (
+                            <label key={provId} className="flex items-start gap-3 rounded-xl border border-line p-3 cursor-pointer hover:bg-canvas/50">
+                              <input
+                                type="radio"
+                                name={`shipping-${group.shop.id}`}
+                                className="mt-1 h-4 w-4 border-line text-primary focus:ring-primary"
+                                checked={group.effectiveProviderId === provId}
+                                onChange={() => setShopShippingMap(prev => ({ ...prev, [group.shop.id]: provId }))}
+                              />
+                              <div>
+                                <p className="font-bold text-ink">{provider.name}</p>
+                                <p className="text-xs text-muted">Phí: {(provider.fixedFee ?? 30000).toLocaleString("vi-VN")}đ</p>
+                              </div>
+                            </label>
+                          );
+                        })}
                       </div>
                     </Field>
                   </div>

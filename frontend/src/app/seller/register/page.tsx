@@ -190,7 +190,7 @@ export default function SellerRegisterPage() {
                   <MultiSelect
                     options={shippingProviders.map(p => ({
                       label: p.fixedFee ? `${p.name} (${Number(p.fixedFee).toLocaleString("vi-VN")}đ)` : p.name,
-                      value: p.publicId
+                      value: p.publicId ?? ""
                     }))}
                     value={form.shippingProviderPublicIds ?? []}
                     onChange={(val) => setForm(prev => ({ ...prev, shippingProviderPublicIds: val }))}

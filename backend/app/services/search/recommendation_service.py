@@ -267,14 +267,13 @@ async def get_suggestions_by_keywords(
     except Exception as e:
         logger.error(f"Error fetching hot products for suggestions: {e}")
 
-    # 3. Fetch Semantic Products
-    sem_hits_list = []
-    for i, kw in enumerate(keywords):
-        kw_size = alloc_kw[i]
-        kw_from = (page - 1) * kw_size
-        
+    # 3. Fetch Semantic Products (concurrently)
+    async def _fetch_kw_products(kw: str, kw_size: int) -> List[dict]:
         try:
+            kw_from = (page - 1) * kw_size
             kw_emb = await generate_query_embedding(kw)
+            if not kw_emb:
+                return []
             body = {
                 "query": {
                     "bool": {
@@ -295,9 +294,18 @@ async def get_suggestions_by_keywords(
                 "_source": {"excludes": ["embedding"]}
             }
             res = await es.search(index=PRODUCT_INDEX_ALIAS, body=body)
-            sem_hits_list.extend([hit["_source"] for hit in res.get("hits", {}).get("hits", [])])
+            return [hit["_source"] for hit in res.get("hits", {}).get("hits", [])]
         except Exception as e:
-            logger.error(f"Error fetching semantic products for keyword {kw}: {e}")
+            logger.error("Error fetching semantic products for keyword %s: %s", kw, e)
+            return []
+
+    if keywords:
+        import asyncio
+        kw_tasks = [_fetch_kw_products(kw, alloc_kw[i]) for i, kw in enumerate(keywords)]
+        kw_results = await asyncio.gather(*kw_tasks)
+        sem_hits_list = [hit for sublist in kw_results for hit in sublist]
+    else:
+        sem_hits_list = []
 
     # 4. Mix and Deduplicate
     mixed_results = []

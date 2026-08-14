@@ -166,7 +166,6 @@ export default function HomePageComponent() {
   const BadgeIconComponent = activeSlide.badgeIcon;
 
   useEffect(() => {
-    if (!store.ready) return;
     let isMounted = true;
     const loadHomeData = async () => {
       setLoading(true);
@@ -222,7 +221,7 @@ export default function HomePageComponent() {
     return () => {
       isMounted = false;
     };
-  }, [store.ready]);
+  }, []);
 
   const activeSuggestions = suggestions.filter(p => {
     const isHidden = store.state.hiddenProductIds.includes(p.id) || store.state.hiddenProductIds.includes(p.slug);
@@ -474,7 +473,12 @@ export default function HomePageComponent() {
 
         <div className="mt-6">
           {loading ? (
-            <CyberProductGridSkeleton count={24} />
+            <>
+              <CyberProductGridSkeleton count={48} />
+              <div className="mt-8 flex justify-center">
+                <Skeleton className="h-10 w-28 rounded-xl" />
+              </div>
+            </>
           ) : activeSuggestions.length > 0 ? (
             <>
               <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">

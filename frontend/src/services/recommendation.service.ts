@@ -1,5 +1,13 @@
 import { apiClient } from './api';
-import { ProductListResponse } from '../types/catalog';
+import { Product } from '@/types/models';
+
+export interface ProductListResponse {
+  items: Product[];
+  total: number;
+  page?: number;
+  size?: number;
+  pages?: number;
+}
 
 class RecommendationService {
   /**

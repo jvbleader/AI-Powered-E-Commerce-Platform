@@ -82,6 +82,7 @@ export type BackendSellerApplication = {
   shop_name: string;
   shop_slug?: string | null;
   shop_description?: string | null;
+  shop_logo_url?: string | null;
   phone: string;
   email: string;
   pickup_address: string;
@@ -197,6 +198,7 @@ export type SellerApplicationPayload = Pick<
   | "bankAccountName"
   | "shippingProviderPublicIds"
   | "shopDescription"
+  | "shopLogoUrl"
 >;
 
 

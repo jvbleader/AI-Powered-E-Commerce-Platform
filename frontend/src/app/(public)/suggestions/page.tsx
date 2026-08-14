@@ -24,7 +24,6 @@ function SuggestionsContent() {
   const [total, setTotal] = useState(0);
 
   useEffect(() => {
-    if (!store.ready) return;
     let isMounted = true;
     
     const loadData = async () => {
@@ -48,7 +47,7 @@ function SuggestionsContent() {
     return () => {
       isMounted = false;
     };
-  }, [store.ready, page]);
+  }, [page]);
 
   const activeProducts = products.filter(p => {
     const isHidden = store.state.hiddenProductIds.includes(p.id) || store.state.hiddenProductIds.includes(p.slug);
@@ -68,7 +67,7 @@ function SuggestionsContent() {
 
         <div className="mt-8">
           {loading ? (
-            <CyberProductGridSkeleton count={24} />
+            <CyberProductGridSkeleton count={48} />
           ) : activeProducts.length > 0 ? (
             <>
               <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
@@ -115,7 +114,7 @@ function SuggestionsContent() {
 
 export default function SuggestionsPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen p-8"><CyberProductGridSkeleton count={24} /></div>}>
+    <Suspense fallback={<div className="min-h-screen p-8"><CyberProductGridSkeleton count={48} /></div>}>
       <SuggestionsContent />
     </Suspense>
   );
