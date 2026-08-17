@@ -7,8 +7,11 @@ from models.seller import SellerProfile
 async def get_seller_profile_by_id(
     seller_id: int, db: AsyncSession
 ) -> SellerProfile:
+    from sqlalchemy.orm import selectinload
     result = await db.execute(
-        select(SellerProfile).where(SellerProfile.id == seller_id)
+        select(SellerProfile)
+        .options(selectinload(SellerProfile.shipping_providers))
+        .where(SellerProfile.id == seller_id)
     )
     return result.scalar_one_or_none()
 
@@ -28,8 +31,17 @@ async def get_seller_profile_by_user_id(
 async def get_seller_profile_by_public_id(
     public_id: str, db: AsyncSession
 ) -> SellerProfile:
+    from sqlalchemy.orm import selectinload
+    from sqlalchemy import or_
+    filters = [SellerProfile.public_id == public_id]
+    if str(public_id).isdigit():
+        filters.append(SellerProfile.id == int(public_id))
+    filters.append(SellerProfile.shop_slug == str(public_id))
+
     result = await db.execute(
-        select(SellerProfile).where(SellerProfile.public_id == public_id)
+        select(SellerProfile)
+        .options(selectinload(SellerProfile.shipping_providers))
+        .where(or_(*filters))
     )
     return result.scalar_one_or_none()
 

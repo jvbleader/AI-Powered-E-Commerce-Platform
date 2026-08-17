@@ -22,6 +22,14 @@ from schemas.seller.seller_application_schema import (
     SellerApplicationRequest,
     SellerDashboardSummaryResponse,
 )
+from schemas.catalog.category_suggestion_schema import (
+    CategorySuggestionCreateRequest,
+    CategorySuggestionPublicResponse,
+)
+from services.catalog.category_suggestion_service import (
+    create_category_suggestion,
+    get_seller_category_suggestions,
+)
 
 
 router = APIRouter(prefix="/seller", tags=["Seller"])
@@ -142,6 +150,30 @@ async def recalculate_dashboard_summary_api(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Lỗi hệ thống khi tính toán lại thống kê: {str(exc)}",
         )
+
+
+@router.post(path="/category-suggestions", response_model=CategorySuggestionPublicResponse, status_code=status.HTTP_201_CREATED)
+async def create_category_suggestion_api(
+    user: CurrentUser,
+    data: CategorySuggestionCreateRequest,
+    db: DBSession,
+) -> CategorySuggestionPublicResponse:
+    try:
+        result = await create_category_suggestion(user, data, db)
+        await db.commit()
+        return result
+    except Exception:
+        await db.rollback()
+        raise
+
+
+@router.get(path="/category-suggestions", response_model=list[CategorySuggestionPublicResponse])
+async def list_category_suggestions_api(
+    user: CurrentUser,
+    db: DBSession,
+) -> list[CategorySuggestionPublicResponse]:
+    result = await get_seller_category_suggestions(user, db)
+    return result
 
 
 

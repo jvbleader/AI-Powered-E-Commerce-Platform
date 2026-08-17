@@ -13,14 +13,31 @@ export function ProductCardInChat({ product }: { product: AIProductItem }) {
   const [adding, setAdding] = useState(false);
 
   const shopSlug = product.shop_slug || "shop";
-  const productHref = product.slug
-    ? `/shops/${shopSlug}/products/${product.slug}`
+  const targetIdentifier = product.slug || (product.id ? String(product.id) : "");
+  const productHref = targetIdentifier
+    ? `/shops/${shopSlug}/products/${targetIdentifier}`
     : `/search?q=${encodeURIComponent(product.name)}`;
 
   const targetVariantId = product.primary_variant_id || String(product.id);
-  const isOutOfStock = product.stock <= 0;
+  const stockNum =
+    typeof product.stock === "number" && !Number.isNaN(product.stock)
+      ? product.stock
+      : null;
+  const isOutOfStock = stockNum !== null && stockNum <= 0;
 
-  const handleAddToCart = async () => {
+  const priceNum =
+    typeof product.price === "number" && !Number.isNaN(product.price)
+      ? product.price
+      : null;
+  const salePriceNum =
+    typeof product.sale_price === "number" && !Number.isNaN(product.sale_price)
+      ? product.sale_price
+      : null;
+  const displayPrice = salePriceNum ?? priceNum;
+
+  const handleAddToCart = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
     if (isOutOfStock || adding) return;
     setAdding(true);
     try {
@@ -34,62 +51,84 @@ export function ProductCardInChat({ product }: { product: AIProductItem }) {
   };
 
   return (
-    <div className="w-[220px] shrink-0 overflow-hidden rounded-2xl border border-emerald-100/80 bg-white shadow-xs hover:shadow-md transition-all duration-200 hover:border-emerald-300">
-      <div className="relative aspect-square w-full bg-slate-50 overflow-hidden">
+    <div className="group relative w-[150px] shrink-0 overflow-hidden rounded-xl border border-slate-200/90 bg-white shadow-xs transition-all duration-200 hover:-translate-y-0.5 hover:border-emerald-300 hover:shadow-md flex flex-col">
+      {/* Top section: Square Thumbnail image */}
+      <Link href={productHref} className="block relative aspect-square w-full shrink-0 bg-slate-50 overflow-hidden">
         <img
           src={product.thumbnail_url || "/images/placeholder.png"}
           alt={product.name}
-          className="h-full w-full object-cover transition-transform duration-300 hover:scale-105"
+          className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
           onError={(e) => {
-            (e.target as HTMLImageElement).src = "https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=400&q=80";
+            (e.target as HTMLImageElement).src =
+              "https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=400&q=80";
           }}
         />
-        <div className="absolute top-2 left-2 z-10">
+        <div className="absolute top-1.5 left-1.5 z-10">
           {isOutOfStock ? (
-            <span className="rounded-full bg-rose-500/90 px-2.5 py-0.5 text-[10px] font-bold text-white backdrop-blur-xs shadow-xs">
+            <span className="rounded-md bg-rose-500/90 px-1.5 py-0.5 text-[9px] font-bold text-white shadow-xs">
               Hết hàng
             </span>
+          ) : stockNum !== null ? (
+            <span className="rounded-md bg-emerald-600/90 px-1.5 py-0.5 text-[9px] font-bold text-white shadow-xs">
+              Còn {stockNum}
+            </span>
           ) : (
-            <span className="rounded-full bg-emerald-600/90 px-2.5 py-0.5 text-[10px] font-bold text-white backdrop-blur-xs shadow-xs">
-              Còn {product.stock}
+            <span className="rounded-md bg-emerald-600/90 px-1.5 py-0.5 text-[9px] font-bold text-white shadow-xs">
+              Sẵn hàng
             </span>
           )}
         </div>
-      </div>
+      </Link>
 
-      <div className="p-3 space-y-1.5">
-        <h4 className="line-clamp-2 text-xs font-bold text-slate-800 leading-snug min-h-[32px]">
-          {product.name}
-        </h4>
-        <div className="flex items-baseline gap-1.5">
-          <span className="text-sm font-extrabold text-emerald-600">
-            {formatVnd(product.sale_price ?? product.price)}
-          </span>
-          {product.sale_price && (
-            <span className="text-[11px] text-slate-400 line-through">
-              {formatVnd(product.price)}
-            </span>
-          )}
-        </div>
-
-        <div className="pt-2 grid grid-cols-2 gap-1.5 border-t border-slate-100">
+      {/* Bottom section: Content & Actions */}
+      <div className="p-2 space-y-1.5 flex-1 flex flex-col justify-between">
+        <div>
           <Link
             href={productHref}
-            className="flex items-center justify-center gap-1 rounded-xl border border-slate-200 bg-slate-50 px-2 py-1.5 text-[11px] font-semibold text-slate-700 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-200 transition-all"
+            className="text-[11px] font-semibold text-slate-800 leading-snug hover:text-emerald-600 transition-colors block h-[30px] overflow-hidden"
+            style={{
+              display: "-webkit-box",
+              WebkitLineClamp: 2,
+              WebkitBoxOrient: "vertical",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+            }}
+            title={product.name}
           >
-            <span>Chi tiết</span>
-            <ExternalLink className="h-3 w-3" />
+            {product.name}
+          </Link>
+          <div className="flex items-baseline gap-1 mt-1">
+            <span className="text-xs font-bold text-emerald-600">
+              {displayPrice !== null ? formatVnd(displayPrice) : "Liên hệ"}
+            </span>
+            {salePriceNum !== null && priceNum !== null && priceNum > salePriceNum && (
+              <span className="text-[10px] text-slate-400 line-through">
+                {formatVnd(priceNum)}
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Action buttons */}
+        <div className="pt-1.5 grid grid-cols-2 gap-1 border-t border-slate-100">
+          <Link
+            href={productHref}
+            className="h-6 flex items-center justify-center gap-0.5 rounded-lg border border-slate-200 bg-slate-50 text-[10px] font-semibold text-slate-700 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-200 transition-colors"
+          >
+            <span>Xem</span>
+            <ExternalLink className="h-2.5 w-2.5" />
           </Link>
           <button
             onClick={handleAddToCart}
             disabled={isOutOfStock || adding}
-            className="flex items-center justify-center gap-1 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 px-2 py-1.5 text-[11px] font-bold text-white hover:from-emerald-700 hover:to-teal-700 disabled:opacity-50 transition-all shadow-xs"
+            className="h-6 flex items-center justify-center gap-0.5 rounded-lg bg-emerald-600 text-[10px] font-bold text-white hover:bg-emerald-700 disabled:opacity-50 transition-colors shadow-xs"
+            title="Thêm vào giỏ"
           >
             {adding ? (
-              <Loader2 className="h-3 w-3 animate-spin" />
+              <Loader2 className="h-2.5 w-2.5 animate-spin" />
             ) : (
               <>
-                <ShoppingCart className="h-3 w-3" />
+                <ShoppingCart className="h-2.5 w-2.5" />
                 <span>+Giỏ</span>
               </>
             )}
@@ -99,3 +138,4 @@ export function ProductCardInChat({ product }: { product: AIProductItem }) {
     </div>
   );
 }
+

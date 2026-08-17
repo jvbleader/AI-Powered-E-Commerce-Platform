@@ -36,99 +36,66 @@ def get_agent_tools(db: AsyncSession) -> List[Any]:
 
     @tool
     async def search_catalog(
-        keyword: Optional[str] = None,
-        category_id: Optional[int] = None,
+        query: Optional[str] = None,
+        category: Optional[str] = None,
         min_price: Optional[float] = None,
         max_price: Optional[float] = None,
+        brand: Optional[str] = None,
+        sort_by: Optional[str] = None,
         limit: int = 5,
     ) -> str:
-        """Tìm kiếm các sản phẩm đang hiển thị bán trên Shepoo. Sử dụng khi khách hàng hỏi về tìm kiếm, gợi ý hoặc hỏi tư vấn mua sản phẩm. Hỗ trợ lọc theo từ khóa, danh mục, khoảng giá."""
+        """Tìm kiếm các sản phẩm đang hiển thị bán trên sàn TMĐT Shepoo.
+
+        Sử dụng khi khách hàng hỏi về tìm kiếm, gợi ý sản phẩm, phong cách, tầm giá, hoặc nhu cầu mua sắm.
+        - `query`: Từ khóa loại sản phẩm cụ thể (ví dụ: 'áo khoác', 'ghế công thái học', 'nồi lẩu điện', 'tai nghe chống ồn'). Khi người dùng hỏi bằng mục đích/vấn đề/hoàn cảnh sử dụng, hãy phân tích và trích xuất thành tên loại sản phẩm/vật dụng cụ thể để tìm kiếm.
+        - `category`: Tên danh mục tiếng Việt (ví dụ: 'Thời trang nam', 'Điện tử', 'Gia dụng') hoặc category slug.
+        - `min_price`: Mức giá tối thiểu (VND).
+        - `max_price`: Mức giá tối đa (VND).
+        - `brand`: Tên thương hiệu.
+        - `sort_by`: Tiêu chí sắp xếp ('relevance', 'price_asc', 'price_desc', 'rating', 'best_selling').
+        - `limit`: Số lượng sản phẩm muốn lấy (mặc định 5).
+        """
         try:
-            import services.catalog.product_public_service as product_public_service
+            from ai.catalog_search import execute_multi_tier_catalog_search
 
-            category_slug = None
-            if category_id:
-                cat_stmt = select(Category.slug).where(Category.id == category_id)
-                cat_res = await db.execute(cat_stmt)
-                category_slug = cat_res.scalar_one_or_none()
-
-            listing = await product_public_service.get_public_product_list(
-                db,
-                keyword=keyword,
-                category_slug=category_slug,
+            result = await execute_multi_tier_catalog_search(
+                db=db,
+                query=query,
+                category=category,
                 min_price=min_price,
                 max_price=max_price,
-                sort_by="relevance" if keyword else "best_selling",
-                page=1,
-                size=max(1, min(limit, 20)),
+                brand=brand,
+                sort_by=sort_by,
+                limit=limit,
             )
-
-            result = []
-            for p in listing.items:
-                active_variants = [
-                    v for v in (p.variants or []) if getattr(v, "status", "") != "DELETED"
-                ]
-                first_variant = active_variants[0] if active_variants else None
-
-                prices = []
-                sale_prices = []
-                total_stock = 0
-                for v in active_variants:
-                    if getattr(v, "price", None) is not None:
-                        prices.append(float(v.price))
-                    if getattr(v, "sale_price", None) is not None:
-                        sale_prices.append(float(v.sale_price))
-                    inv = getattr(v, "inventory", None)
-                    if inv:
-                        qty = getattr(inv, "quantity", 0) or 0
-                        reserved = getattr(inv, "reserved_quantity", 0) or 0
-                        total_stock += max(0, qty - reserved)
-
-                min_p = min(prices) if prices else 0.0
-                min_sale_p = min(sale_prices) if sale_prices else None
-
-                thumbnail_url = ""
-                if p.images:
-                    thumb = next((img for img in p.images if img.is_thumbnail), None)
-                    thumbnail_url = (thumb or p.images[0]).image_url
-
-                seller = p.seller
-                shop_slug = (
-                    seller.shop_slug
-                    if seller and getattr(seller, "shop_slug", None)
-                    else "shop"
-                )
-                primary_variant_id = (
-                    str(first_variant.public_id)
-                    if first_variant and first_variant.public_id
-                    else p.public_id
-                )
-
-                result.append(
-                    {
-                        "id": p.public_id,
-                        "name": p.name,
-                        "brand": "",
-                        "price": min_p,
-                        "sale_price": min_sale_p,
-                        "stock": total_stock,
-                        "average_rating": float(p.average_rating or 0),
-                        "review_count": p.review_count or 0,
-                        "thumbnail_url": thumbnail_url or "",
-                        "slug": p.slug or "",
-                        "shop_slug": shop_slug,
-                        "primary_variant_id": primary_variant_id,
-                    }
-                )
-
             return json.dumps(result, ensure_ascii=False)
         except Exception as e:
-            return json.dumps({"error": str(e)}, ensure_ascii=False)
+            return json.dumps(
+                {"error": str(e), "match_type": "error", "items": []},
+                ensure_ascii=False,
+            )
 
     @tool
-    async def get_product_details(product_id: int) -> str:
-        """Lấy thông tin chi tiết của một sản phẩm bằng ID. Sử dụng khi khách hàng hỏi về thông số kỹ thuật, mô tả chi tiết hoặc danh sách phân loại (màu sắc, size)."""
+    async def get_product_details(product_id: str) -> str:
+        """Lấy thông tin chi tiết của một sản phẩm bằng ID (có thể là ID số, public_id chuỗi, hoặc slug sản phẩm). Sử dụng khi khách hàng hỏi về thông số kỹ thuật, mô tả chi tiết hoặc danh sách phân loại (màu sắc, size)."""
         try:
+            filters = [Product.status != "DELETED"]
+            if str(product_id).isdigit():
+                filters.append(
+                    or_(
+                        Product.id == int(product_id),
+                        Product.public_id == str(product_id),
+                        Product.slug == str(product_id),
+                    )
+                )
+            else:
+                filters.append(
+                    or_(
+                        Product.public_id == str(product_id),
+                        Product.slug == str(product_id),
+                    )
+                )
+
             stmt = (
                 select(Product)
                 .options(
@@ -137,7 +104,7 @@ def get_agent_tools(db: AsyncSession) -> List[Any]:
                     selectinload(Product.categories),
                     selectinload(Product.seller),
                 )
-                .where(Product.id == product_id, Product.status != "DELETED")
+                .where(*filters)
             )
             res = await db.execute(stmt)
             p = res.scalar_one_or_none()
@@ -147,6 +114,9 @@ def get_agent_tools(db: AsyncSession) -> List[Any]:
                 )
 
             variants_data = []
+            prices = []
+            sale_prices = []
+            total_stock = 0
             for v in p.variants or []:
                 if getattr(v, "status", "") == "DELETED":
                     continue
@@ -156,25 +126,59 @@ def get_agent_tools(db: AsyncSession) -> List[Any]:
                     qty = getattr(inv, "quantity", 0) or 0
                     reserved = getattr(inv, "reserved_quantity", 0) or 0
                     avail_stock = max(0, qty - reserved)
+                total_stock += avail_stock
+
+                v_price = float(v.price) if getattr(v, "price", None) is not None else None
+                v_sale = float(v.sale_price) if getattr(v, "sale_price", None) is not None else None
+                if v_price is not None:
+                    prices.append(v_price)
+                if v_sale is not None:
+                    sale_prices.append(v_sale)
 
                 variants_data.append(
                     {
                         "variant_id": v.id,
                         "sku": v.sku or "",
                         "variant_name": v.variant_name or "",
-                        "price": float(v.price) if getattr(v, "price", None) is not None else 0.0,
-                        "sale_price": float(v.sale_price)
-                        if getattr(v, "sale_price", None) is not None
-                        else None,
+                        "price": v_price if v_price is not None else 0.0,
+                        "sale_price": v_sale,
                         "available_stock": avail_stock,
                         "status": getattr(v, "status", "ACTIVE"),
                     }
                 )
 
+            thumbnail_url = None
+            if p.images:
+                for img in p.images:
+                    if getattr(img, "is_thumbnail", False):
+                        thumbnail_url = img.image_url
+                        break
+                if not thumbnail_url and len(p.images) > 0:
+                    thumbnail_url = p.images[0].image_url
+
+            min_p = min(prices) if prices else 0.0
+            min_sale_p = min(sale_prices) if sale_prices else None
+
+            seller = getattr(p, "seller", None)
+            shop_slug = getattr(seller, "shop_slug", "shop") if seller else "shop"
+
+            active_vars = [v for v in (p.variants or []) if getattr(v, "status", "") != "DELETED"]
+            first_var = active_vars[0] if active_vars else None
+            pub_id = getattr(first_var, "public_id", None) if first_var else None
+            var_id = getattr(first_var, "id", None) if first_var else None
+            primary_var_id = str(pub_id) if pub_id else (str(var_id) if var_id else str(p.id))
+
             data = {
                 "id": p.id,
                 "name": p.name,
                 "brand": p.brand or "",
+                "slug": p.slug or "",
+                "shop_slug": shop_slug,
+                "price": min_p,
+                "sale_price": min_sale_p,
+                "stock": total_stock,
+                "thumbnail_url": thumbnail_url or "",
+                "primary_variant_id": primary_var_id,
                 "origin": p.origin or "",
                 "warranty_info": p.warranty_info or "",
                 "short_description": p.short_description or "",

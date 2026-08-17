@@ -8,11 +8,13 @@ import { ChatMessageItem } from "./ChatMessageItem";
 function ChatMessageListInner({
   messages,
   isStreaming,
-  currentStatus
+  currentStatus,
+  onRetry
 }: {
   messages: AIChatMessage[];
   isStreaming?: boolean;
   currentStatus?: string | null;
+  onRetry?: () => void;
 }) {
   return (
     <div className="space-y-4">
@@ -21,6 +23,7 @@ function ChatMessageListInner({
           key={msg.id || idx}
           message={msg}
           isStreaming={isStreaming && idx === messages.length - 1 && msg.role === "assistant"}
+          onRetry={idx === messages.length - 1 ? onRetry : undefined}
         />
       ))}
 

@@ -76,3 +76,7 @@ docker-compose.tunnel.yml
 
 */tests
 /docs/other
+
+deploy.sh
+init-ssl.sh
+renew-ssl.sh

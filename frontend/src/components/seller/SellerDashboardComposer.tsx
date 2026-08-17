@@ -110,57 +110,57 @@ export function SellerDashboardComposer({
               }
             }}
             placeholder="Nhập phản hồi của bạn..."
-            className="w-full bg-transparent border-none focus:ring-0 resize-none py-3 px-4 text-sm max-h-[150px] overflow-y-auto"
+            className="w-full bg-transparent border-0 border-none outline-none focus:outline-none focus:ring-0 focus:border-none focus-visible:outline-none resize-none py-2.5 px-3.5 text-sm max-h-[150px] overflow-y-auto"
           />
-          <div className="flex items-center justify-between p-2 border-t border-slate-100 bg-slate-50/50">
-            <div className="flex items-center gap-1">
+          <div className="flex items-center justify-between px-2.5 py-1 border-t border-slate-100 bg-slate-50/50">
+            <div className="flex items-center gap-0.5">
               <button
                 type="button"
                 onClick={openImagePicker}
                 disabled={mediaUploading || !canAddMoreMedia}
-                className="p-2 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-full transition-colors disabled:opacity-50"
+                className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors disabled:opacity-50"
                 title={`Gửi hình ảnh (tối đa ${maxMediaFiles}, 2MB/ảnh)`}
               >
                 {mediaUploading ? (
-                  <Loader2 className="w-5 h-5 animate-spin" />
+                  <Loader2 className="w-4 h-4 animate-spin" />
                 ) : (
-                  <ImageIcon className="w-5 h-5" />
+                  <ImageIcon className="w-4 h-4" />
                 )}
               </button>
               <button
                 type="button"
                 onClick={openVideoPicker}
                 disabled={mediaUploading || !canAddMoreMedia}
-                className="p-2 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-full transition-colors disabled:opacity-50"
+                className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors disabled:opacity-50"
                 title={`Gửi video (tối đa ${maxMediaFiles}, 30MB/video)`}
               >
-                <Video className="w-5 h-5" />
+                <Video className="w-4 h-4" />
               </button>
               <button
                 id="product-popup-trigger"
                 type="button"
                 onClick={onToggleProductPopup}
-                className="p-2 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-full transition-colors"
+                className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
                 title="Gửi Sản phẩm"
               >
-                <ShoppingBag className="w-5 h-5" />
+                <ShoppingBag className="w-4 h-4" />
               </button>
               <button
                 id="order-popup-trigger"
                 type="button"
                 onClick={onToggleOrderPopup}
-                className="p-2 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-full transition-colors"
+                className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
                 title="Gửi Đơn hàng"
               >
-                <ClipboardList className="w-5 h-5" />
+                <ClipboardList className="w-4 h-4" />
               </button>
             </div>
             <button
               type="submit"
               disabled={!canSend}
-              className="p-2 text-emerald-600 hover:bg-emerald-100 disabled:text-slate-300 disabled:hover:bg-transparent rounded-lg transition-colors"
+              className="p-1.5 text-emerald-600 hover:bg-emerald-100 disabled:text-slate-300 disabled:hover:bg-transparent rounded-lg transition-colors"
             >
-              <Send className="w-5 h-5" />
+              <Send className="w-4 h-4" />
             </button>
           </div>
         </div>

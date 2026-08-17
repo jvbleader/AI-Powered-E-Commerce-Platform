@@ -1,10 +1,12 @@
 "use client";
 
 import React, { useCallback } from "react";
-import { Bot, Store } from "lucide-react";
+import { Bot, Store, Plus, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { formatChatListTime, formatAIChatTime } from "@/lib/chat-message-layout";
 import { SellerChatListItem } from "./SellerChatListItem";
 import type { SellerSessionSummary } from "@/types/chat";
+import type { AIChatSessionSummary } from "@/services/aiChatService";
 
 type SellerSessionSidebarProps = {
   activeTab: "AI" | "SELLER";
@@ -15,6 +17,12 @@ type SellerSessionSidebarProps = {
   onSelectShop: (shopId: number) => void;
   onConversationAction: (sessionId: string, action: string) => void;
   onSelectAi: () => void;
+  aiSessions?: AIChatSessionSummary[];
+  activeAiSessionId?: string;
+  isLoadingAiSessions?: boolean;
+  onSelectAiSession?: (sessionId: string) => void;
+  onNewAiChat?: () => void;
+  onDeleteAiSession?: (sessionId: string) => void;
 };
 
 function sessionsEqual(a: SellerSessionSummary[], b: SellerSessionSummary[]) {
@@ -41,6 +49,22 @@ function sessionsEqual(a: SellerSessionSummary[], b: SellerSessionSummary[]) {
   return true;
 }
 
+function aiSessionsEqual(a?: AIChatSessionSummary[], b?: AIChatSessionSummary[]) {
+  if (a === b) return true;
+  if (!a || !b) return a === b;
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (
+      a[i].sessionId !== b[i].sessionId ||
+      a[i].title !== b[i].title ||
+      a[i].updatedAt !== b[i].updatedAt
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
 function SellerSessionSidebarInner({
   activeTab,
   onTabChange,
@@ -50,6 +74,12 @@ function SellerSessionSidebarInner({
   onSelectShop,
   onConversationAction,
   onSelectAi,
+  aiSessions = [],
+  activeAiSessionId = "",
+  isLoadingAiSessions = false,
+  onSelectAiSession,
+  onNewAiChat,
+  onDeleteAiSession,
 }: SellerSessionSidebarProps) {
   const handleAiTab = useCallback(() => onTabChange("AI"), [onTabChange]);
   const handleSellerTab = useCallback(() => onTabChange("SELLER"), [onTabChange]);
@@ -79,22 +109,90 @@ function SellerSessionSidebarInner({
         </button>
       </div>
 
+      {activeTab === "AI" && onNewAiChat && (
+        <div className="p-2 border-b border-slate-200 bg-white">
+          <button
+            type="button"
+            onClick={onNewAiChat}
+            className="w-full py-2 px-3 rounded-xl border border-dashed border-emerald-300 bg-emerald-50/60 hover:bg-emerald-100/70 text-emerald-700 font-semibold text-xs transition-all flex items-center justify-center gap-2 shadow-xs group"
+          >
+            <Plus className="w-4 h-4 text-emerald-600 transition-transform group-hover:rotate-90 duration-200" />
+            <span>Tạo đoạn chat mới</span>
+          </button>
+        </div>
+      )}
+
       {/* Scroll native nhẹ — không dùng ChatScrollArea (thumb/MO/RO gây jank sidebar) */}
       <div className="chat-widget-scroll-native-hidden min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain">
         {activeTab === "AI" && (
-          <div
-            className="p-3 m-2 rounded-xl bg-white border border-emerald-200 cursor-pointer hover:bg-emerald-50"
-            onClick={onSelectAi}
-          >
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600">
-                <Bot className="w-6 h-6" />
-              </div>
-              <div>
-                <h4 className="font-bold text-sm text-slate-900">Shepoo AI</h4>
-                <p className="text-xs text-slate-500 truncate">Trợ lý mua sắm thông minh</p>
-              </div>
+          <div className="py-2">
+            <div className="text-[11px] font-bold text-slate-500 px-3.5 pb-2 uppercase tracking-wider">
+              Lịch sử trò chuyện
             </div>
+            {isLoadingAiSessions && aiSessions.length === 0 ? (
+              <div className="space-y-2 px-3">
+                <div className="h-12 rounded-lg bg-slate-200/60 animate-pulse" />
+                <div className="h-12 rounded-lg bg-slate-200/60 animate-pulse" />
+                <div className="h-12 rounded-lg bg-slate-200/60 animate-pulse" />
+              </div>
+            ) : aiSessions.length === 0 ? (
+              <div className="p-6 text-center text-slate-400 text-xs">
+                Chưa có lịch sử trò chuyện AI nào.
+              </div>
+            ) : (
+              <div className="divide-y divide-slate-200 border-y border-slate-200 bg-white">
+                {aiSessions.map((session) => {
+                  const isActive = activeAiSessionId === session.sessionId;
+                  return (
+                    <div
+                      key={session.sessionId}
+                      onClick={() => onSelectAiSession?.(session.sessionId)}
+                      className={cn(
+                        "group relative px-4 py-3 transition-colors cursor-pointer flex items-center justify-between gap-2.5",
+                        isActive
+                          ? "bg-emerald-50/90"
+                          : "bg-white hover:bg-slate-50"
+                      )}
+                    >
+                      {isActive && (
+                        <div className="absolute left-0 top-0 bottom-0 w-1 bg-emerald-600" />
+                      )}
+                      <div className="flex-1 min-w-0 pr-1">
+                        <h4
+                          className={cn(
+                            "text-[13px] truncate leading-snug",
+                            isActive ? "font-bold text-emerald-950" : "font-medium text-slate-800 group-hover:text-slate-950"
+                          )}
+                          title={session.title}
+                        >
+                          {session.title}
+                        </h4>
+                        <span className={cn(
+                          "inline-block text-[11px] mt-1 leading-none tabular-nums font-normal",
+                          isActive ? "text-emerald-700 font-medium" : "text-slate-400"
+                        )}>
+                          {formatAIChatTime(session.updatedAt || session.createdAt)}
+                        </span>
+                      </div>
+                      {onDeleteAiSession && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onDeleteAiSession(session.sessionId);
+                          }}
+                          className="opacity-0 group-hover:opacity-100 p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-md transition-all shrink-0"
+                          title="Xóa đoạn chat này"
+                          aria-label="Xóa đoạn chat này"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
         {activeTab === "SELLER" &&
@@ -135,8 +233,15 @@ function sidebarPropsEqual(
     prev.onSelectShop === next.onSelectShop &&
     prev.onConversationAction === next.onConversationAction &&
     prev.onSelectAi === next.onSelectAi &&
-    sessionsEqual(prev.sellerSessions, next.sellerSessions)
+    prev.activeAiSessionId === next.activeAiSessionId &&
+    prev.isLoadingAiSessions === next.isLoadingAiSessions &&
+    prev.onSelectAiSession === next.onSelectAiSession &&
+    prev.onNewAiChat === next.onNewAiChat &&
+    prev.onDeleteAiSession === next.onDeleteAiSession &&
+    sessionsEqual(prev.sellerSessions, next.sellerSessions) &&
+    aiSessionsEqual(prev.aiSessions, next.aiSessions)
   );
 }
 
 export const SellerSessionSidebar = React.memo(SellerSessionSidebarInner, sidebarPropsEqual);
+

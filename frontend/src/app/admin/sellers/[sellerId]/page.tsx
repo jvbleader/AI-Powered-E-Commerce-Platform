@@ -2,11 +2,12 @@
 
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { RefreshCcw } from "lucide-react";
+import { RefreshCcw, ArrowLeft, Store, Truck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { EmptyState, ErrorState } from "@/components/ui/feedback";
 import { Field, Textarea } from "@/components/ui/input";
 import { Panel, Section } from "@/components/ui/containers";
+import { StatusBadge } from "@/components/ui/badge";
 import { sellerStatusLabel } from "@/lib/helpers";
 import { useMarketplaceStore } from "@/store/use-marketplace-store";
 import type { SellerApplication, User } from "@/types/models";
@@ -15,7 +16,7 @@ function InfoRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-panel border border-line bg-white p-3">
       <p className="text-xs text-muted">{label}</p>
-      <p className="mt-1 font-semibold text-ink">{value}</p>
+      <p className="mt-1 font-semibold text-ink break-words">{value}</p>
     </div>
   );
 }
@@ -24,9 +25,9 @@ function NotFoundPage() {
   return (
     <main className="mx-auto max-w-2xl px-4 py-10">
       <EmptyState
-        title="Không tìm thấy route"
-        description="Đường dẫn không đúng hoặc không còn tồn tại."
-        action={<Button onClick={() => (window.location.href = "/")}>Về trang chủ</Button>}
+        title="Không tìm thấy người bán"
+        description="Hồ sơ người bán không đúng hoặc không tồn tại."
+        action={<Button onClick={() => (window.location.href = "/admin/sellers")}>Về danh sách người bán</Button>}
       />
     </main>
   );
@@ -137,43 +138,125 @@ export default function AdminSellerDetailPage() {
   const applicationStatus = application.status ?? "PENDING";
 
   return (
-    <Section title={`Seller ${application.shopName}`}>
+    <Section
+      title={
+        <div className="flex items-center gap-3">
+          <Button
+            variant="secondary"
+            className="h-8 px-2.5 text-xs flex items-center gap-1.5"
+            onClick={() => (window.location.href = "/admin/sellers")}
+          >
+            <ArrowLeft className="h-3.5 w-3.5" />
+            Danh sách
+          </Button>
+          <span className="font-bold text-lg">{application.shopName}</span>
+          <StatusBadge status={applicationStatus} label={sellerStatusLabel[applicationStatus as keyof typeof sellerStatusLabel] ?? applicationStatus} />
+        </div>
+      }
+      className="h-full overflow-y-auto pb-6 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
+    >
       <div className="grid gap-4 lg:grid-cols-[1fr_360px]">
-        <Panel>
-          <div className="grid gap-3 md:grid-cols-2">
-            <InfoRow label="Status" value={sellerStatusLabel[applicationStatus]} />
-            <InfoRow label="Owner" value={detail.user?.fullName ?? "-"} />
-            <InfoRow label="Email owner" value={detail.user?.email ?? "-"} />
-            <InfoRow label="Phone owner" value={detail.user?.phone ?? "-"} />
-            <InfoRow label="Shop email" value={application.email} />
-            <InfoRow label="Shop phone" value={application.phone} />
-            <InfoRow label="Slug" value={application.shopSlug ?? "-"} />
-            <InfoRow label="Tax code" value={application.taxCode} />
-            <InfoRow label="Bank" value={application.bankName} />
-            <InfoRow label="Bank account" value={application.bankAccountNumber} />
-            <InfoRow label="Account name" value={application.bankAccountName} />
-            <InfoRow label="Pickup" value={application.pickupAddress} />
-            <InfoRow label="Rejected reason" value={application.rejectedReason ?? "Không có"} />
-          </div>
-        </Panel>
+        <div className="flex flex-col gap-4">
+          {/* Shop Header card if logo or description exists */}
+          {(application.shopLogoUrl || application.shopDescription) && (
+            <Panel>
+              <div className="flex items-start gap-4">
+                {application.shopLogoUrl ? (
+                  <img
+                    src={application.shopLogoUrl}
+                    alt={application.shopName}
+                    className="w-16 h-16 rounded-panel object-cover border border-line"
+                  />
+                ) : (
+                  <div className="w-16 h-16 rounded-panel bg-primary/10 text-primary flex items-center justify-center border border-line">
+                    <Store className="w-8 h-8" />
+                  </div>
+                )}
+                <div>
+                  <h3 className="font-bold text-lg text-ink">{application.shopName}</h3>
+                  {application.shopSlug && (
+                    <p className="text-xs text-muted font-mono">slug: {application.shopSlug}</p>
+                  )}
+                  {application.shopDescription && (
+                    <p className="mt-2 text-sm text-ink leading-relaxed whitespace-pre-wrap">
+                      {application.shopDescription}
+                    </p>
+                  )}
+                </div>
+              </div>
+            </Panel>
+          )}
+
+          {/* Details info grid */}
+          <Panel>
+            <h3 className="font-bold text-base mb-3">Thông tin chi tiết</h3>
+            <div className="grid gap-3 md:grid-cols-2">
+              <InfoRow label="Trạng thái" value={sellerStatusLabel[applicationStatus as keyof typeof sellerStatusLabel] ?? applicationStatus} />
+              <InfoRow label="Chủ sở hữu" value={detail.user?.fullName ?? "-"} />
+              <InfoRow label="Email chủ sở hữu" value={detail.user?.email ?? "-"} />
+              <InfoRow label="SĐT chủ sở hữu" value={detail.user?.phone ?? "-"} />
+              <InfoRow label="Email cửa hàng" value={application.email} />
+              <InfoRow label="SĐT cửa hàng" value={application.phone} />
+              <InfoRow label="Slug cửa hàng" value={application.shopSlug ?? "-"} />
+              <InfoRow label="Mã số thuế" value={application.taxCode} />
+              <InfoRow label="Ngân hàng" value={application.bankName} />
+              <InfoRow label="Số tài khoản" value={application.bankAccountNumber} />
+              <InfoRow label="Chủ tài khoản" value={application.bankAccountName} />
+              <InfoRow label="Địa chỉ lấy hàng" value={application.pickupAddress} />
+              {application.approvedAt && (
+                <InfoRow label="Ngày duyệt" value={new Date(application.approvedAt).toLocaleString("vi-VN")} />
+              )}
+              <InfoRow label="Lý do từ chối" value={application.rejectedReason ?? "Không có"} />
+            </div>
+          </Panel>
+
+          {/* Shipping providers */}
+          {application.shippingProviders && application.shippingProviders.length > 0 && (
+            <Panel>
+              <h3 className="font-bold text-base mb-3 flex items-center gap-2">
+                <Truck className="h-4 w-4 text-primary" />
+                Đơn vị vận chuyển đã cấu hình ({application.shippingProviders.length})
+              </h3>
+              <div className="grid gap-2.5 sm:grid-cols-2">
+                {application.shippingProviders.map((sp) => (
+                  <div key={sp.code || sp.publicId || sp.name} className="p-3 bg-canvas rounded-panel border border-line flex items-center gap-3">
+                    {sp.logoUrl && (
+                      <img src={sp.logoUrl} alt={sp.name} className="w-8 h-8 rounded object-contain border border-line" />
+                    )}
+                    <div>
+                      <p className="font-semibold text-sm text-ink">{sp.name}</p>
+                      <p className="text-xs text-muted">Mã: {sp.code || "-"}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </Panel>
+          )}
+        </div>
+
+        {/* Review panel */}
         <Panel className="h-fit">
-          <h3 className="font-bold">Review</h3>
+          <h3 className="font-bold text-base">Kiểm duyệt hồ sơ</h3>
           <div className="mt-3 grid gap-3">
             <Field label="Lý do từ chối">
-              <Textarea value={rejectReason} onChange={(event) => setRejectReason(event.target.value)} />
+              <Textarea
+                placeholder="Nhập lý do từ chối hồ sơ (nếu từ chối)..."
+                value={rejectReason}
+                onChange={(event) => setRejectReason(event.target.value)}
+              />
             </Field>
             <Button
               disabled={reviewing || applicationStatus !== "PENDING"}
               onClick={() => reviewApplication("approve")}
             >
-              Approve
+              Phê duyệt (Approve)
             </Button>
             <Button
               variant="danger"
               disabled={reviewing || applicationStatus !== "PENDING"}
               onClick={() => reviewApplication("reject")}
             >
-              Reject
+              Từ chối (Reject)
             </Button>
           </div>
         </Panel>

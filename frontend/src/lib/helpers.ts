@@ -15,12 +15,16 @@ import type {
   User
 } from "@/types/models";
 
-export const formatVnd = (value: number) =>
-  new Intl.NumberFormat("vi-VN", {
+export const formatVnd = (value?: number | string | null) => {
+  if (value === null || value === undefined || value === "") return "Liên hệ";
+  const num = typeof value === "number" ? value : Number(value);
+  if (Number.isNaN(num)) return "Liên hệ";
+  return new Intl.NumberFormat("vi-VN", {
     style: "currency",
     currency: "VND",
     maximumFractionDigits: 0
-  }).format(value);
+  }).format(num);
+};
 
 /** API datetimes are UTC but often serialized without a timezone suffix. */
 export function parseApiDateTime(value?: string | Date): Date | null {

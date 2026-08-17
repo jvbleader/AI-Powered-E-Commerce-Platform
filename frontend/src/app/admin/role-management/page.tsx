@@ -1,127 +1,76 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Search, UserPlus, Shield, UserCheck, Key, Phone, Mail, User as UserIcon } from "lucide-react";
+import { Search, RefreshCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { DataTable } from "@/components/ui/data-table";
-import { Input, Checkbox, Field } from "@/components/ui/input";
+import { Input, Field, Select } from "@/components/ui/input";
 import { Panel, Section } from "@/components/ui/containers";
+import { DataTable } from "@/components/ui/data-table";
 import { StatusBadge } from "@/components/ui/badge";
 import { useMarketplaceStore } from "@/store/use-marketplace-store";
-import { TableSkeleton } from "@/components/ui/skeleton";
 import { apiFetch } from "@/services/api";
-import type { User, Role } from "@/types/models";
+import type { User } from "@/types/models";
+import { cn } from "@/lib/utils";
 
 const normalizeUser = (u: any): User => ({
   id: u.publicId ?? u.public_id ?? u.email,
   fullName: u.fullName ?? u.full_name ?? u.fullname ?? u.email,
   email: u.email,
   phone: u.phone,
-  avatarUrl: u.avatarUrl ?? u.avatar_url ?? "https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=240&q=80",
+  avatarUrl:
+    u.avatarUrl ??
+    u.avatar_url ??
+    "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=240&q=80",
   status: u.status ?? "ACTIVE",
   roles: u.roles ?? ["CUSTOMER"],
   emailVerified: Boolean(u.emailVerifiedAt ?? u.email_verified_at),
   phoneVerified: Boolean(u.phoneVerifiedAt ?? u.phone_verified_at),
-  gender: u.gender ?? undefined,
-  birthday: u.dateOfBirth ?? u.date_of_birth ?? undefined,
-  lockedUntil: u.lockedUntil ?? u.locked_until ?? undefined,
-  lockReason: u.lockReason ?? u.lock_reason ?? undefined,
 });
 
 export default function RoleManagementPage() {
   const store = useMarketplaceStore();
   const { showToast } = store;
+  const currentUser = store.getCurrentUser();
 
-  const [activeTab, setActiveTab] = useState<"assign" | "create">("assign");
   const [usersList, setUsersList] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
+  const [roleFilter, setRoleFilter] = useState<"ALL" | "ADMIN" | "SUPPORTER">("ALL");
 
-  // Create Form State
+  // Form State
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
-  const [selectedRoles, setSelectedRoles] = useState<string[]>(["ADMIN"]);
+  const [selectedRole, setSelectedRole] = useState<"ADMIN" | "SUPPORTER">("ADMIN");
   const [submitting, setSubmitting] = useState(false);
 
-  // Fetch users from database on load
-  const fetchUsers = async () => {
+  const fetchStaffUsers = async () => {
     setLoading(true);
     try {
       const data = await apiFetch<any[]>("/admin/users");
       const normalized = data.map(normalizeUser);
-      store.setUsers(normalized);
       setUsersList(normalized);
+      store.setUsers(normalized);
     } catch (err: any) {
-      console.error(err);
-      showToast(err.message ?? "Không thể tải danh sách người dùng từ Database.", "danger");
+      showToast(err.message || "Không thể tải danh sách tài khoản.", "danger");
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchUsers();
+    fetchStaffUsers();
   }, []);
-
-  const handleToggleRole = async (targetUser: User, roleToToggle: string) => {
-    let nextRoles = [...targetUser.roles];
-    const isAdding = !nextRoles.includes(roleToToggle as Role);
-
-    if (isAdding) {
-      if (roleToToggle === "ADMIN") {
-        nextRoles = nextRoles.filter((r) => r !== "SUPPORTER" && r !== "CUSTOMER");
-        nextRoles.push("ADMIN");
-      } else if (roleToToggle === "SUPPORTER") {
-        if (targetUser.id === store.getCurrentUser()?.id && targetUser.roles.includes("ADMIN")) {
-          showToast("Bạn không thể tự chuyển quyền Admin thành Supporter của chính mình.", "danger");
-          return;
-        }
-        nextRoles = nextRoles.filter((r) => r !== "ADMIN" && r !== "CUSTOMER");
-        nextRoles.push("SUPPORTER");
-      } else {
-        nextRoles.push(roleToToggle as Role);
-      }
-    } else {
-      // Prevent self-revoking admin role
-      if (targetUser.id === store.getCurrentUser()?.id && roleToToggle === "ADMIN") {
-        showToast("Bạn không thể tự thu hồi quyền Admin của chính mình.", "danger");
-        return;
-      }
-      nextRoles = nextRoles.filter((r) => r !== roleToToggle);
-    }
-
-    // Default to CUSTOMER if no roles left
-    if (nextRoles.length === 0) {
-      nextRoles.push("CUSTOMER");
-    }
-
-    try {
-      const updatedUser = await apiFetch<any>(`/admin/users/${targetUser.id}/roles`, {
-        method: "PUT",
-        body: JSON.stringify({ roles: nextRoles })
-      });
-      const normalized = normalizeUser(updatedUser);
-
-      const nextUsers = store.state.users.map((u) => u.id === targetUser.id ? normalized : u);
-      store.setUsers(nextUsers);
-      setUsersList(nextUsers);
-      showToast(`Đã cập nhật quyền thành công cho ${targetUser.fullName}.`, "success");
-    } catch (error: any) {
-      console.error(error);
-      showToast(error.message ?? "Lỗi cập nhật vai trò người dùng.", "danger");
-    }
-  };
 
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!fullName || !email || !phone || !password) {
-      showToast("Vui lòng điền đầy đủ tất cả thông tin bắt buộc.", "danger");
+    if (!fullName.trim() || !email.trim() || !phone.trim() || !password) {
+      showToast("Vui lòng nhập đầy đủ thông tin.", "danger");
       return;
     }
     if (password.length < 8) {
-      showToast("Mật khẩu phải chứa ít nhất 8 ký tự.", "danger");
+      showToast("Mật khẩu phải có ít nhất 8 ký tự.", "danger");
       return;
     }
 
@@ -130,299 +79,237 @@ export default function RoleManagementPage() {
       const created = await apiFetch<any>("/admin/users", {
         method: "POST",
         body: JSON.stringify({
-          full_name: fullName,
-          email,
-          phone,
+          full_name: fullName.trim(),
+          email: email.trim(),
+          phone: phone.trim(),
           password,
-          roles: selectedRoles
+          roles: [selectedRole]
         })
       });
 
       const normalized = normalizeUser(created);
-
-      const nextUsers = [normalized, ...store.state.users];
-      store.setUsers(nextUsers);
+      const nextUsers = [normalized, ...usersList];
       setUsersList(nextUsers);
+      store.setUsers(nextUsers);
 
-      showToast(`Đã tạo thành công tài khoản ${normalized.fullName} trong Database.`, "success");
+      showToast(`Đã tạo tài khoản ${normalized.fullName} thành công.`, "success");
 
-      // Reset Form
       setFullName("");
       setEmail("");
       setPhone("");
       setPassword("");
-      setSelectedRoles(["ADMIN"]);
-      setActiveTab("assign");
     } catch (error: any) {
-      console.error(error);
-      showToast(error.message ?? "Lỗi tạo tài khoản mới.", "danger");
+      showToast(error.message || "Không thể tạo tài khoản.", "danger");
     } finally {
       setSubmitting(false);
     }
   };
 
-  const handleToggleRoleSelection = (role: string) => {
-    if (selectedRoles.includes(role)) {
-      const next = selectedRoles.filter((r) => r !== role);
-      setSelectedRoles(next.length === 0 ? ["ADMIN"] : next);
-    } else {
-      if (role === "ADMIN") {
-        setSelectedRoles(["ADMIN"]);
-      } else if (role === "SUPPORTER") {
-        setSelectedRoles(["SUPPORTER"]);
-      } else if (role === "CUSTOMER") {
-        setSelectedRoles(["CUSTOMER"]);
-      } else {
-        setSelectedRoles([...selectedRoles.filter((r) => r !== "ADMIN" && r !== "SUPPORTER"), role]);
-      }
+  const handleToggleLock = async (user: User) => {
+    if (user.id === currentUser?.id) {
+      showToast("Không thể tự khóa tài khoản đang đăng nhập.", "danger");
+      return;
+    }
+    try {
+      const updated = await apiFetch<any>(`/admin/users/${user.id}/toggle-lock`, { method: "POST" });
+      const normalized = normalizeUser(updated);
+      const nextUsers = usersList.map((u) => (u.id === user.id ? normalized : u));
+      setUsersList(nextUsers);
+      store.setUsers(nextUsers);
+      showToast(`Đã ${normalized.status === "LOCKED" ? "khóa" : "mở khóa"} tài khoản ${user.fullName}.`, "success");
+    } catch (err: any) {
+      showToast(err.message || "Lỗi thao tác tài khoản.", "danger");
     }
   };
 
-  const filteredUsers = usersList.filter(
-    (user) =>
-      user.fullName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      user.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      user.phone.includes(searchQuery)
+  const staffUsers = usersList.filter(
+    (u) => u.roles.includes("ADMIN") || u.roles.includes("SUPPORTER")
   );
 
+  const filteredStaff = staffUsers.filter((user) => {
+    const q = searchQuery.toLowerCase().trim();
+    const matchText = !q || user.fullName.toLowerCase().includes(q) || user.email.toLowerCase().includes(q) || user.phone.includes(q);
+    if (!matchText) return false;
+    if (roleFilter === "ADMIN" && !user.roles.includes("ADMIN")) return false;
+    if (roleFilter === "SUPPORTER" && !user.roles.includes("SUPPORTER")) return false;
+    return true;
+  });
+
   return (
-    <Section
-      title="Quản lý phân quyền"
-      description="Cấp quyền Admin & Supporter trực tiếp vào Database, hoặc khởi tạo tài khoản quản trị mới."
-    >
-      {/* Premium Tabs */}
-      <div className="flex gap-2 border-b border-line pb-px mb-6">
-        <button
-          onClick={() => setActiveTab("assign")}
-          className={`flex items-center gap-2 px-5 py-3 font-semibold text-sm border-b-2 transition duration-200 -mb-px ${
-            activeTab === "assign"
-              ? "border-primary text-primary font-bold"
-              : "border-transparent text-muted hover:text-ink"
-          }`}
-        >
-          <UserCheck className="h-4 w-4" />
-          Cấp quyền tài khoản có sẵn
-        </button>
-        <button
-          onClick={() => setActiveTab("create")}
-          className={`flex items-center gap-2 px-5 py-3 font-semibold text-sm border-b-2 transition duration-200 -mb-px ${
-            activeTab === "create"
-              ? "border-primary text-primary font-bold"
-              : "border-transparent text-muted hover:text-ink"
-          }`}
-        >
-          <UserPlus className="h-4 w-4" />
-          Tạo tài khoản quản trị mới
-        </button>
-      </div>
+    <Section title="Tạo tài khoản">
+      <div className="grid gap-5 lg:grid-cols-12 items-start">
+        {/* Form Panel */}
+        <div className="lg:col-span-4">
+          <Panel className="p-4 space-y-4">
+            <h3 className="font-bold text-ink text-sm">Thêm tài khoản mới</h3>
 
-      {activeTab === "assign" ? (
-        <div className="grid gap-4">
-          <Panel>
-            <div className="flex flex-col sm:flex-row gap-3 justify-between items-center mb-4">
-              <div className="relative w-full sm:max-w-md">
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
-                <Input
-                  placeholder="Tìm kiếm theo Tên, Email hoặc Số điện thoại..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-9 bg-canvas border-line focus:border-primary focus:ring-1 focus:ring-primary/20"
-                />
-              </div>
-              <Button onClick={fetchUsers} variant="secondary" className="w-full sm:w-auto">
-                Làm mới danh sách
-              </Button>
-            </div>
-
-            {loading ? (
-              <div className="py-10"><TableSkeleton headers={["Người dùng", "Liên hệ", "Trạng thái", "Vai trò Admin", "Vai trò Supporter", "Hành động"]} rows={8} /></div>
-            ) : filteredUsers.length === 0 ? (
-              <div className="py-10 text-center text-muted">Không tìm thấy người dùng phù hợp.</div>
-            ) : (
-              <div className="overflow-x-auto">
-                <DataTable
-                  columns={["Người dùng", "Liên hệ", "Trạng thái", "Vai trò Admin", "Vai trò Supporter", "Hành động"]}
-                  rows={filteredUsers.map((user) => [
-                    <div key="user" className="flex items-center gap-3 py-1">
-                      <img
-                        src={user.avatarUrl}
-                        alt={user.fullName}
-                        className="h-9 w-9 rounded-full object-cover border border-line"
-                      />
-                      <div>
-                        <p className="font-bold text-ink leading-tight">{user.fullName}</p>
-                        <p className="text-xs text-muted mt-0.5">
-                          {user.roles.includes("ADMIN") ? (
-                            <span className="text-amber font-semibold">Admin</span>
-                          ) : user.roles.includes("SUPPORTER") ? (
-                            <span className="text-sky font-semibold">Supporter</span>
-                          ) : (
-                            <span>Khách hàng</span>
-                          )}
-                        </p>
-                      </div>
-                    </div>,
-                    <div key="contact">
-                      <p className="text-sm font-medium text-ink">{user.email}</p>
-                      <p className="text-xs text-muted mt-0.5">{user.phone || "Không có SĐT"}</p>
-                    </div>,
-                    <StatusBadge key="status" status={user.status} label={user.status === "ACTIVE" ? "Đang hoạt động" : "Bị khóa"} />,
-                    <div key="admin-role" className="flex justify-center">
-                      <Checkbox
-                        label={<span className="text-xs text-muted font-semibold">ADMIN</span>}
-                        checked={user.roles.includes("ADMIN")}
-                        disabled={user.id === store.getCurrentUser()?.id}
-                        onChange={() => handleToggleRole(user, "ADMIN")}
-                      />
-                    </div>,
-                    <div key="supporter-role" className="flex justify-center">
-                      <Checkbox
-                        label={<span className="text-xs text-muted font-semibold">SUPPORTER</span>}
-                        checked={user.roles.includes("SUPPORTER")}
-                        onChange={() => handleToggleRole(user, "SUPPORTER")}
-                      />
-                    </div>,
-                    <div key="actions" className="flex gap-2">
-                      <Button
-                        variant={user.status === "LOCKED" ? "secondary" : "danger"}
-                        onClick={() => store.toggleUserLock(user.id)}
-                        disabled={user.id === store.getCurrentUser()?.id}
-                        className="text-xs py-1 px-3 h-8 min-h-8 font-bold"
-                      >
-                        {user.status === "LOCKED" ? "Mở khóa" : "Khóa"}
-                      </Button>
-                    </div>
-                  ])}
-                />
-              </div>
-            )}
-          </Panel>
-        </div>
-      ) : (
-        <Panel className="max-w-3xl mx-auto shadow-md border-line">
-          <div className="mb-6 border-b border-line pb-4 flex items-center gap-3">
-            <div className="bg-primary/10 text-primary p-2.5 rounded-panel">
-              <Shield className="h-6 w-6" />
-            </div>
-            <div>
-              <h3 className="text-lg font-bold text-ink">Thêm tài khoản quản trị mới</h3>
-              <p className="text-sm text-muted">Tài khoản tạo ở đây sẽ được ghi trực tiếp vào Database ở trạng thái Active.</p>
-            </div>
-          </div>
-
-          <form onSubmit={handleCreateUser} className="space-y-4">
-            <div className="grid gap-4 sm:grid-cols-2">
+            <form onSubmit={handleCreateUser} className="space-y-3">
               <Field label="Họ và tên">
-                <div className="relative">
-                  <UserIcon className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
-                  <Input
-                    placeholder="Nguyễn Văn A"
-                    required
-                    value={fullName}
-                    onChange={(e) => setFullName(e.target.value)}
-                    className="pl-9"
-                  />
-                </div>
+                <Input
+                  placeholder="Nguyễn Văn A"
+                  required
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                />
               </Field>
 
-              <Field label="Mật khẩu khởi tạo">
-                <div className="relative">
-                  <Key className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
-                  <Input
-                    type="password"
-                    placeholder="Tối thiểu 8 ký tự"
-                    required
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="pl-9"
-                  />
-                </div>
-              </Field>
-
-              <Field label="Địa chỉ Email">
-                <div className="relative">
-                  <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
-                  <Input
-                    type="email"
-                    placeholder="email@example.com"
-                    required
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="pl-9"
-                  />
-                </div>
+              <Field label="Email">
+                <Input
+                  type="email"
+                  placeholder="name@example.com"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                />
               </Field>
 
               <Field label="Số điện thoại">
-                <div className="relative">
-                  <Phone className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
+                <Input
+                  type="tel"
+                  placeholder="0912345678"
+                  required
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                />
+              </Field>
+
+              <Field label="Mật khẩu">
+                <Input
+                  type="password"
+                  placeholder="Tối thiểu 8 ký tự"
+                  required
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                />
+              </Field>
+
+              <Field label="Vai trò">
+                <Select
+                  value={selectedRole}
+                  onChange={(e) => setSelectedRole(e.target.value as "ADMIN" | "SUPPORTER")}
+                >
+                  <option value="ADMIN">Quản trị viên (Admin)</option>
+                  <option value="SUPPORTER">Hỗ trợ viên (Supporter)</option>
+                </Select>
+              </Field>
+
+              <div className="pt-2">
+                <Button type="submit" disabled={submitting} className="w-full">
+                  {submitting ? "Đang tạo..." : "Tạo tài khoản"}
+                </Button>
+              </div>
+            </form>
+          </Panel>
+        </div>
+
+        {/* Staff List Panel */}
+        <div className="lg:col-span-8">
+          <Panel className="p-4 space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <h3 className="font-bold text-ink text-sm">
+                Danh sách nhân sự ({filteredStaff.length})
+              </h3>
+
+              <div className="flex items-center gap-2">
+                <div className="relative w-full sm:w-56">
+                  <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted" />
                   <Input
-                    type="tel"
-                    placeholder="Ví dụ: 0912345678"
-                    required
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    className="pl-9"
+                    placeholder="Tìm kiếm..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pl-8 text-xs h-8"
                   />
                 </div>
-              </Field>
-            </div>
 
-            <div className="border-t border-line pt-4 mt-6">
-              <label className="block text-sm font-semibold text-ink mb-3">Vai trò tài khoản (Chọn ít nhất một):</label>
-              <div className="flex flex-wrap gap-4">
-                <label className="inline-flex items-center gap-2 cursor-pointer bg-canvas px-4 py-2.5 rounded-panel border border-line hover:border-primary/45 transition">
-                  <input
-                    type="checkbox"
-                    checked={selectedRoles.includes("ADMIN")}
-                    onChange={() => handleToggleRoleSelection("ADMIN")}
-                    className="h-4 w-4 accent-primary"
-                  />
-                  <div>
-                    <p className="text-sm font-bold text-ink">Quản trị viên (ADMIN)</p>
-                    <p className="text-xs text-muted">Toàn quyền cấu hình, duyệt shop, phân quyền.</p>
-                  </div>
-                </label>
+                <div className="flex items-center rounded-lg bg-slate-100 p-0.5 border border-line shrink-0">
+                  {(
+                    [
+                      { key: "ALL", label: "Tất cả" },
+                      { key: "ADMIN", label: "Admin" },
+                      { key: "SUPPORTER", label: "Supporter" },
+                    ] as const
+                  ).map((tab) => (
+                    <button
+                      key={tab.key}
+                      type="button"
+                      onClick={() => setRoleFilter(tab.key)}
+                      className={cn(
+                        "px-2 py-1 text-xs font-semibold rounded-md transition-colors",
+                        roleFilter === tab.key ? "bg-white text-ink shadow-xs" : "text-muted hover:text-ink"
+                      )}
+                    >
+                      {tab.label}
+                    </button>
+                  ))}
+                </div>
 
-                <label className="inline-flex items-center gap-2 cursor-pointer bg-canvas px-4 py-2.5 rounded-panel border border-line hover:border-primary/45 transition">
-                  <input
-                    type="checkbox"
-                    checked={selectedRoles.includes("SUPPORTER")}
-                    onChange={() => handleToggleRoleSelection("SUPPORTER")}
-                    className="h-4 w-4 accent-primary"
-                  />
-                  <div>
-                    <p className="text-sm font-bold text-ink">Nhân viên hỗ trợ (SUPPORTER)</p>
-                    <p className="text-xs text-muted">Tham gia chat chăm sóc khách hàng, giải quyết khiếu nại.</p>
-                  </div>
-                </label>
-
-                <label className="inline-flex items-center gap-2 cursor-pointer bg-canvas px-4 py-2.5 rounded-panel border border-line hover:border-primary/45 transition opacity-60">
-                  <input
-                    type="checkbox"
-                    checked={selectedRoles.includes("CUSTOMER")}
-                    onChange={() => handleToggleRoleSelection("CUSTOMER")}
-                    className="h-4 w-4 accent-primary"
-                  />
-                  <div>
-                    <p className="text-sm font-bold text-ink font-medium">Người mua hàng (CUSTOMER)</p>
-                    <p className="text-xs text-muted">Quyền truy cập mua sắm thông thường (Mặc định).</p>
-                  </div>
-                </label>
+                <Button
+                  variant="secondary"
+                  onClick={fetchStaffUsers}
+                  disabled={loading}
+                  className="text-xs h-8 px-2.5 shrink-0"
+                  title="Làm mới danh sách"
+                >
+                  <RefreshCcw className={cn("h-3.5 w-3.5", loading && "animate-spin")} />
+                </Button>
               </div>
             </div>
 
-            <div className="border-t border-line pt-4 mt-6 flex justify-end gap-3">
-              <Button type="button" variant="secondary" onClick={() => setActiveTab("assign")}>
-                Hủy bỏ
-              </Button>
-              <Button type="submit" disabled={submitting}>
-                {submitting ? "Đang tạo tài khoản..." : "Tạo tài khoản quản trị"}
-              </Button>
-            </div>
-          </form>
-        </Panel>
-      )}
+            <DataTable
+              columns={["Họ tên", "Email", "Số điện thoại", "Vai trò", "Trạng thái", "Thao tác"]}
+              rows={filteredStaff.map((user) => {
+                const isAdmin = user.roles.includes("ADMIN");
+                const isSelf = user.id === currentUser?.id;
+
+                return [
+                  <div key="name" className="flex items-center gap-2.5">
+                    <img
+                      src={user.avatarUrl}
+                      alt={user.fullName}
+                      className="h-8 w-8 rounded-full object-cover border border-line shrink-0"
+                    />
+                    <div>
+                      <span className="font-semibold text-ink">{user.fullName}</span>
+                      {isSelf && (
+                        <span className="ml-1.5 text-[10px] bg-slate-100 text-slate-600 px-1 py-0.2 rounded font-normal">
+                          Bạn
+                        </span>
+                      )}
+                    </div>
+                  </div>,
+                  <span key="email" className="text-slate-600">{user.email}</span>,
+                  <span key="phone" className="text-slate-600">{user.phone || "-"}</span>,
+                  <span
+                    key="role"
+                    className={cn(
+                      "inline-flex px-2 py-0.5 rounded text-xs font-semibold",
+                      isAdmin ? "bg-slate-900 text-white" : "bg-blue-100 text-blue-800"
+                    )}
+                  >
+                    {isAdmin ? "Admin" : "Supporter"}
+                  </span>,
+                  <StatusBadge
+                    key="status"
+                    status={user.status}
+                    label={user.status === "ACTIVE" ? "Hoạt động" : "Bị khóa"}
+                  />,
+                  <Button
+                    key="action"
+                    variant={user.status === "LOCKED" ? "secondary" : "danger"}
+                    onClick={() => handleToggleLock(user)}
+                    disabled={isSelf}
+                    className="text-xs h-7 px-2"
+                  >
+                    {user.status === "LOCKED" ? "Mở khóa" : "Khóa"}
+                  </Button>
+                ];
+              })}
+            />
+          </Panel>
+        </div>
+      </div>
     </Section>
   );
 }
+
+

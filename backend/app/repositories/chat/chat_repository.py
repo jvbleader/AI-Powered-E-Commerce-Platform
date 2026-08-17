@@ -148,3 +148,26 @@ async def list_user_sessions_with_first_message(
         .limit(limit)
     )
     return list(result.scalars().all())
+
+
+async def delete_user_session(
+    session_id: str,
+    user_id: int,
+    db: AsyncSession | None = None,
+) -> bool:
+    if db is None:
+        raise ValueError("Database session (db) is required")
+
+    result = await db.execute(
+        select(ChatSession).where(
+            ChatSession.id == session_id,
+            ChatSession.user_id == user_id,
+        )
+    )
+    session = result.scalar_one_or_none()
+    if not session:
+        return False
+    await db.delete(session)
+    await db.flush()
+    return True
+

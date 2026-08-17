@@ -1,6 +1,6 @@
 from typing import List, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, update, func, or_, desc, delete, case
+from sqlalchemy import select, update, func, or_, and_, desc, delete, case
 from sqlalchemy.orm import selectinload, joinedload
 from models.catalog import Product
 from models.catalog import ProductCategory
@@ -521,10 +521,16 @@ async def get_public_product_detail(
 async def get_recommended_products(
     db: AsyncSession, user_id: Optional[int] = None, limit: int = 10
 ) -> List[Product]:
+    quality_filter = or_(
+        Product.review_count == 0,
+        and_(Product.review_count >= 1, Product.average_rating >= 3.0),
+    )
+
     base_filter = (
         select(Product)
         .join(SellerProfile, Product.seller_id == SellerProfile.id)
         .filter(Product.status == "ACTIVE", SellerProfile.status == "APPROVED")
+        .filter(quality_filter)
     )
 
     keywords = []
@@ -549,8 +555,12 @@ async def get_recommended_products(
         if filters:
             base_filter = base_filter.filter(or_(*filters))
     else:
-        # Fallback to top selling
-        base_filter = base_filter.order_by(desc(Product.sold_count))
+        # Fallback to top rated / selling
+        base_filter = base_filter.order_by(
+            desc(Product.average_rating),
+            desc(Product.sold_count),
+            desc(Product.created_at),
+        )
 
     items_query = base_filter.options(
         selectinload(Product.images),
@@ -570,12 +580,17 @@ async def get_recommended_products(
             select(Product)
             .join(SellerProfile, Product.seller_id == SellerProfile.id)
             .filter(Product.status == "ACTIVE", SellerProfile.status == "APPROVED")
+            .filter(quality_filter)
         )
         if existing_ids:
             fallback_filter = fallback_filter.filter(Product.id.notin_(existing_ids))
 
         fallback_query = (
-            fallback_filter.order_by(desc(Product.sold_count))
+            fallback_filter.order_by(
+                desc(Product.average_rating),
+                desc(Product.sold_count),
+                desc(Product.created_at),
+            )
             .options(
                 selectinload(Product.images),
                 selectinload(Product.variants).selectinload(ProductVariant.inventory),

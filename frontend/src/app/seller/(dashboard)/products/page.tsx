@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/ui/data-table";
 import { Section } from "@/components/ui/containers";
 import { StatusBadge } from "@/components/ui/badge";
+import { SearchField } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { getCategoryNames, productStatusLabel } from "@/lib/helpers";
 import { useMarketplaceStore } from "@/store/use-marketplace-store";
@@ -18,6 +19,7 @@ export default function SellerProductsPage() {
   const shop = store.getCurrentShop();
   const { showToast } = store;
   const [activeTab, setActiveTab] = useState<"ACTIVE" | "HIDDEN">("ACTIVE");
+  const [searchQuery, setSearchQuery] = useState("");
   const [inventoryProduct, setInventoryProduct] = useState<Product | null>(null);
 
   useEffect(() => {
@@ -38,7 +40,17 @@ export default function SellerProductsPage() {
     );
   }
 
-  const products = store.state.products.filter((product) => product.sellerId === shop?.id && product.status === activeTab);
+  const allShopProducts = store.state.products.filter((product) => product.sellerId === shop?.id);
+  const activeCount = allShopProducts.filter((p) => p.status === "ACTIVE").length;
+  const hiddenCount = allShopProducts.filter((p) => p.status === "HIDDEN").length;
+
+  const products = allShopProducts.filter((product) => {
+    if (product.status !== activeTab) return false;
+    if (searchQuery.trim()) {
+      return product.name.toLowerCase().includes(searchQuery.toLowerCase().trim());
+    }
+    return true;
+  });
 
   return (
     <>
@@ -51,31 +63,52 @@ export default function SellerProductsPage() {
           </Button>
         }
       >
-        <div className="flex gap-4 border-b border-line mb-4">
-          <button
-            className={cn(
-              "pb-2 text-sm font-semibold transition-colors",
-              activeTab === "ACTIVE"
-                ? "border-b-2 border-primary text-primary"
-                : "text-muted hover:text-primary"
-            )}
-            onClick={() => setActiveTab("ACTIVE")}
-          >
-            Sản phẩm đang bán
-          </button>
-          <button
-            className={cn(
-              "pb-2 text-sm font-semibold transition-colors",
-              activeTab === "HIDDEN"
-                ? "border-b-2 border-primary text-primary"
-                : "text-muted hover:text-primary"
-            )}
-            onClick={() => setActiveTab("HIDDEN")}
-          >
-            Sản phẩm đã ẩn
-          </button>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-line mb-4 pb-2 sm:pb-0">
+          <div className="flex gap-4">
+            <button
+              type="button"
+              className={cn(
+                "pb-2 text-sm font-semibold transition-colors",
+                activeTab === "ACTIVE"
+                  ? "border-b-2 border-primary text-primary"
+                  : "text-muted hover:text-primary"
+              )}
+              onClick={() => setActiveTab("ACTIVE")}
+            >
+              Sản phẩm đang bán ({activeCount})
+            </button>
+            <button
+              type="button"
+              className={cn(
+                "pb-2 text-sm font-semibold transition-colors",
+                activeTab === "HIDDEN"
+                  ? "border-b-2 border-primary text-primary"
+                  : "text-muted hover:text-primary"
+              )}
+              onClick={() => setActiveTab("HIDDEN")}
+            >
+              Sản phẩm đã ẩn ({hiddenCount})
+            </button>
+          </div>
+
+          <div className="w-full sm:w-72 pb-2 sm:pb-2">
+            <SearchField
+              value={searchQuery}
+              onChange={setSearchQuery}
+              placeholder="Tìm kiếm sản phẩm theo tên..."
+              className="w-full"
+            />
+          </div>
         </div>
         <DataTable
+          empty={
+            searchQuery.trim() ? (
+              <div className="p-8 text-center bg-white rounded-panel border border-line">
+                <p className="text-sm font-semibold text-slate-700">Không tìm thấy sản phẩm nào</p>
+                <p className="text-xs text-muted mt-1">Không có sản phẩm nào khớp với từ khóa "{searchQuery}"</p>
+              </div>
+            ) : undefined
+          }
           columns={["Sản phẩm", "Categories", "Variants", "Kho", "Đã bán", "Rating", "Status", "Action"]}
           rows={products.map((product) => {
             const productVariants = store.state.variants.filter((variant) => variant.productId === product.id);

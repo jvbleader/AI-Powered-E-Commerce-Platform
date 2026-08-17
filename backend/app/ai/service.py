@@ -25,12 +25,23 @@ logger = logging.getLogger(__name__)
 
 SYSTEM_PROMPT = """Bạn là Trợ lý Tư vấn Mua sắm AI chuyên nghiệp của sàn TMĐT Shepoo.
 
-QUY TẮC BẮT BUỘC:
-1. CHỈ tư vấn và đưa ra các sản phẩm THỰC TẾ thu được từ việc gọi các Tools (search_catalog, get_product_details, check_inventory, recommend_similar_products).
-2. TUYỆT ĐỐI KHÔNG tự bịa ra sản phẩm, giá bán, phần trăm giảm giá hoặc số lượng tồn kho.
-3. Nếu kết quả tìm kiếm rỗng (không có sản phẩm nào phù hợp trong hệ thống), hãy thông báo lịch sự cho khách hàng rằng hiện tại sàn chưa có sản phẩm này, và tuyệt đối KHÔNG in ra các tham số tìm kiếm hoặc dữ liệu thô.
-4. Ghi nhớ lịch sử cuộc trò chuyện và luôn lưu giữ tất cả thông tin cá nhân khách hàng đã cung cấp (như tên, xưng hô, sở thích, nhu cầu) để xưng hô và trả lời chính xác.
-5. Trình bày phản hồi ngắn gọn, thân thiện, sử dụng định dạng Markdown đẹp mắt.
+NGUYÊN TẮC TƯ DUY & TƯ VẤN BẮT BUỘC:
+1. Phân tích Nhu cầu & Chuyển dịch ý định (Intent Decomposition):
+   - Khi người dùng hỏi bằng mục đích, vấn đề, thời tiết/mùa, sự kiện hoặc hoàn cảnh sử dụng (ví dụ: 'chuẩn bị đi cắm trại', 'hay bị đau lưng khi làm việc', 'đồ mặc mùa đông', 'nấu lẩu tại nhà', 'quà tặng cho bé'):
+   - Luôn tự suy luận: "Những loại sản phẩm/vật dụng vật lý cụ thể nào trên sàn TMĐT giải quyết tốt nhất bài toán này?"
+   - Sử dụng tên các loại hàng hóa/mặt hàng cụ thể đó để làm từ khóa khi gọi `search_catalog`.
+2. Tự đánh giá & Tìm kiếm linh hoạt (Self-Reflection):
+   - Nếu kết quả tìm kiếm lần 1 chưa đúng trọng tâm hoặc còn quá rộng, bạn có thể gọi `search_catalog` thêm lần nữa với từ khóa danh mục hoặc góc nhìn sản phẩm khác.
+   - Khi tư vấn, hãy kết nối đặc tính của sản phẩm tìm được với hoàn cảnh sử dụng thực tế của khách hàng để giải thích tại sao món đồ đó phù hợp.
+3. Dữ liệu thực tế & Tính trung thực:
+   - CHỈ tư vấn và trích dẫn các sản phẩm THỰC TẾ thu được từ việc gọi Tools (search_catalog, get_product_details, check_inventory, recommend_similar_products).
+   - TUYỆT ĐỐI KHÔNG tự bịa ra sản phẩm, giá bán, phần trăm giảm giá hoặc số lượng tồn kho.
+4. Xử lý kết quả từ `search_catalog`:
+   - Nếu `match_type == 'exact'`: Tự tin tư vấn và giới thiệu các sản phẩm tìm thấy phù hợp nhất với nhu cầu của khách.
+   - Nếu `match_type == 'relaxed'` hoặc `match_type == 'semantic'`: Khéo léo giải thích là đã nới lỏng khoảng giá/bộ lọc để tìm mẫu tương tự tốt nhất cho khách.
+   - Nếu `match_type == 'none'` hoặc `match_type == 'category_popular'`: Lịch sự thông báo sàn chưa có mẫu chính xác đó và nhiệt tình giới thiệu các sản phẩm nổi bật/bán chạy cùng ngành hàng.
+5. Ghi nhớ lịch sử cuộc trò chuyện và luôn lưu giữ tất cả thông tin cá nhân khách hàng đã cung cấp (như tên, xưng hô, sở thích, nhu cầu) để xưng hô và trả lời chính xác.
+6. Trình bày phản hồi ngắn gọn, thân thiện, sử dụng định dạng Markdown đẹp mắt, không in ra các tham số tìm kiếm JSON hoặc dữ liệu kỹ thuật thô.
 """
 
 
@@ -75,19 +86,124 @@ def prepare_messages(
     return messages
 
 
+def _filter_products_mentioned_in_reply(
+    reply_text: str, collected_products: List[Dict[str, Any]]
+) -> List[Dict[str, Any]]:
+    if not reply_text or not collected_products:
+        return []
+
+    reply_lower = reply_text.lower()
+
+    # If the reply explicitly states that no matching products were found on the platform
+    no_product_phrases = [
+        "chưa tìm thấy sản phẩm",
+        "không tìm thấy sản phẩm",
+        "chưa có sản phẩm phù hợp",
+        "chưa có sản phẩm nào",
+        "chưa có mặt hàng",
+        "rất tiếc sàn chưa có",
+        "chưa có mẫu nào",
+    ]
+    if any(phrase in reply_lower for phrase in no_product_phrases) and not any(
+        kw in reply_lower for kw in ["dưới đây là", "gợi ý cho bạn", "tham khảo một số", "tham khảo các", "gửi bạn một số"]
+    ):
+        return []
+
+    matched = []
+    for p in collected_products:
+        name = (p.get("name") or "").strip().lower()
+        if not name:
+            continue
+
+        # 1. Direct substring match of full name
+        if name in reply_lower:
+            matched.append(p)
+            continue
+
+        # 2. Match by main title segment (before delimiters like -, |, /)
+        main_segment = re.split(r"[-–—|/,]", name)[0].strip()
+        if len(main_segment) >= 6 and main_segment in reply_lower:
+            matched.append(p)
+            continue
+
+        # 3. Match by the first 3-5 words of the product name
+        words = name.split()
+        if len(words) >= 3:
+            first_n = " ".join(words[: min(len(words), 4)])
+            if len(first_n) >= 8 and first_n in reply_lower:
+                matched.append(p)
+                continue
+
+        # 4. Check if a 3-word phrase from the product name is in reply
+        found_phrase = False
+        for i in range(len(words) - 2):
+            trigram = " ".join(words[i : i + 3])
+            if len(trigram) >= 10 and trigram in reply_lower:
+                matched.append(p)
+                found_phrase = True
+                break
+        if found_phrase:
+            continue
+
+        # 5. Check slug / ID
+        slug = (p.get("slug") or "").strip().lower()
+        if slug and len(slug) >= 5 and slug in reply_lower:
+            matched.append(p)
+            continue
+
+    return matched
+
+
+def _normalize_extracted_product(item: Dict[str, Any]) -> Dict[str, Any]:
+    norm = dict(item)
+    variants = norm.get("variants") or []
+    if ("price" not in norm or norm["price"] is None) and variants:
+        prices = [
+            float(v["price"])
+            for v in variants
+            if isinstance(v, dict) and v.get("price") is not None
+        ]
+        sale_prices = [
+            float(v["sale_price"])
+            for v in variants
+            if isinstance(v, dict) and v.get("sale_price") is not None
+        ]
+        norm["price"] = min(prices) if prices else 0.0
+        norm["sale_price"] = min(sale_prices) if sale_prices else None
+
+    if ("stock" not in norm or norm["stock"] is None) and variants:
+        norm["stock"] = sum(
+            int(v.get("available_stock", 0) or 0)
+            for v in variants
+            if isinstance(v, dict)
+        )
+
+    images = norm.get("images") or []
+    if not norm.get("thumbnail_url") and images and isinstance(images[0], str):
+        norm["thumbnail_url"] = images[0]
+
+    return norm
+
+
 def _extract_products_from_tool_output(
     tool_output: str, collected_products: List[Dict[str, Any]]
 ) -> None:
     try:
         parsed = json.loads(tool_output)
+        items = []
         if isinstance(parsed, list):
-            for item in parsed:
-                if isinstance(item, dict) and "id" in item and "name" in item:
-                    if not any(p.get("id") == item["id"] for p in collected_products):
-                        collected_products.append(item)
-        elif isinstance(parsed, dict) and "id" in parsed and "name" in parsed:
-            if not any(p.get("id") == parsed["id"] for p in collected_products):
-                collected_products.append(parsed)
+            items = parsed
+        elif isinstance(parsed, dict):
+            if "items" in parsed and isinstance(parsed["items"], list):
+                items = parsed["items"]
+            elif "id" in parsed and "name" in parsed:
+                items = [parsed]
+
+        for raw_item in items:
+            if isinstance(raw_item, dict) and "id" in raw_item and "name" in raw_item:
+                item = _normalize_extracted_product(raw_item)
+                if not any(p.get("id") == item["id"] for p in collected_products):
+                    collected_products.append(item)
     except Exception:
         pass
 
@@ -142,17 +258,19 @@ async def send_chat_message(
                 )
         else:
             clean_reply = _clean_reasoning_tags(response.content)
+            filtered_products = _filter_products_mentioned_in_reply(clean_reply, collected_products)
             return {
                 "reply": clean_reply,
                 "model": ai_settings.MODEL,
-                "products": collected_products,
+                "products": filtered_products,
             }
 
     last_content = _clean_reasoning_tags(messages[-1].content) if messages else ""
+    filtered_products = _filter_products_mentioned_in_reply(last_content, collected_products)
     return {
         "reply": last_content,
         "model": ai_settings.MODEL,
-        "products": collected_products,
+        "products": filtered_products,
     }
 
 
@@ -234,8 +352,9 @@ async def stream_chat_message(
                     sub_chunk = final_text[i:i + chunk_size]
                     yield f"data: {json.dumps({'type': 'text', 'content': sub_chunk, 'done': False}, ensure_ascii=False)}\n\n"
 
-            if collected_products:
-                yield f"data: {json.dumps({'type': 'products', 'items': collected_products}, ensure_ascii=False)}\n\n"
+            filtered_products = _filter_products_mentioned_in_reply(final_text, collected_products)
+            if filtered_products:
+                yield f"data: {json.dumps({'type': 'products', 'items': filtered_products}, ensure_ascii=False)}\n\n"
 
             yield f"data: {json.dumps({'type': 'end', 'content': '', 'done': True}, ensure_ascii=False)}\n\n"
             return

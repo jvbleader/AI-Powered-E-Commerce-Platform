@@ -4,13 +4,30 @@ from fastapi import APIRouter, BackgroundTasks, Depends, Request, Response, stat
 from pydantic import BaseModel, EmailStr
 from sqlalchemy.ext.asyncio import AsyncSession
 from schemas.user.user_schema import UserMeResponse, AdminCreateUserRequest, UserRolesUpdateRequest
-from schemas.admin.admin_schema import AdminDashboardStatsResponse
+from schemas.admin.admin_schema import (
+    AdminDashboardStatsResponse,
+    AdminDetailedStatsResponse,
+    AdminTopProduct,
+    AdminTopSeller,
+    AdminTimeSeriesData,
+    AdminPaymentBreakdown,
+    AdminUserBreakdown,
+)
 import services.auth.auth_service as auth_service
 
 from core.database import DBSession
 from models.user import User
 from dependencies.auth import CurrentAdmin
 from schemas.catalog.category_public_schema import CategoryPublicResponse
+from schemas.catalog.category_suggestion_schema import (
+    CategorySuggestionPublicResponse,
+    CategorySuggestionApproveRequest,
+)
+from services.catalog.category_suggestion_service import (
+    list_admin_category_suggestions,
+    approve_category_suggestion,
+    reject_category_suggestion,
+)
 from schemas.catalog.product_public_schema import ProductPublicResponse, ProductDetailPublicResponse
 from schemas.seller.seller_application_schema import (
     SellerApplicationResponse,
@@ -70,6 +87,250 @@ async def get_dashboard_stats_api(
             total_users=total_users,
             total_sellers=total_sellers,
             pending_seller_applications=pending_apps
+        )
+    except Exception:
+        raise
+
+
+@router.get(path="/statistics/detailed", response_model=AdminDetailedStatsResponse)
+async def get_detailed_statistics_api(
+    user: CurrentAdmin,
+    db: DBSession,
+) -> AdminDetailedStatsResponse:
+    from sqlalchemy import select, func, and_
+    from datetime import datetime, timedelta
+    from decimal import Decimal
+    from models.order import Order, OrderItem
+    from models.user import User, UserRole
+    from models.seller import SellerProfile
+    from models.catalog import Product, Category, ProductImage
+
+    try:
+        # 1. Orders & Revenue KPIs
+        revenue_stmt = select(func.sum(Order.total_amount)).where(Order.order_status == "COMPLETED")
+        total_revenue = (await db.scalar(revenue_stmt)) or Decimal("0")
+
+        pending_rev_stmt = select(func.sum(Order.total_amount)).where(
+            Order.order_status.in_(["PLACED", "READY_TO_SHIP", "SHIPPING"])
+        )
+        pending_revenue = (await db.scalar(pending_rev_stmt)) or Decimal("0")
+
+        total_orders = (await db.scalar(select(func.count(Order.id)))) or 0
+        completed_orders = (await db.scalar(select(func.count(Order.id)).where(Order.order_status == "COMPLETED"))) or 0
+        cancelled_orders = (await db.scalar(select(func.count(Order.id)).where(Order.order_status == "CANCELLED"))) or 0
+
+        average_order_value = (total_revenue / completed_orders) if completed_orders > 0 else Decimal("0")
+
+        # 2. Order Status Breakdown
+        status_stmt = select(Order.order_status, func.count(Order.id)).group_by(Order.order_status)
+        status_res = await db.execute(status_stmt)
+        order_status_breakdown = {row[0]: row[1] for row in status_res.all()}
+
+        # 3. Payment Method Breakdown
+        payment_stmt = (
+            select(
+                Order.preferred_payment_method,
+                func.sum(Order.total_amount),
+                func.count(Order.id),
+            )
+            .where(Order.order_status == "COMPLETED")
+            .group_by(Order.preferred_payment_method)
+        )
+        payment_res = await db.execute(payment_stmt)
+        cod_revenue = Decimal("0")
+        cod_count = 0
+        vnpay_revenue = Decimal("0")
+        vnpay_count = 0
+
+        for method, rev, cnt in payment_res.all():
+            m_str = (method or "COD").upper()
+            amount = rev or Decimal("0")
+            if "VNPAY" in m_str or "ONLINE" in m_str:
+                vnpay_revenue += amount
+                vnpay_count += cnt
+            else:
+                cod_revenue += amount
+                cod_count += cnt
+
+        payment_breakdown = AdminPaymentBreakdown(
+            cod_revenue=cod_revenue,
+            cod_count=cod_count,
+            vnpay_revenue=vnpay_revenue,
+            vnpay_count=vnpay_count,
+        )
+
+        # 4. User Breakdown
+        role_stmt = select(UserRole.role_name, func.count(UserRole.user_id)).group_by(UserRole.role_name)
+        role_res = await db.execute(role_stmt)
+        role_map = {row[0]: row[1] for row in role_res.all()}
+
+        total_active_users = (await db.scalar(select(func.count(User.id)).where(User.status == "ACTIVE"))) or 0
+        total_locked_users = (await db.scalar(select(func.count(User.id)).where(User.status == "LOCKED"))) or 0
+
+        user_breakdown = AdminUserBreakdown(
+            total_customers=role_map.get("CUSTOMER", 0),
+            total_sellers=role_map.get("SELLER", 0),
+            total_supporters=role_map.get("SUPPORTER", 0),
+            total_admins=role_map.get("ADMIN", 0),
+            active_users=total_active_users,
+            locked_users=total_locked_users,
+        )
+
+        # 5. Products & Categories
+        total_products = (await db.scalar(select(func.count(Product.id)).where(Product.status != "DELETED"))) or 0
+        active_products = (await db.scalar(select(func.count(Product.id)).where(Product.status == "ACTIVE"))) or 0
+        hidden_products = (await db.scalar(select(func.count(Product.id)).where(Product.status == "HIDDEN"))) or 0
+        total_categories = (await db.scalar(select(func.count(Category.id)))) or 0
+
+        # 6. Daily Stats (Last 30 Days)
+        now = datetime.utcnow()
+        thirty_days_ago = now - timedelta(days=29)
+        day_expr = func.date(func.coalesce(Order.completed_at, Order.created_at))
+        daily_orders_stmt = (
+            select(
+                day_expr.label("day"),
+                func.sum(Order.total_amount),
+                func.count(Order.id),
+            )
+            .where(
+                and_(
+                    Order.order_status == "COMPLETED",
+                    func.coalesce(Order.completed_at, Order.created_at) >= thirty_days_ago,
+                )
+            )
+            .group_by(day_expr)
+            .order_by(day_expr)
+        )
+        daily_res = await db.execute(daily_orders_stmt)
+        daily_map = {str(row[0]): (row[1] or Decimal("0"), row[2] or 0) for row in daily_res.all()}
+
+        daily_stats = []
+        for i in range(30):
+            d = (thirty_days_ago + timedelta(days=i)).date()
+            d_str = str(d)
+            rev, cnt = daily_map.get(d_str, (Decimal("0"), 0))
+            daily_stats.append(AdminTimeSeriesData(date=d_str, revenue=rev, orders_count=cnt))
+
+        # 7. Monthly Stats (Last 12 Months)
+        monthly_stats = []
+        for i in range(11, -1, -1):
+            y = now.year
+            m = now.month - i
+            while m <= 0:
+                m += 12
+                y -= 1
+            m_start = datetime(y, m, 1)
+            if m == 12:
+                m_end = datetime(y + 1, 1, 1)
+            else:
+                m_end = datetime(y, m + 1, 1)
+            
+            m_stmt = select(
+                func.sum(Order.total_amount),
+                func.count(Order.id)
+            ).where(
+                and_(
+                    Order.order_status == "COMPLETED",
+                    func.coalesce(Order.completed_at, Order.created_at) >= m_start,
+                    func.coalesce(Order.completed_at, Order.created_at) < m_end
+                )
+            )
+            m_res = await db.execute(m_stmt)
+            m_row = m_res.one_or_none()
+            m_rev = (m_row[0] if m_row and m_row[0] is not None else Decimal("0"))
+            m_cnt = (m_row[1] if m_row and m_row[1] is not None else 0)
+            monthly_stats.append(AdminTimeSeriesData(date=f"{m:02d}/{y}", revenue=m_rev, orders_count=m_cnt))
+
+        # 8. Top 5 Products
+        top_p_stmt = (
+            select(
+                Product.id,
+                Product.public_id,
+                Product.name,
+                Product.sold_count,
+            )
+            .where(Product.status != "DELETED")
+            .order_by(Product.sold_count.desc())
+            .limit(5)
+        )
+        top_p_res = await db.execute(top_p_stmt)
+        top_products = []
+        for p_id, pid, pname, sold in top_p_res.all():
+            rev_stmt = (
+                select(func.coalesce(func.sum(OrderItem.subtotal), Decimal("0")))
+                .join(Order, and_(OrderItem.order_id == Order.id, Order.order_status == "COMPLETED"))
+                .where(OrderItem.product_id == p_id)
+            )
+            prod_rev = (await db.scalar(rev_stmt)) or Decimal("0")
+
+            img_stmt = (
+                select(ProductImage.image_url)
+                .where(ProductImage.product_id == p_id)
+                .order_by(ProductImage.is_thumbnail.desc())
+                .limit(1)
+            )
+            img_url = await db.scalar(img_stmt)
+            top_products.append(
+                AdminTopProduct(
+                    id=pid,
+                    name=pname,
+                    image_url=img_url,
+                    sold_count=sold or 0,
+                    revenue=prod_rev,
+                )
+            )
+
+        # 9. Top 5 Sellers
+        top_s_stmt = (
+            select(
+                SellerProfile.id,
+                SellerProfile.public_id,
+                SellerProfile.shop_name,
+                SellerProfile.shop_logo_url,
+                func.count(Order.id),
+                func.coalesce(func.sum(Order.total_amount), Decimal("0")),
+            )
+            .outerjoin(Order, and_(Order.seller_id == SellerProfile.id, Order.order_status == "COMPLETED"))
+            .where(SellerProfile.status == "APPROVED")
+            .group_by(
+                SellerProfile.id,
+                SellerProfile.public_id,
+                SellerProfile.shop_name,
+                SellerProfile.shop_logo_url,
+            )
+            .order_by(func.coalesce(func.sum(Order.total_amount), Decimal("0")).desc(), func.count(Order.id).desc())
+            .limit(5)
+        )
+        top_s_res = await db.execute(top_s_stmt)
+        top_sellers = [
+            AdminTopSeller(
+                id=row[1],
+                shop_name=row[2],
+                logo_url=row[3],
+                total_orders=row[4],
+                total_revenue=row[5],
+            )
+            for row in top_s_res.all()
+        ]
+
+        return AdminDetailedStatsResponse(
+            total_revenue=total_revenue,
+            pending_revenue=pending_revenue,
+            total_orders=total_orders,
+            completed_orders=completed_orders,
+            cancelled_orders=cancelled_orders,
+            average_order_value=average_order_value,
+            total_products=total_products,
+            active_products=active_products,
+            hidden_products=hidden_products,
+            total_categories=total_categories,
+            user_breakdown=user_breakdown,
+            payment_breakdown=payment_breakdown,
+            order_status_breakdown=order_status_breakdown,
+            daily_stats=daily_stats,
+            monthly_stats=monthly_stats,
+            top_products=top_products,
+            top_sellers=top_sellers,
         )
     except Exception:
         raise
@@ -547,11 +808,12 @@ async def list_products_admin_api(
     from sqlalchemy.orm import selectinload
     from models.catalog import Product
     from models.catalog import ProductVariant
+    from models.seller.seller_profile import SellerProfile
 
     stmt = (
         select(Product)
         .options(
-            selectinload(Product.seller),
+            selectinload(Product.seller).selectinload(SellerProfile.shipping_providers),
             selectinload(Product.categories),
             selectinload(Product.images),
             selectinload(Product.variants).selectinload(ProductVariant.inventory)
@@ -561,6 +823,47 @@ async def list_products_admin_api(
     res = await db.execute(stmt)
     products = res.scalars().all()
     return products
+
+
+@router.get(path="/category-suggestions", response_model=list[CategorySuggestionPublicResponse])
+async def list_category_suggestions_admin_api(
+    user: CurrentAdmin,
+    db: DBSession,
+    status: Optional[str] = None,
+) -> list[CategorySuggestionPublicResponse]:
+    result = await list_admin_category_suggestions(db, status_filter=status)
+    return result
+
+
+@router.post(path="/category-suggestions/{suggestion_id}/approve", response_model=CategoryPublicResponse)
+async def approve_category_suggestion_admin_api(
+    suggestion_id: int,
+    user: CurrentAdmin,
+    db: DBSession,
+    data: Optional[CategorySuggestionApproveRequest] = None,
+) -> CategoryPublicResponse:
+    try:
+        new_category = await approve_category_suggestion(db, suggestion_id, data)
+        await db.commit()
+        return new_category
+    except Exception:
+        await db.rollback()
+        raise
+
+
+@router.post(path="/category-suggestions/{suggestion_id}/reject", response_model=CategorySuggestionPublicResponse)
+async def reject_category_suggestion_admin_api(
+    suggestion_id: int,
+    user: CurrentAdmin,
+    db: DBSession,
+) -> CategorySuggestionPublicResponse:
+    try:
+        rejected = await reject_category_suggestion(db, suggestion_id)
+        await db.commit()
+        return rejected
+    except Exception:
+        await db.rollback()
+        raise
 
 
 

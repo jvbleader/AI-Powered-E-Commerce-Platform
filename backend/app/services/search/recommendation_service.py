@@ -1,10 +1,17 @@
 import logging
+import math
 from typing import List, Optional, Tuple
 from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from core.elasticsearch import get_es_client
 from search.indices import PRODUCT_INDEX_ALIAS
 from models.catalog import Product
+from services.search.recommendation_scoring import (
+    get_quality_gate_es_filter,
+    get_bayesian_script_score_function,
+    calculate_bayesian_rating,
+    is_quality_gate_passed,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +50,8 @@ async def get_similar_products(
             "filter": {
                 "bool": {
                     "must_not": [
-                        {"term": {"id": product.id}} # exclude self
+                        {"term": {"id": product.id}},  # exclude self
+                        get_quality_gate_es_filter(),
                     ],
                     "must": [
                         {"term": {"status": "ACTIVE"}}
@@ -216,7 +224,14 @@ async def get_suggestions_by_keywords(
         "query": {
             "function_score": {
                 "query": {
-                    "term": {"status": "ACTIVE"}
+                    "bool": {
+                        "must": [
+                            {"term": {"status": "ACTIVE"}}
+                        ],
+                        "must_not": [
+                            get_quality_gate_es_filter()
+                        ]
+                    }
                 },
                 "functions": [
                     {
@@ -227,13 +242,7 @@ async def get_suggestions_by_keywords(
                         },
                         "weight": 3.0
                     },
-                    {
-                        "field_value_factor": {
-                            "field": "average_rating",
-                            "factor": 1.0
-                        },
-                        "weight": 1.5
-                    }
+                    get_bayesian_script_score_function(m=3.0, c=3.5, weight=2.5)
                 ],
                 "score_mode": "sum",
                 "boost_mode": "multiply"
@@ -274,6 +283,7 @@ async def get_suggestions_by_keywords(
             kw_emb = await generate_query_embedding(kw)
             if not kw_emb:
                 return []
+            fetch_size = max(kw_from + kw_size * 2, 20)
             body = {
                 "query": {
                     "bool": {
@@ -286,15 +296,33 @@ async def get_suggestions_by_keywords(
                                 }
                             },
                             {"term": {"status": "ACTIVE"}}
+                        ],
+                        "must_not": [
+                            get_quality_gate_es_filter()
                         ]
                     }
                 },
-                "from": kw_from,
-                "size": kw_size,
+                "size": fetch_size,
                 "_source": {"excludes": ["embedding"]}
             }
             res = await es.search(index=PRODUCT_INDEX_ALIAS, body=body)
-            return [hit["_source"] for hit in res.get("hits", {}).get("hits", [])]
+            hits = res.get("hits", {}).get("hits", [])
+            scored_candidates = []
+            for hit in hits:
+                knn_score = hit.get("_score", 1.0)
+                src = hit["_source"]
+                avg_r = src.get("average_rating", 0.0) or 0.0
+                rev_cnt = src.get("review_count", 0) or 0
+                sold_cnt = src.get("sold_count", 0) or 0
+                wr = calculate_bayesian_rating(avg_r, rev_cnt, m=3.0, c=3.5)
+                rating_multiplier = 0.5 + 0.5 * (wr / 5.0)
+                sales_multiplier = 1.0 + 0.1 * math.log1p(sold_cnt)
+                final_score = knn_score * rating_multiplier * sales_multiplier
+                scored_candidates.append((final_score, src))
+
+            scored_candidates.sort(key=lambda x: x[0], reverse=True)
+            reranked_products = [src for _, src in scored_candidates]
+            return reranked_products[kw_from : kw_from + kw_size]
         except Exception as e:
             logger.error("Error fetching semantic products for keyword %s: %s", kw, e)
             return []

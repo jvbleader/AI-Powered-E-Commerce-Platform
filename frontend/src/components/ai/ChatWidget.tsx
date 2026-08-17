@@ -52,7 +52,20 @@ export function ChatWidget() {
   const [showScrollDown, setShowScrollDown] = useState(false);
 
   // AI Chat
-  const { messages: aiMessages, isStreaming, currentStatus, sendMessage: sendAiMessage, clearChat: clearAiChat } = useAIChatStream();
+  const {
+    sessionId: activeAiSessionId,
+    messages: aiMessages,
+    isStreaming,
+    currentStatus,
+    isLoadingHistory: isLoadingAiHistory,
+    chatSessions: aiSessions,
+    isLoadingSessions: isLoadingAiSessions,
+    sendMessage: sendAiMessage,
+    clearChat: clearAiChat,
+    switchChat: switchAiChat,
+    deleteSession: deleteAiSession,
+    retryLastMessage: retryAiMessage,
+  } = useAIChatStream();
 
   // Seller Chat inbox — WS nền khi user đăng nhập (DELIVERED + badge)
   const {
@@ -508,6 +521,22 @@ export function ChatWidget() {
     scrollToLatestRef.current(true);
   }, []);
 
+  const handleSelectAiSession = useCallback((sessionId: string) => {
+    setActiveShopId(null);
+    switchAiChat(sessionId);
+    scrollToLatestRef.current(true);
+  }, [switchAiChat]);
+
+  const handleNewAiChat = useCallback(() => {
+    setActiveShopId(null);
+    clearAiChat();
+    scrollToLatestRef.current(true);
+  }, [clearAiChat]);
+
+  const handleDeleteAiSession = useCallback(async (sessionId: string) => {
+    await deleteAiSession(sessionId);
+  }, [deleteAiSession]);
+
   const handleOpenWidget = () => setIsOpen(true);
 
   const handleCloseWidget = () => {
@@ -595,6 +624,12 @@ export function ChatWidget() {
             onSelectShop={handleSelectShop}
             onConversationAction={handleConversationMenuAction}
             onSelectAi={handleSelectAi}
+            aiSessions={aiSessions}
+            activeAiSessionId={activeAiSessionId}
+            isLoadingAiSessions={isLoadingAiSessions}
+            onSelectAiSession={handleSelectAiSession}
+            onNewAiChat={handleNewAiChat}
+            onDeleteAiSession={handleDeleteAiSession}
           />
           
           {/* Main Area */}
@@ -614,12 +649,16 @@ export function ChatWidget() {
                       </p>
                     </div>
                   </div>
-                  <button onClick={clearAiChat} className="p-2 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-full" title="Tạo chat mới">
-                    <Plus className="w-5 h-5" />
-                  </button>
                  </div>
                  
-                 {aiMessages.length === 0 ? (
+                 {isLoadingAiHistory ? (
+                  <div className="flex-1 flex flex-col items-center justify-center p-6 text-center space-y-3">
+                    <div className="w-10 h-10 rounded-full bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-600">
+                      <Bot className="w-5 h-5 animate-pulse" />
+                    </div>
+                    <p className="text-xs text-slate-500 font-medium">Đang tải lịch sử trò chuyện...</p>
+                  </div>
+                ) : aiMessages.length === 0 ? (
                   <div className="flex-1 overflow-y-auto flex flex-col items-center justify-center p-6 text-center space-y-6">
                     <div>
                       <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -652,6 +691,7 @@ export function ChatWidget() {
                       messages={aiMessages}
                       isStreaming={isStreaming}
                       currentStatus={currentStatus}
+                      onRetry={retryAiMessage}
                     />
                     <div ref={messagesEndRef} className="h-px shrink-0" aria-hidden />
                   </ChatScrollArea>

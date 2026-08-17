@@ -18,7 +18,8 @@ import {
   ShieldCheck,
   MessageSquare,
   ClipboardCheck,
-  Bot
+  Bot,
+  UserPlus
 } from "lucide-react";
 import { ChevronLeft, ChevronRight, Menu } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -92,18 +93,15 @@ export function DashboardFrame({
         ]
       : kind === "admin"
         ? [
-            ["/admin", "Dashboard", LayoutDashboard],
-            ["/admin/users", "Users", Users],
-            ["/admin/sellers", "Sellers", Store],
-            ["/admin/categories", "Categories", PanelLeft],
-            ["/admin/products", "Products", Package],
-            ["/admin/statistics", "Statistics", ChartNoAxesCombined],
-            ["/admin/violation-reports", "Reports", ShieldCheck],
-            ["/admin/supporters", "Supporters", MessageSquare],
-            ["/admin/chats", "Chats", MessageSquare],
-            ["/admin/system-reports", "System", ClipboardCheck],
-            ["/admin/ai/knowledge", "AI Knowledge", Bot],
-            ["/admin/role-management", "Phân quyền", ShieldCheck]
+            ["/admin", "Tổng quan", LayoutDashboard],
+            ["/admin/users", "Người dùng", Users],
+            ["/admin/sellers", "Người bán", Store],
+            ["/admin/categories", "Danh mục", PanelLeft],
+            ["/admin/products", "Sản phẩm", Package],
+            ["/admin/statistics", "Thống kê", ChartNoAxesCombined],
+            ["/admin/violation-reports", "Báo cáo vi phạm", ShieldCheck],
+            ["/admin/ai/knowledge", "Tri thức AI", Bot],
+            ["/admin/role-management", "Tạo tài khoản", UserPlus]
           ]
         : [
             ["/supporter", "Dashboard", LayoutDashboard],

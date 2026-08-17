@@ -24,7 +24,10 @@ export interface AIChatMessage {
   metadata?: {
     recommended_product_ids?: number[];
     tools_called?: string[];
+    is_error?: boolean;
+    error_detail?: string;
   };
+  isError?: boolean;
   products?: AIProductItem[];
   createdAt?: string;
 }
@@ -88,8 +91,14 @@ export function setSessionIdLocal(userId: string | undefined, sessionId: string)
 
 export async function fetchChatSessions(): Promise<AIChatSessionSummary[]> {
   try {
-    const data = await apiFetch<{ sessions: AIChatSessionSummary[] }>("/ai/chat/sessions");
-    return data?.sessions || [];
+    const data = await apiFetch<{ sessions: any[] }>("/ai/chat/sessions");
+    const rawSessions = data?.sessions || [];
+    return rawSessions.map((s: any) => ({
+      sessionId: s.sessionId || s.session_id,
+      title: s.title || "Đoạn chat mới",
+      createdAt: s.createdAt || s.created_at,
+      updatedAt: s.updatedAt || s.updated_at || s.createdAt || s.created_at,
+    }));
   } catch (err) {
     console.error("Failed to fetch chat sessions:", err);
     return [];
@@ -102,16 +111,21 @@ export async function fetchChatSessions(): Promise<AIChatSessionSummary[]> {
  */
 export async function fetchChatHistory(sessionId: string): Promise<AIChatMessage[]> {
   try {
-    const data = await apiFetch<{ sessionId?: string; session_id?: string; messages: AIChatMessage[] }>(
+    const data = await apiFetch<{ sessionId?: string; session_id?: string; messages: any[] }>(
       `/ai/chat/history?session_id=${encodeURIComponent(sessionId)}`
     );
     const rawMessages = data?.messages ?? [];
-    return rawMessages.map((m) => ({
-      ...m,
+    return rawMessages.map((m: any) => ({
+      id: String(m.id || ""),
+      role: m.role,
+      content: m.content,
+      createdAt: m.createdAt || m.created_at,
+      metadata: m.metadata || m.metadata_info,
+      isError: Boolean((m.metadata && m.metadata.is_error) || (m.metadata_info && m.metadata_info.is_error)),
       products:
         m.products && m.products.length > 0
           ? m.products
-          : (m.metadata as any)?.products || []
+          : (m.metadata as any)?.products || (m.metadata_info as any)?.products || []
     }));
   } catch (err: unknown) {
     if (err instanceof ApiError && err.status === 404) {
@@ -120,6 +134,23 @@ export async function fetchChatHistory(sessionId: string): Promise<AIChatMessage
     throw err;
   }
 }
+
+/**
+ * Delete a chat session.
+ * Endpoint: DELETE /ai/chat/sessions/{sessionId}
+ */
+export async function deleteChatSession(sessionId: string): Promise<boolean> {
+  try {
+    await apiFetch(`/ai/chat/sessions/${encodeURIComponent(sessionId)}`, {
+      method: "DELETE",
+    });
+    return true;
+  } catch (err) {
+    console.error("Failed to delete chat session:", err);
+    return false;
+  }
+}
+
 
 
 /**

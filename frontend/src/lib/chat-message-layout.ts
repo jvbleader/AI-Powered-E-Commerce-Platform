@@ -22,7 +22,42 @@ export function formatChatTime(value?: string | Date): string {
   return `${parts.hour}:${parts.minute}`;
 }
 
+/**
+ * Định dạng thời gian cho danh sách phiên chat AI:
+ * - Trong ngày: hiển thị giờ phút (HH:mm)
+ * - Ngày khác cùng năm: hiển thị ngày tháng (DD/MM)
+ * - Từ năm trước trở đi: hiển thị cả ngày tháng năm (DD/MM/YYYY)
+ */
+export function formatAIChatTime(value?: string | Date): string {
+  const dateObj = parseChatDate(value);
+  if (!dateObj) return "";
+
+  const now = new Date();
+  const isToday =
+    dateObj.getDate() === now.getDate() &&
+    dateObj.getMonth() === now.getMonth() &&
+    dateObj.getFullYear() === now.getFullYear();
+
+  if (isToday) {
+    const hours = String(dateObj.getHours()).padStart(2, "0");
+    const minutes = String(dateObj.getMinutes()).padStart(2, "0");
+    return `${hours}:${minutes}`;
+  }
+
+  const isCurrentYear = dateObj.getFullYear() === now.getFullYear();
+  const day = String(dateObj.getDate()).padStart(2, "0");
+  const month = String(dateObj.getMonth() + 1).padStart(2, "0");
+
+  if (isCurrentYear) {
+    return `${day}/${month}`;
+  }
+
+  const year = dateObj.getFullYear();
+  return `${day}/${month}/${year}`;
+}
+
 /** Thời gian sidebar: hôm nay → giờ, hôm qua → "Hôm qua", lâu hơn → ngày. */
+
 export function formatChatListTime(value?: string | Date): string {
   const dateObj = parseChatDate(value);
   if (!dateObj) return "";
