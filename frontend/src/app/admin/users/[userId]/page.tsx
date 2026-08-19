@@ -1,6 +1,6 @@
 "use client";
 
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/feedback";
 import { Panel, Section } from "@/components/ui/containers";
@@ -19,19 +19,20 @@ function InfoRow({ label, value }: { label: string; value: string }) {
   );
 }
 
-function NotFoundPage() {
+function NotFoundPage({ onBack }: { onBack?: () => void }) {
   return (
     <main className="mx-auto max-w-2xl px-4 py-10">
       <EmptyState
         title="Không tìm thấy route"
         description="Đường dẫn không đúng hoặc không còn tồn tại."
-        action={<Button onClick={() => (window.location.href = "/")}>Về trang chủ</Button>}
+        action={<Button onClick={onBack}>Về trang chủ</Button>}
       />
     </main>
   );
 }
 
 export default function AdminUserDetailPage() {
+  const router = useRouter();
   const params = useParams();
   const userId = params.userId as string;
   const store = useMarketplaceStore();
@@ -67,7 +68,7 @@ export default function AdminUserDetailPage() {
   };
 
   if (loading) return <div className="p-10 text-center text-slate-500">Đang tải...</div>;
-  if (!user) return <NotFoundPage />;
+  if (!user) return <NotFoundPage onBack={() => router.push("/")} />;
 
   return (
     <Section title={`User ${user.fullName}`}>

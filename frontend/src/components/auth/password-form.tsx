@@ -172,7 +172,7 @@ export default function PasswordPage({ mode }: { mode: "forgot" | "reset" }) {
             <Button
               disabled={submitting}
               onClick={submitPasswordForm}
-              className="mt-6 w-full rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 py-3 text-sm font-bold text-white shadow-lg transition-all hover:from-emerald-500 hover:to-teal-500 active:scale-[0.99] disabled:opacity-70"
+              className="mt-6 w-full rounded-xl !border-emerald-600 !bg-emerald-600 py-3 text-sm font-bold !text-white shadow-lg transition-all hover:!bg-emerald-700 active:scale-[0.99] disabled:opacity-70"
             >
               {submitting ? (
                 <div className="flex items-center justify-center gap-2">

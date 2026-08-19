@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { RefreshCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/feedback";
@@ -41,6 +42,7 @@ const formatLocalTime = (isoString?: string | null) => {
 
 
 export default function SellerDashboardPage() {
+  const router = useRouter();
   const store = useMarketplaceStore();
   const shop = store.getCurrentShop();
   const [summary, setSummary] = useState<BackendSellerDashboardSummary | null>(null);
@@ -117,7 +119,7 @@ export default function SellerDashboardPage() {
         <EmptyState
           title="Chưa có hồ sơ shop"
           description="Bạn cần gửi hồ sơ mở shop trước khi truy cập dashboard người bán."
-          action={<Button onClick={() => (window.location.href = "/seller/register")}>Gửi hồ sơ</Button>}
+          action={<Button onClick={() => router.push("/seller/register")}>Gửi hồ sơ</Button>}
         />
       </Section>
     );
@@ -129,7 +131,7 @@ export default function SellerDashboardPage() {
         <Panel>
           <StatusBadge status={shop.status} label={sellerStatusLabel[shop.status]} />
           <p className="mt-2 text-sm leading-6 text-muted">Shop hiện chưa ở trạng thái được duyệt.</p>
-          <Button className="mt-4" variant="secondary" onClick={() => (window.location.href = `/seller/${shop.status.toLowerCase()}`)}>
+          <Button className="mt-4" variant="secondary" onClick={() => router.push(`/seller/${shop.status.toLowerCase()}`)}>
             Xem trạng thái
           </Button>
         </Panel>
@@ -180,8 +182,8 @@ export default function SellerDashboardPage() {
         <Panel>
           <h3 className="font-bold">Thao tác nhanh</h3>
           <div className="mt-3 flex flex-wrap gap-2">
-            <Button onClick={() => (window.location.href = "/seller/products/new")}>Tạo sản phẩm</Button>
-            <Button variant="secondary" onClick={() => (window.location.href = "/seller/orders")}>Xem đơn hàng</Button>
+            <Button onClick={() => router.push("/seller/products/new")}>Tạo sản phẩm</Button>
+            <Button variant="secondary" onClick={() => router.push("/seller/orders")}>Xem đơn hàng</Button>
           </div>
         </Panel>
         <Panel>

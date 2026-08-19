@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { CreditCard, Home, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Panel, Section } from "@/components/ui/containers";
@@ -17,11 +18,13 @@ type PaymentPageClientProps = {
 };
 
 export default function PaymentPageClient({ paymentCode }: PaymentPageClientProps) {
+  const router = useRouter();
   const store = useMarketplaceStore();
   const { showToast } = store;
   const ready = store.ready;
   const fetchPaymentDetail = useMarketplaceStore((s) => s.fetchPaymentDetail);
   const [resuming, setResuming] = useState(false);
+  const [mockPaying, setMockPaying] = useState(false);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
 
@@ -127,18 +130,21 @@ export default function PaymentPageClient({ paymentCode }: PaymentPageClientProp
               ) : null}
               {canMockPay ? (
                 <Button
+                  disabled={mockPaying}
                   onClick={async () => {
+                    setMockPaying(true);
                     try {
                       await paymentApi.mockCallback({ payment_code: payment.paymentCode, status: "PAID" });
                       store.updatePaymentStatus(payment.paymentCode, "PAID");
                       showToast("Đã thanh toán đơn hàng.", "success");
                     } catch {
                       showToast("Lỗi khi thanh toán đơn hàng.", "danger");
+                      setMockPaying(false);
                     }
                   }}
                 >
-                  <CreditCard className="h-4 w-4" aria-hidden="true" />
-                  Thanh toán ngay
+                  {mockPaying ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <CreditCard className="h-4 w-4" aria-hidden="true" />}
+                  {mockPaying ? "Đang xử lý thanh toán..." : "Thanh toán ngay"}
                 </Button>
               ) : null}
               {payment.paymentStatus === "PAID" ? (
@@ -148,11 +154,11 @@ export default function PaymentPageClient({ paymentCode }: PaymentPageClientProp
                 </Button>
               ) : null}
               <div className="my-1 border-t border-line" />
-              <Button variant="secondary" onClick={() => (window.location.href = "/")}>
+              <Button variant="secondary" onClick={() => router.push("/")}>
                 <Home className="h-4 w-4" aria-hidden="true" />
                 Về màn hình chính
               </Button>
-              <Button variant="secondary" onClick={() => (window.location.href = "/account/orders")}>Xem đơn hàng</Button>
+              <Button variant="secondary" onClick={() => router.push("/account/orders")}>Xem đơn hàng</Button>
             </div>
           </Panel>
         </div>

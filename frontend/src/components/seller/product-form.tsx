@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox, Field, Input, Select, Textarea } from "@/components/ui/input";
@@ -33,6 +34,7 @@ function InfoRow({ label, value }: { label: string; value: string }) {
 }
 
 export default function ProductForm({ productId }: { productId?: string }) {
+  const router = useRouter();
   const shop = useMarketplaceStore((s) => s.getCurrentShop());
   const showToast = useMarketplaceStore((s) => s.showToast);
   const currentUser = useMarketplaceStore((s) => s.getCurrentUser());
@@ -371,7 +373,7 @@ export default function ProductForm({ productId }: { productId?: string }) {
 
                 if (res.ok) {
                   showToast("Đã lưu sản phẩm.", "success");
-                  window.location.href = "/seller/products";
+                  router.push("/seller/products");
                 } else {
                   showToast(res.message || "Lỗi lưu sản phẩm", "danger");
                 }

@@ -129,12 +129,12 @@ export function MarketplaceHeader() {
       const shopQuery = query.trim();
       if (!shopQuery) return;
       addSearchHistory(shopQuery);
-      window.location.href = `/search/shops?q=${encodeURIComponent(shopQuery)}`;
+      router.push(`/search/shops?q=${encodeURIComponent(shopQuery)}`);
       return;
     }
     if (keyword.trim()) {
       addSearchHistory(keyword.trim());
-      window.location.href = `/search?q=${encodeURIComponent(keyword.trim())}`;
+      router.push(`/search?q=${encodeURIComponent(keyword.trim())}`);
     }
   };
 

@@ -8,7 +8,7 @@ import { getSearchHistory } from "@/lib/search-history";
 import { useMarketplaceStore } from "@/store/use-marketplace-store";
 import { CyberProductGridSkeleton } from "@/components/ui/skeletons";
 import { EmptyState } from "@/components/ui/feedback";
-import { RatingStars } from "@/components/shared/cards";
+import { ProductCard } from "@/components/shared/cards";
 import type { Product, ProductVariant, Shop } from "@/types/models";
 
 function SuggestionsContent() {
@@ -70,13 +70,15 @@ function SuggestionsContent() {
             <CyberProductGridSkeleton count={48} />
           ) : activeProducts.length > 0 ? (
             <>
-              <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
+              <div className="grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-6">
                 {activeProducts.map((product) => (
-                  <CyberProductCard
+                  <ProductCard
                     key={product.id}
                     product={product}
-                    variant={localVariants.find((v) => v.productId === product.id)}
+                    variants={localVariants}
                     shop={localShops.find((s) => s.id === product.sellerId)}
+                    categories={store.state.categories}
+                    hideAddToCart={true}
                   />
                 ))}
               </div>
@@ -117,47 +119,5 @@ export default function SuggestionsPage() {
     <Suspense fallback={<div className="min-h-screen p-8"><CyberProductGridSkeleton count={48} /></div>}>
       <SuggestionsContent />
     </Suspense>
-  );
-}
-
-function CyberProductCard({
-  product,
-  variant,
-  shop
-}: {
-  product: Product;
-  variant?: ProductVariant;
-  shop?: Shop;
-}) {
-  return (
-    <Link href={`/shops/${shop?.shopSlug || "shop"}/products/${product.slug}`} className="bento-card group flex flex-col justify-between overflow-hidden rounded-2xl border border-slate-200/80 bg-white/90 p-4 transition-all hover:-translate-y-1 hover:border-slate-300">
-      <div>
-        <div className="relative aspect-square w-full overflow-hidden rounded-xl bg-slate-50">
-          <img
-            src={product.thumbnailUrl}
-            alt={product.name}
-            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-          />
-        </div>
-
-        <div className="mt-3">
-          <p className="text-[11px] font-semibold text-slate-400">{shop?.shopName || "Shepoo Store"}</p>
-          <h4 className="line-clamp-1 font-heading text-sm font-bold text-slate-900 group-hover:text-emerald-700">
-            {product.name}
-          </h4>
-          <div className="mt-1.5 flex items-center justify-between gap-1">
-            <RatingStars rating={product.averageRating} count={product.reviewCount} />
-            <span className="text-[11px] font-semibold text-slate-600">Đã bán <span className="text-emerald-600 font-bold">{product.soldCount.toLocaleString("vi-VN")}</span></span>
-          </div>
-        </div>
-      </div>
-
-      <div className="mt-3 border-t border-slate-100 pt-3">
-        <p className="text-[10px] text-slate-400">Giá bán</p>
-        <p className="font-heading text-base font-extrabold text-emerald-700">
-          {variant ? `${variant.price.toLocaleString("vi-VN")} ₫` : "---"}
-        </p>
-      </div>
-    </Link>
   );
 }

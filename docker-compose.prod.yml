@@ -78,7 +78,7 @@ services:
       MYSQL_USER: ${MYSQL_USER}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD}
       MYSQL_DATABASE: ${MYSQL_DATABASE}
-      SEED_SQL_PATH: /seed/ecommerce_db_backup_20260811_224740.sql
+      SEED_SQL_PATH: /seed/backup.sql
     volumes:
       - ./database/seed:/seed:ro
     entrypoint: ["/bin/bash", "/seed/seed.sh"]

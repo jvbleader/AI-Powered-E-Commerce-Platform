@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { RefreshCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { EmptyState, ErrorState } from "@/components/ui/feedback";
@@ -12,6 +13,7 @@ import type { SellerApplication, SellerStatus } from "@/types/models";
 import Unauthorized from "@/components/shared/unauthorized-page";
 
 export default function SellerPendingPage() {
+  const router = useRouter();
   const store = useMarketplaceStore();
   const [application, setApplication] = useState<SellerApplication | undefined>();
   const [actualStatus, setActualStatus] = useState<SellerStatus>("PENDING");
@@ -83,7 +85,7 @@ export default function SellerPendingPage() {
         <EmptyState
           title="Chưa có hồ sơ mở shop"
           description="Bạn cần gửi hồ sơ seller trước khi theo dõi trạng thái xét duyệt."
-          action={<Button onClick={() => (window.location.href = "/seller/register")}>Gửi hồ sơ</Button>}
+          action={<Button onClick={() => router.push("/seller/register")}>Gửi hồ sơ</Button>}
         />
       </main>
     );
@@ -103,9 +105,9 @@ export default function SellerPendingPage() {
           {actualStatus === "CLOSED" && "Shop đã đóng."}
         </p>
         <div className="mt-4 flex flex-wrap gap-2">
-          {actualStatus === "APPROVED" ? <Button onClick={() => (window.location.href = "/seller")}>Vào kênh người bán</Button> : null}
-          {actualStatus === "REJECTED" ? <Button onClick={() => (window.location.href = "/seller/register")}>Sửa hồ sơ</Button> : null}
-          <Button variant="secondary" onClick={() => (window.location.href = "/")}>Về marketplace</Button>
+          {actualStatus === "APPROVED" ? <Button onClick={() => router.push("/seller")}>Vào kênh người bán</Button> : null}
+          {actualStatus === "REJECTED" ? <Button onClick={() => router.push("/seller/register")}>Sửa hồ sơ</Button> : null}
+          <Button variant="secondary" onClick={() => router.push("/")}>Về marketplace</Button>
         </div>
       </Panel>
     </main>

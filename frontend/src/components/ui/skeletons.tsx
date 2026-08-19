@@ -52,31 +52,34 @@ export function TableRowSkeleton({ cols = 5 }: { cols?: number }) {
 
 export function CyberProductCardSkeleton() {
   return (
-    <div className="bento-card flex flex-col justify-between overflow-hidden rounded-2xl border border-slate-200/80 bg-white/90 p-4">
-      <div>
-        <div className="relative aspect-square w-full overflow-hidden rounded-xl bg-slate-100">
-          <Skeleton className="h-full w-full rounded-none" />
+    <article className="overflow-hidden rounded-2xl border border-slate-200/90 bg-white">
+      <div className="relative aspect-square overflow-hidden bg-slate-100">
+        <Skeleton className="h-full w-full rounded-none" />
+      </div>
+      <div className="space-y-2 p-2.5">
+        <div className="space-y-1.5 min-h-10">
+          <Skeleton className="h-4 w-full" />
+          <Skeleton className="h-4 w-2/3" />
         </div>
-        <div className="mt-3">
-          <Skeleton className="h-4 w-20 rounded" />
-          <Skeleton className="h-5 w-5/6 rounded-md mt-1" />
-          <div className="mt-1.5 flex items-center justify-between gap-1">
-            <Skeleton className="h-4 w-20 rounded" />
-            <Skeleton className="h-4 w-16 rounded" />
-          </div>
+        <div className="flex items-center gap-1">
+          <Skeleton className="h-3.5 w-3.5 rounded-full" />
+          <Skeleton className="h-3 w-2/5" />
+        </div>
+        <div className="flex items-baseline gap-1 py-0.5">
+          <Skeleton className="h-4 w-1/3" />
+        </div>
+        <div className="flex items-center justify-between gap-2 pt-1.5 border-t border-slate-100">
+          <Skeleton className="h-3 w-1/3" />
+          <Skeleton className="h-3 w-1/4" />
         </div>
       </div>
-      <div className="mt-3 border-t border-slate-100 pt-3">
-        <Skeleton className="h-3.5 w-10 rounded mb-1" />
-        <Skeleton className="h-6 w-24 rounded-md" />
-      </div>
-    </div>
+    </article>
   );
 }
 
 export function CyberProductGridSkeleton({ count = 48 }: { count?: number }) {
   return (
-    <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
+    <div className="grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-6">
       {Array.from({ length: count }).map((_, i) => (
         <CyberProductCardSkeleton key={i} />
       ))}

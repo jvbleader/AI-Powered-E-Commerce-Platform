@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft, Copy, User, CreditCard, Receipt, Printer, Truck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Panel, Section } from "@/components/ui/containers";
@@ -20,6 +20,7 @@ import { useMarketplaceStore } from "@/store/use-marketplace-store";
 import Unauthorized from "@/components/shared/unauthorized-page";
 
 export default function SellerOrderDetailPage() {
+  const router = useRouter();
   const params = useParams();
   const orderCode = params.orderCode as string;
   const store = useMarketplaceStore();
@@ -70,12 +71,10 @@ export default function SellerOrderDetailPage() {
       <div className="mb-4">
         <button
           onClick={() => {
-            // Using window.location.href or router.push triggers nav. 
-            // We use history.back() if possible, else push
             if (window.history.length > 1) {
               window.history.back();
             } else {
-              window.location.href = "/seller/orders";
+              router.push("/seller/orders");
             }
           }}
           className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-600 hover:text-emerald-700 transition bg-transparent border-none cursor-pointer"

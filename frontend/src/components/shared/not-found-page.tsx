@@ -1,5 +1,4 @@
-"use client";
-
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/feedback";
 
@@ -10,7 +9,11 @@ export default function NotFoundPage() {
         <EmptyState
           title="Không tìm thấy trang"
           description="Đường dẫn không đúng hoặc không còn tồn tại."
-          action={<Button onClick={() => (window.location.href = "/")}>Về trang chủ</Button>}
+          action={
+            <Link href="/">
+              <Button>Về trang chủ</Button>
+            </Link>
+          }
         />
       </div>
     </main>

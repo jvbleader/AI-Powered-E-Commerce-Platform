@@ -5,6 +5,8 @@ import { ApiError } from "@/services/api";
 import { addToCartApi, updateCartItemApi, removeCartItemApi, selectAllCartApi, fetchMyCart } from "@/services/cart-api";
 import { normalizeProduct } from "@/services/product-api";
 
+const cartUpdateDebounceMap: Record<string, ReturnType<typeof setTimeout>> = {};
+
 export const createCartSlice: StateCreator<MarketplaceStore, [], [], any> = (set, get) => {
   const setState = (updater: ((state: AppState) => AppState) | Partial<AppState>) => {
     set((store) => {
@@ -53,22 +55,62 @@ export const createCartSlice: StateCreator<MarketplaceStore, [], [], any> = (set
       }
     },
     updateCartItem: async (cartItemId: string, changes: { quantity?: number; isSelected?: boolean }) => {
-      const { state, verificationContext } = get();
-
-    try {
-      const apiItem = await updateCartItemApi(Number(cartItemId), changes.quantity, changes.isSelected);
+      // 1. Cập nhật lạc quan (Optimistic update) ngay trên UI để phản hồi mượt mà
       setState((prev: AppState) => ({
         ...prev,
         cartItems: prev.cartItems.map((item) =>
           item.id === cartItemId
-            ? { ...item, quantity: apiItem.quantity, isSelected: apiItem.isSelected }
+            ? {
+                ...item,
+                quantity: changes.quantity !== undefined ? changes.quantity : item.quantity,
+                isSelected: changes.isSelected !== undefined ? changes.isSelected : item.isSelected,
+              }
             : item
-        )
+        ),
       }));
-    } catch (e) {
-      console.error("Failed to update cart item:", e);
-    }
-  },
+
+      // 2. Nếu chỉ đổi trạng thái checkbox isSelected, gửi request ngay lập tức
+      if (changes.quantity === undefined) {
+        try {
+          const apiItem = await updateCartItemApi(Number(cartItemId), undefined, changes.isSelected);
+          setState((prev: AppState) => ({
+            ...prev,
+            cartItems: prev.cartItems.map((item) =>
+              item.id === cartItemId
+                ? { ...item, quantity: apiItem.quantity, isSelected: apiItem.isSelected }
+                : item
+            ),
+          }));
+        } catch (e) {
+          console.error("Failed to update cart item selection:", e);
+          get().refreshCart();
+        }
+        return;
+      }
+
+      // 3. Nếu thay đổi số lượng, áp dụng debounce 350ms gom nhóm các lần bấm liên tiếp
+      if (cartUpdateDebounceMap[cartItemId]) {
+        clearTimeout(cartUpdateDebounceMap[cartItemId]);
+      }
+
+      cartUpdateDebounceMap[cartItemId] = setTimeout(async () => {
+        delete cartUpdateDebounceMap[cartItemId];
+        try {
+          const apiItem = await updateCartItemApi(Number(cartItemId), changes.quantity, changes.isSelected);
+          setState((prev: AppState) => ({
+            ...prev,
+            cartItems: prev.cartItems.map((item) =>
+              item.id === cartItemId
+                ? { ...item, quantity: apiItem.quantity, isSelected: apiItem.isSelected }
+                : item
+            ),
+          }));
+        } catch (e) {
+          console.error("Failed to update cart item quantity:", e);
+          get().refreshCart();
+        }
+      }, 350);
+    },
     removeCartItem: async (cartItemId: string) => {
       const { state, verificationContext } = get();
 

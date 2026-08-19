@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { ChevronLeft, ChevronRight, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/feedback";
@@ -12,19 +12,20 @@ import { fetchAdminProducts, hideAdminProduct, unhideAdminProduct, deleteAdminPr
 import { Product } from "@/types/models";
 import { formatVnd, productStatusLabel } from "@/lib/helpers";
 
-function NotFoundPage() {
+function NotFoundPage({ onBack }: { onBack?: () => void }) {
   return (
     <main className="mx-auto max-w-2xl px-4 py-10">
       <EmptyState
         title="Không tìm thấy route"
         description="Đường dẫn không đúng hoặc không còn tồn tại."
-        action={<Button onClick={() => (window.location.href = "/admin/products")}>Về trang danh sách</Button>}
+        action={<Button onClick={onBack}>Về trang danh sách</Button>}
       />
     </main>
   );
 }
 
 export default function AdminProductDetailPage() {
+  const router = useRouter();
   const params = useParams();
   const productId = params.productId as string;
   const store = useMarketplaceStore();
@@ -118,7 +119,7 @@ export default function AdminProductDetailPage() {
   }, [productId]);
 
   if (loading) return <div className="p-10 text-center">Đang tải...</div>;
-  if (!product) return <NotFoundPage />;
+  if (!product) return <NotFoundPage onBack={() => router.push("/admin/products")} />;
 
   const variants = (product as any).variants || [];
 
@@ -129,7 +130,7 @@ export default function AdminProductDetailPage() {
           <Button
             variant="secondary"
             className="h-8 px-2.5 text-xs flex items-center gap-1.5"
-            onClick={() => (window.location.href = "/admin/products")}
+            onClick={() => router.push("/admin/products")}
           >
             <ArrowLeft className="h-3.5 w-3.5" />
             Danh sách

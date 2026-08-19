@@ -65,22 +65,34 @@ export const PHONE_RE = /^0(3|5|7|8|9)\d{8}$/;
 
 export const persistState = (state: AppState) => {
   if (typeof window !== "undefined") {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    try {
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    } catch (error) {
+      console.warn("[Storage] Failed to persist state to localStorage (quota exceeded):", error);
+    }
   }
 };
 
 export const readVerificationContext = (): VerificationContext | undefined => {
   if (typeof window === "undefined") return undefined;
-  const raw = window.localStorage.getItem(VERIFICATION_CONTEXT_KEY);
-  return raw ? (JSON.parse(raw) as VerificationContext) : undefined;
+  try {
+    const raw = window.localStorage.getItem(VERIFICATION_CONTEXT_KEY);
+    return raw ? (JSON.parse(raw) as VerificationContext) : undefined;
+  } catch {
+    return undefined;
+  }
 };
 
 export const persistVerificationContext = (context: VerificationContext | undefined) => {
   if (typeof window === "undefined") return;
-  if (context) {
-    window.localStorage.setItem(VERIFICATION_CONTEXT_KEY, JSON.stringify(context));
-  } else {
-    window.localStorage.removeItem(VERIFICATION_CONTEXT_KEY);
+  try {
+    if (context) {
+      window.localStorage.setItem(VERIFICATION_CONTEXT_KEY, JSON.stringify(context));
+    } else {
+      window.localStorage.removeItem(VERIFICATION_CONTEXT_KEY);
+    }
+  } catch (error) {
+    console.warn("[Storage] Failed to persist verification context:", error);
   }
 };
 

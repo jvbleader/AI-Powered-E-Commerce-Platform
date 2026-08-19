@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Plus, Box } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/ui/data-table";
@@ -15,6 +16,7 @@ import { QuickInventoryModal } from "@/components/seller/quick-inventory-modal";
 import type { Product } from "@/types/models";
 
 export default function SellerProductsPage() {
+  const router = useRouter();
   const store = useMarketplaceStore();
   const shop = store.getCurrentShop();
   const { showToast } = store;
@@ -57,7 +59,7 @@ export default function SellerProductsPage() {
       <Section
         title="Quản lý sản phẩm"
         action={
-          <Button onClick={() => (window.location.href = "/seller/products/new")}>
+          <Button onClick={() => router.push("/seller/products/new")}>
             <Plus className="h-4 w-4" />
             Tạo sản phẩm
           </Button>

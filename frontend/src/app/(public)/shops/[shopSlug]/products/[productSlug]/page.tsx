@@ -526,7 +526,9 @@ export default function ProductDetailPage() {
               </div>
               {selectedVariant?.salePrice ? (
                 <p className="mt-1 text-[11px] font-semibold text-rose-600">
-                  Ưu đãi áp dụng đến {formatDate(selectedVariant.saleEndAt)}
+                  {selectedVariant.saleEndAt && parseApiDateTime(selectedVariant.saleEndAt)
+                    ? `Ưu đãi áp dụng đến ${formatDate(selectedVariant.saleEndAt)}`
+                    : "Ưu đãi có hạn"}
                 </p>
               ) : (
                 <p className="mt-1 text-[11px] font-medium text-slate-500">
@@ -685,7 +687,7 @@ export default function ProductDetailPage() {
                   isSelectedVariantOutOfStock
                 }
                 onClick={handleBuyNow}
-                className="flex-1 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 py-3 text-sm font-extrabold text-white shadow-lg transition-all hover:from-emerald-500 hover:to-teal-500 active:scale-[0.99] disabled:opacity-60"
+                className="flex-1 rounded-xl !border-emerald-600 !bg-emerald-600 py-3 text-sm font-extrabold !text-white shadow-lg transition-all hover:!bg-emerald-700 active:scale-[0.99] disabled:opacity-60"
               >
                 {buyingNow ? (
                   <div className="flex items-center justify-center gap-2">

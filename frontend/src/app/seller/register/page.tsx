@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { ChangeEvent, FormEvent } from "react";
+import { useRouter } from "next/navigation";
 import { RefreshCcw, Store } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ErrorState } from "@/components/ui/feedback";
@@ -16,6 +17,7 @@ import Unauthorized from "@/components/shared/unauthorized-page";
 import { shippingApi } from "@/services/shipping-api";
 
 export default function SellerRegisterPage() {
+  const router = useRouter();
   const store = useMarketplaceStore();
   const { showToast } = store;
 
@@ -127,7 +129,7 @@ export default function SellerRegisterPage() {
     }
 
     showToast(result.message, "success");
-    window.location.href = result.redirectTo;
+    router.push(result.redirectTo);
   };
 
   if (!store.ready || loadingApplication) {
@@ -154,7 +156,7 @@ export default function SellerRegisterPage() {
           <StatusBadge status="APPROVED" label={sellerStatusLabel.APPROVED} />
           <h1 className="mt-3 text-2xl font-black text-ink">Shop đã được duyệt</h1>
           <p className="mt-2 text-sm leading-6 text-muted">Hồ sơ đã được duyệt.</p>
-          <Button className="mt-4" onClick={() => (window.location.href = "/seller")}>
+          <Button className="mt-4" onClick={() => router.push("/seller")}>
             Vào kênh người bán
           </Button>
         </Panel>
@@ -220,7 +222,7 @@ export default function SellerRegisterPage() {
                   {savingApplication ? "Đang gửi..." : mode === "update" ? "Cập nhật và gửi duyệt lại" : "Gửi yêu cầu"}
                 </Button>
                 {applicationStatus === "REJECTED" ? (
-                  <Button type="button" variant="secondary" onClick={() => (window.location.href = "/seller/rejected")}>
+                  <Button type="button" variant="secondary" onClick={() => router.push("/seller/rejected")}>
                     Xem trạng thái từ chối
                   </Button>
                 ) : null}

@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-SEED_SQL_PATH="${SEED_SQL_PATH:-/seed/ecommerce_db_backup_20260811_224740.sql}"
+SEED_SQL_PATH="${SEED_SQL_PATH:-/seed/backup.sql}"
 
 echo "[db-seed] Waiting for MySQL at ${MYSQL_HOST}:${MYSQL_PORT}..."
 until mysqladmin \

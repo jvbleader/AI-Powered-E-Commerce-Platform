@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { RefreshCcw, ArrowLeft, Store, Truck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { EmptyState, ErrorState } from "@/components/ui/feedback";
@@ -21,19 +21,20 @@ function InfoRow({ label, value }: { label: string; value: string }) {
   );
 }
 
-function NotFoundPage() {
+function NotFoundPage({ onBack }: { onBack?: () => void }) {
   return (
     <main className="mx-auto max-w-2xl px-4 py-10">
       <EmptyState
         title="Không tìm thấy người bán"
         description="Hồ sơ người bán không đúng hoặc không tồn tại."
-        action={<Button onClick={() => (window.location.href = "/admin/sellers")}>Về danh sách người bán</Button>}
+        action={<Button onClick={onBack}>Về danh sách người bán</Button>}
       />
     </main>
   );
 }
 
 export default function AdminSellerDetailPage() {
+  const router = useRouter();
   const params = useParams();
   const sellerId = params.sellerId as string;
   const store = useMarketplaceStore();
@@ -132,7 +133,7 @@ export default function AdminSellerDetailPage() {
     );
   }
 
-  if (!detail) return <NotFoundPage />;
+  if (!detail) return <NotFoundPage onBack={() => router.push("/admin/sellers")} />;
 
   const application = detail.application;
   const applicationStatus = application.status ?? "PENDING";
@@ -144,7 +145,7 @@ export default function AdminSellerDetailPage() {
           <Button
             variant="secondary"
             className="h-8 px-2.5 text-xs flex items-center gap-1.5"
-            onClick={() => (window.location.href = "/admin/sellers")}
+            onClick={() => router.push("/admin/sellers")}
           >
             <ArrowLeft className="h-3.5 w-3.5" />
             Danh sách

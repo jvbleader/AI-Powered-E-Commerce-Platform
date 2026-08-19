@@ -15,19 +15,29 @@ export function getSearchHistory(): string[] {
 
 export function addSearchHistory(keyword: string): void {
   if (typeof window === "undefined" || !keyword.trim()) return;
-  const trimmed = keyword.trim();
-  const history = getSearchHistory().filter((k) => k !== trimmed);
-  history.unshift(trimmed);
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(history.slice(0, MAX_ITEMS)));
+  try {
+    const trimmed = keyword.trim();
+    const history = getSearchHistory().filter((k) => k !== trimmed);
+    history.unshift(trimmed);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(history.slice(0, MAX_ITEMS)));
+  } catch (error) {
+    console.warn("[SearchHistory] Failed to save search history:", error);
+  }
 }
 
 export function removeSearchHistory(keyword: string): void {
   if (typeof window === "undefined") return;
-  const history = getSearchHistory().filter((k) => k !== keyword);
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(history));
+  try {
+    const history = getSearchHistory().filter((k) => k !== keyword);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(history));
+  } catch (error) {
+    console.warn("[SearchHistory] Failed to remove search history item:", error);
+  }
 }
 
 export function clearSearchHistory(): void {
   if (typeof window === "undefined") return;
-  localStorage.removeItem(STORAGE_KEY);
+  try {
+    localStorage.removeItem(STORAGE_KEY);
+  } catch {}
 }

@@ -25,8 +25,6 @@ export default function CheckoutPage() {
   );
   const [method, setMethod] = useState<PaymentMethod>("MOCK");
   const [note, setNote] = useState("");
-  const [coupon, setCoupon] = useState("");
-  const [shipCoupon, setShipCoupon] = useState("");
   const [shopShippingMap, setShopShippingMap] = useState<Record<string, string>>({});
 
   const rows = store.getCartRows();
@@ -181,12 +179,6 @@ export default function CheckoutPage() {
               <div className="mt-3 grid gap-3">
                 <Field label="Ghi chú khách hàng">
                   <Textarea value={note} onChange={(event) => setNote(event.target.value)} placeholder="Ghi chú giao hàng" maxLength={500} />
-                </Field>
-                <Field label="Mã giảm tiền">
-                  <Input value={coupon} onChange={(event) => setCoupon(event.target.value)} placeholder="Tối đa 1 mã" />
-                </Field>
-                <Field label="Mã giảm ship">
-                  <Input value={shipCoupon} onChange={(event) => setShipCoupon(event.target.value)} placeholder="Tối đa 1 mã" />
                 </Field>
                 <Field label="Phương thức thanh toán">
                   <Select value={method} onChange={(event) => setMethod(event.target.value as PaymentMethod)}>

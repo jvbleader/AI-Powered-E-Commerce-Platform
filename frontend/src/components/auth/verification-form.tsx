@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
-import { useSearchParams } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { ShieldCheck, Loader2, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Field, Input } from "@/components/ui/input";
@@ -17,6 +17,7 @@ const normalizeAuthPhoneInput = (value: string) => {
 };
 
 export default function VerificationPage({ type }: { type: "email" | "phone" }) {
+  const router = useRouter();
   const store = useMarketplaceStore();
   const searchParams = useSearchParams();
   const token = searchParams ? searchParams.get("token") ?? "" : "";
@@ -127,7 +128,7 @@ export default function VerificationPage({ type }: { type: "email" | "phone" }) 
                     <p className="text-sm text-muted">
                       Email của bạn đã được xác thực thành công. Bạn có thể tiếp tục đăng nhập để trải nghiệm Shepoo.
                     </p>
-                    <Button onClick={() => window.location.href = '/login'} className="w-full mt-2">
+                    <Button onClick={() => router.push('/login')} className="w-full mt-2">
                       Đến trang đăng nhập
                     </Button>
                   </div>
@@ -138,7 +139,7 @@ export default function VerificationPage({ type }: { type: "email" | "phone" }) 
                         {fieldError || "Xác thực thất bại hoặc link đã hết hạn."}
                       </p>
                     </div>
-                    <Button variant="secondary" onClick={() => window.location.href = '/login'} className="w-full">
+                    <Button variant="secondary" onClick={() => router.push('/login')} className="w-full">
                       Quay lại đăng nhập
                     </Button>
                   </div>

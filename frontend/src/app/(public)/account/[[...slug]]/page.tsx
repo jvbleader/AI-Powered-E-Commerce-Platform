@@ -316,7 +316,7 @@ export default function AccountPage() {
               <Button 
                 variant="secondary" 
                 className="h-7 text-xs px-2.5 rounded-lg border-line text-ink hover:bg-line/30 gap-1.5"
-                onClick={() => window.location.href = `/shops/${order.shopSlug || order.sellerId}`}
+                onClick={() => router.push(`/shops/${order.shopSlug || order.sellerId}`)}
               >
                 <Store className="w-3.5 h-3.5" />
                 <span className="hidden sm:inline">Xem shop</span>
@@ -338,7 +338,7 @@ export default function AccountPage() {
 
         <div 
           className="cursor-pointer group"
-          onClick={() => window.location.href = `/account/orders/${order.orderCode}`}
+          onClick={() => router.push(`/account/orders/${order.orderCode}`)}
         >
           {firstItem && (
             <div className="flex items-start gap-4">
@@ -465,7 +465,7 @@ export default function AccountPage() {
     const goToPaymentForOrder = async (order: Order) => {
       const payment = findPaymentForOrder(order.orderCode);
       if (payment) {
-        window.location.href = `/payment/${payment.paymentCode}`;
+        router.push(`/payment/${payment.paymentCode}`);
         return;
       }
       const method = order.preferredPaymentMethod ?? store.state.lastCheckoutPaymentMethod ?? "MOCK";
@@ -478,7 +478,7 @@ export default function AccountPage() {
         window.location.href = result.redirectUrl;
         return;
       }
-      window.location.href = `/payment/${result.paymentCode}`;
+      router.push(`/payment/${result.paymentCode}`);
     };
 
     const shopById = (id?: string) => {
@@ -657,7 +657,7 @@ export default function AccountPage() {
     const goToPaymentForOrder = async (order: Order) => {
       const payment = findPaymentForOrder(order.orderCode);
       if (payment) {
-        window.location.href = `/payment/${payment.paymentCode}`;
+        router.push(`/payment/${payment.paymentCode}`);
         return;
       }
       const method = order.preferredPaymentMethod ?? store.state.lastCheckoutPaymentMethod ?? "MOCK";
@@ -670,7 +670,7 @@ export default function AccountPage() {
         window.location.href = result.redirectUrl;
         return;
       }
-      window.location.href = `/payment/${result.paymentCode}`;
+      router.push(`/payment/${result.paymentCode}`);
     };
 
     const handleCopy = (text: string, label: string) => {
@@ -1104,23 +1104,11 @@ export default function AccountPage() {
                            const file = e.target.files?.[0];
                            if (!file) return;
                            setUploadingImage(true);
-                           const formData = new FormData();
-                           formData.append("file", file);
                            try {
-                             const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-                             const res = await fetch(`${baseUrl}/api/upload/image`, {
-                               method: "POST",
-                               body: formData,
-                               credentials: "include"
-                             });
-                             if (res.ok) {
-                               const data = await res.json();
-                               if (data.url) setImages(prev => [...prev, data.url]);
-                             } else {
-                               throw new Error("Lỗi tải ảnh");
-                             }
-                           } catch (err) {
-                             console.error(err);
+                             const url = await uploadImage(file);
+                             if (url) setImages(prev => [...prev, url]);
+                           } catch (err: any) {
+                             showToast(err.message || "Lỗi tải ảnh", "danger");
                            } finally {
                              setUploadingImage(false);
                              e.target.value = "";
