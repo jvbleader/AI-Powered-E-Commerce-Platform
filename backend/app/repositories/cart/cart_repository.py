@@ -86,12 +86,19 @@ async def select_all_cart_items(
 async def get_cart_items_for_checkout(
     db: AsyncSession, user_id: int, cart_item_ids: list[int]
 ) -> list[CartItem]:
-    from models.catalog import ProductVariant
+    from models.catalog import Product, ProductVariant
 
     stmt = (
         select(CartItem)
+        .join(CartItem.variant)
+        .join(ProductVariant.product)
         .options(selectinload(CartItem.variant).selectinload(ProductVariant.product))
-        .where(CartItem.id.in_(cart_item_ids), CartItem.cart.has(user_id=user_id))
+        .where(
+            CartItem.id.in_(cart_item_ids),
+            CartItem.cart.has(user_id=user_id),
+            ProductVariant.status == "ACTIVE",
+            Product.status == "ACTIVE",
+        )
     )
     result = await db.execute(stmt)
     return list(result.scalars().all())

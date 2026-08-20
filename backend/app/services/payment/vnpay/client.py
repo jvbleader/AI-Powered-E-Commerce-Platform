@@ -179,6 +179,7 @@ class VNPayClient:
         request_id = secrets.token_hex(8)
         create_date = _format_vn_datetime(_now_vn())
         vnp_amount = str(int(amount * 100))
+        sanitized_order_info = order_info.replace("|", "-").strip() if order_info else ""
 
         payload: dict[str, str] = {
             "vnp_RequestId": request_id,
@@ -188,7 +189,7 @@ class VNPayClient:
             "vnp_TransactionType": transaction_type,
             "vnp_TxnRef": txn_ref,
             "vnp_Amount": vnp_amount,
-            "vnp_OrderInfo": order_info,
+            "vnp_OrderInfo": sanitized_order_info,
             "vnp_TransactionDate": transaction_date,
             "vnp_CreateBy": created_by,
             "vnp_CreateDate": create_date,
@@ -210,7 +211,7 @@ class VNPayClient:
             created_by,
             create_date,
             ip_addr,
-            order_info,
+            sanitized_order_info,
         ]
         payload["vnp_SecureHash"] = sign_pipe_data(
             sign_fields, self.hash_secret, self.hash_algorithm

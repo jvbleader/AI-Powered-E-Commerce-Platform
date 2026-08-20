@@ -232,12 +232,6 @@ async def get_seller_dashboard_summary(
     now_aware = datetime.now(UTC)
     now_naive = utc_now()
 
-    try:
-        await db.execute(text("ALTER TABLE seller_statistics ADD COLUMN updated_at DATETIME NULL;"))
-        await db.flush()
-    except Exception:
-        pass
-
     # Real-time counts for pending orders & products
     pending_stmt = (
         select(func.count(Order.id))

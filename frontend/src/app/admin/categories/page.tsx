@@ -89,6 +89,16 @@ export default function AdminCategoriesPage() {
     loadSuggestions();
   }, []);
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && selectedSuggestion && !approving) {
+        setSelectedSuggestion(null);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [selectedSuggestion, approving]);
+
   // Tính số lượng đề xuất chờ duyệt
   const pendingCount = useMemo(() => {
     return suggestions.filter((s) => s.status === "PENDING").length;
@@ -495,7 +505,17 @@ export default function AdminCategoriesPage() {
 
       {/* Modal: Duyệt & Tạo Danh mục */}
       {selectedSuggestion && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4">
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="approve-category-modal-title"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4"
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !approving) {
+              setSelectedSuggestion(null);
+            }
+          }}
+        >
           <div className="bg-white rounded-2xl shadow-xl border border-slate-200 w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-150">
             <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 bg-slate-50/50">
               <div className="flex items-center gap-2">
@@ -503,7 +523,7 @@ export default function AdminCategoriesPage() {
                   <Check className="w-4 h-4" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-slate-900 text-sm">Duyệt & Tạo Danh Mục</h3>
+                  <h3 id="approve-category-modal-title" className="font-bold text-slate-900 text-sm">Duyệt & Tạo Danh Mục</h3>
                   <p className="text-xs text-slate-500">
                     Đề xuất từ: {selectedSuggestion.shop_name || `Shop #${selectedSuggestion.seller_id}`}
                   </p>

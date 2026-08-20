@@ -85,7 +85,6 @@ async def get_products(
         user_id = current_user.id if current_user else None
         background_tasks.add_task(
             search_log_svc.log_search,
-            db=db,
             keyword=keyword.strip(),
             user_id=user_id,
             result_count=result.total,

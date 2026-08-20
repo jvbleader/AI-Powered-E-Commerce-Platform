@@ -1,3 +1,4 @@
+import asyncio
 import os
 import secrets
 from urllib.parse import urlencode
@@ -16,6 +17,7 @@ from schemas.auth.auth_schema import ChangePasswordRequest, ResetPasswordRequest
 from utils.hash_and_verify import *
 from repositories.user.user_repository import *
 from repositories.user.password_reset_token_repository import *
+from repositories.user.user_session_repository import revoke_all_user_sessions
 
 load_dotenv()
 SMTP_FROM_EMAIL = os.getenv("SMTP_FROM_EMAIL")
@@ -49,6 +51,12 @@ async def change_password(user: User, data: ChangePasswordRequest, db: AsyncSess
         )
 
     await change_password_hash_by_user(user, hash_password(data.new_password), db)
+    await revoke_all_user_sessions(
+        user_id=user.id,
+        revoked_at=datetime.now(UTC),
+        revoke_reason="PASSWORD_CHANGED",
+        db=db,
+    )
 
 
 def generate_token() -> str:
@@ -68,25 +76,24 @@ def email_verification_link(token: str) -> str:
     return f"{FRONTEND_URL.rstrip('/')}/reset-password?{query}"
 
 
+def _send_smtp_sync(message: EmailMessage) -> None:
+    with smtplib.SMTP(
+        host=_clean(SMTP_HOST), port=SMTP_PORT, timeout=SMTP_TIMEOUT_SECONDS
+    ) as smtp:
+        if SMTP_USE_TLS:
+            smtp.starttls()
+        user_name = _clean(SMTP_USERNAME)
+        password = _clean(SMTP_PASSWORD)
+        if user_name and password:
+            smtp.login(user_name, password)
+        smtp.send_message(message)
+
+
 async def send_reset_password_email(email: str, db: AsyncSession):
     user = await get_user_by_email(email, db)
 
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="Email này chưa được đăng ký."
-        )
-
-    if user.status == "LOCKED":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Tài khoản liên kết với email này đang bị khoá.",
-        )
-
-    if not user.email_verified_at:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Email này chưa được xác thực.",
-        )
+    if not user or user.status == "LOCKED" or not user.email_verified_at:
+        return
 
     await delete_password_reset_token_by_user_id(user_id=user.id, db=db)
 
@@ -153,16 +160,7 @@ async def send_reset_password_email(email: str, db: AsyncSession):
     message.add_alternative(html_content, subtype="html")
 
     try:
-        with smtplib.SMTP(
-            host=_clean(SMTP_HOST), port=SMTP_PORT, timeout=SMTP_TIMEOUT_SECONDS
-        ) as smtp:
-            if SMTP_USE_TLS:
-                smtp.starttls()
-            user_name = _clean(SMTP_USERNAME)
-            password = _clean(SMTP_PASSWORD)
-            if user_name and password:
-                smtp.login(user_name, password)
-            smtp.send_message(message)
+        await asyncio.to_thread(_send_smtp_sync, message)
     except Exception:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Gửi email thất bại."
@@ -188,3 +186,9 @@ async def reset_pasword(token: str, data: ResetPasswordRequest, db: AsyncSession
 
     await change_password_hash_by_user_id(user_id, hash_password(data.new_password), db)
     await delete_password_reset_token_by_user_id(user_id=user_id, db=db)
+    await revoke_all_user_sessions(
+        user_id=user_id,
+        revoked_at=datetime.now(UTC),
+        revoke_reason="PASSWORD_RESET",
+        db=db,
+    )

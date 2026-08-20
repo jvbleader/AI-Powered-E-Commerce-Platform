@@ -9,7 +9,7 @@ from argon2.exceptions import InvalidHashError, VerificationError, VerifyMismatc
 from dotenv import load_dotenv
 
 load_dotenv()
-TOKEN_HASH_PEPPER = os.getenv("TOKEN_HASH_PEPPER")
+TOKEN_HASH_PEPPER = os.getenv("TOKEN_HASH_PEPPER") or "shepoo_default_secure_token_pepper"
 
 password_hasher = PasswordHasher()
 

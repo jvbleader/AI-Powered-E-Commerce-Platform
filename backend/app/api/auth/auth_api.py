@@ -264,5 +264,7 @@ async def send_reset_password_email(
         await db.rollback()
         raise
 
-    return MessageResponse(message="Đã gửi email.")
+    return MessageResponse(
+        message="Nếu email tồn tại trong hệ thống, hướng dẫn đặt lại mật khẩu đã được gửi."
+    )
 

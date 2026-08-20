@@ -191,6 +191,7 @@ async def vnpay_refund(
             db=db,
             ip_addr=_client_ip(request),
             partial=data.partial,
+            order_id=data.order_id,
         )
         await db.commit()
         return VNPayRefundResponse(

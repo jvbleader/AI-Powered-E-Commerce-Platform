@@ -311,8 +311,12 @@ export function SupportChatRealtimeProvider({
 
       const request = (async () => {
         try {
+          const effectiveGuestId = resolveGuestIdForWs(guestIdRef.current);
+          const query = effectiveGuestId
+            ? `?guest_id=${encodeURIComponent(effectiveGuestId)}`
+            : "";
           const data = await apiFetch<SupportMessage[]>(
-            `/api/support-chat/conversations/${conversationId}/messages`
+            `/api/support-chat/conversations/${conversationId}/messages${query}`
           );
           if (!data) return;
           if (fetchGenerationRef.current[conversationId] !== generation) return;
@@ -342,8 +346,12 @@ export function SupportChatRealtimeProvider({
 
   const refetchConversationDetails = useCallback(async (conversationId: string) => {
     try {
+      const effectiveGuestId = resolveGuestIdForWs(guestIdRef.current);
+      const query = effectiveGuestId
+        ? `?guest_id=${encodeURIComponent(effectiveGuestId)}`
+        : "";
       const data = await apiFetch<SupportConversation>(
-        `/api/support-chat/conversations/${conversationId}`
+        `/api/support-chat/conversations/${conversationId}${query}`
       );
       if (!data) return;
       setConversationsById((prev) => ({ ...prev, [conversationId]: data }));

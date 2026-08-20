@@ -115,18 +115,6 @@ export const useMarketplaceStore = create<MarketplaceStore>()((set, get, store) 
           });
         }
       });
-
-    const handleUnauthorized = () => {
-      set((prev) => {
-        const nextState = { ...prev.state, sessionUserId: undefined, activeRole: "GUEST" as const, cartItems: [] };
-        if (prev.state.sessionUserId) {
-          persistState(nextState);
-          window.location.href = "/login";
-        }
-        return { state: nextState };
-      });
-    };
-    window.addEventListener("auth:unauthorized", handleUnauthorized);
   }
 }));
 

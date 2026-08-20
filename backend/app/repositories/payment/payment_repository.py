@@ -22,12 +22,14 @@ async def create_payment_order(
 
 
 async def get_payment_by_code_with_orders(
-    db: AsyncSession, payment_code: str
+    db: AsyncSession, payment_code: str, for_update: bool = False
 ) -> Optional[Payment]:
     stmt = (
         select(Payment)
         .options(selectinload(Payment.order_links).selectinload(PaymentOrder.order))
         .where(Payment.payment_code == payment_code)
     )
+    if for_update:
+        stmt = stmt.with_for_update()
     result = await db.execute(stmt)
     return result.scalar_one_or_none()

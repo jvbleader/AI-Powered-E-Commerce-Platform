@@ -18,6 +18,7 @@ export function QuickInventoryModal({ product, onClose }: QuickInventoryModalPro
   const { showToast } = store;
   const [loading, setLoading] = useState(false);
   const [quantities, setQuantities] = useState<Record<string, number>>({});
+  const [initialQuantities, setInitialQuantities] = useState<Record<string, number>>({});
 
   const variants: ProductVariant[] = product
     ? store.state.variants.filter((v) => v.productId === product.id)
@@ -30,8 +31,19 @@ export function QuickInventoryModal({ product, onClose }: QuickInventoryModalPro
         initial[v.id] = v.inventory?.quantity ?? 0;
       });
       setQuantities(initial);
+      setInitialQuantities(initial);
     }
   }, [product, store.state.variants]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !loading) {
+        onClose();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onClose, loading]);
 
   if (!product) return null;
 
@@ -51,45 +63,71 @@ export function QuickInventoryModal({ product, onClose }: QuickInventoryModalPro
   };
 
   const handleSave = async () => {
-    setLoading(true);
-    const payload = {
-      variants: variants.map((v) => ({
-        public_id: v.id,
-        sku: v.sku,
-        variant_name: v.variantName,
-        price: v.price,
-        quantity: quantities[v.id] ?? v.inventory?.quantity ?? 0,
-        image_url: v.imageUrl,
-        tier_index: v.tierIndex
-      }))
-    };
+    // Check if any quantity actually changed
+    const hasChanges = variants.some(
+      (v) => (quantities[v.id] ?? 0) !== (initialQuantities[v.id] ?? 0)
+    );
 
-    const res = await store.updateSellerProduct(product.id, payload);
-    setLoading(false);
-    if (res.ok) {
-      showToast("Đã cập nhật tồn kho cho sản phẩm thành công!", "success");
+    if (!hasChanges) {
       onClose();
-    } else {
-      showToast(res.message || "Lỗi cập nhật tồn kho", "danger");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const payload = {
+        variants: variants.map((v) => ({
+          public_id: v.id,
+          sku: v.sku,
+          variant_name: v.variantName,
+          price: v.price,
+          quantity: quantities[v.id] ?? v.inventory?.quantity ?? 0,
+          image_url: v.imageUrl,
+          tier_index: v.tierIndex
+        }))
+      };
+
+      const res = await store.updateSellerProduct(product.id, payload);
+      if (res.ok) {
+        showToast("Đã cập nhật tồn kho cho sản phẩm thành công!", "success");
+        onClose();
+      } else {
+        showToast(res.message || "Lỗi cập nhật tồn kho", "danger");
+      }
+    } catch (err: any) {
+      showToast(err.message || "Lỗi cập nhật tồn kho", "danger");
+    } finally {
+      setLoading(false);
     }
   };
 
   const totalStock = Object.values(quantities).reduce((a, b) => a + b, 0);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="modal-inventory-title"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 animate-in fade-in duration-150"
+      onClick={(e) => {
+        if (e.target === e.currentTarget && !loading) {
+          onClose();
+        }
+      }}
+    >
       <div className="w-full max-w-2xl rounded-panel border border-line bg-white shadow-lg overflow-hidden flex flex-col max-h-[90vh]">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-line px-5 py-4 bg-canvas/50">
           <div className="flex items-center gap-2">
             <Box className="h-5 w-5 text-primary" />
             <div>
-              <h3 className="font-bold text-ink text-base">Quản lý tồn kho sản phẩm</h3>
+              <h3 id="modal-inventory-title" className="font-bold text-ink text-base">Quản lý tồn kho sản phẩm</h3>
               <p className="text-xs text-muted font-medium line-clamp-1">{product.name}</p>
             </div>
           </div>
           <button
             onClick={onClose}
+            disabled={loading}
             className="rounded-full p-1 text-muted hover:bg-canvas hover:text-ink transition-colors"
           >
             <X className="h-5 w-5" />

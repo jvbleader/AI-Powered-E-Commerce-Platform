@@ -3,7 +3,7 @@ import logging
 from datetime import datetime
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, Query, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect, status
 from pydantic import BaseModel
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,6 +17,7 @@ from models.seller import SellerProfile
 from models.user import User
 import services.auth.jwt_service as jwt_service
 import repositories.user.user_repository as user_repository
+from repositories.user.user_role_repository import get_role_list_by_user_id
 from services.chat.seller_chat_ws import (
     cleanup_multiplex_connection,
     handle_multiplex_command,
@@ -606,15 +607,47 @@ async def get_conversation_by_shop(
 @router.get("/conversations/{conversation_id}/messages", response_model=List[SellerMessageResponse])
 async def get_messages(
     conversation_id: str,
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     stmt = (
+        select(SellerConversation)
+        .options(selectinload(SellerConversation.shop))
+        .where(SellerConversation.id == conversation_id)
+    )
+    result = await db.execute(stmt)
+    conv = result.scalars().first()
+    if not conv:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Không tìm thấy hội thoại.",
+        )
+
+    is_customer = conv.customer_id == current_user.id
+    is_shop_owner = False
+    if conv.shop and conv.shop.user_id == current_user.id:
+        is_shop_owner = True
+    elif conv.shop_id:
+        shop = await _resolve_shop_by_id(db, conv.shop_id)
+        if shop and shop.user_id == current_user.id:
+            is_shop_owner = True
+
+    roles = await get_role_list_by_user_id(current_user.id, db)
+    is_admin = "ADMIN" in roles
+
+    if not (is_customer or is_shop_owner or is_admin):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Bạn không có quyền truy cập tin nhắn của hội thoại này.",
+        )
+
+    msg_stmt = (
         select(SellerMessage)
         .where(SellerMessage.conversation_id == conversation_id)
         .order_by(SellerMessage.created_at.asc())
     )
-    result = await db.execute(stmt)
-    messages = result.scalars().all()
+    msg_result = await db.execute(msg_stmt)
+    messages = msg_result.scalars().all()
     return [
         {
             "id": msg.id,

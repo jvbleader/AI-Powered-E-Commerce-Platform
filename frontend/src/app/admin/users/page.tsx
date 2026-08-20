@@ -14,6 +14,8 @@ export default function AdminUsersPage() {
   const { showToast } = useMarketplaceStore();
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
+  const [confirmUser, setConfirmUser] = useState<User | null>(null);
+  const [submittingLock, setSubmittingLock] = useState(false);
 
   const loadUsers = async () => {
     try {
@@ -32,14 +34,19 @@ export default function AdminUsersPage() {
     loadUsers();
   }, []);
 
-  const handleToggleLock = async (userId: string) => {
+  const confirmToggleLock = async () => {
+    if (!confirmUser) return;
     try {
-      const updatedUser = await toggleAdminUserLock(userId);
-      setUsers((prev) => prev.map((u) => (u.id === userId ? { ...u, status: updatedUser.status } : u)));
+      setSubmittingLock(true);
+      const updatedUser = await toggleAdminUserLock(confirmUser.id);
+      setUsers((prev) => prev.map((u) => (u.id === confirmUser.id ? { ...u, status: updatedUser.status } : u)));
       showToast(updatedUser.status === "LOCKED" ? "Đã khóa tài khoản thành công." : "Đã mở khóa tài khoản thành công.", "success");
+      setConfirmUser(null);
     } catch (error: any) {
       console.error(error);
       showToast(error.message ?? "Lỗi cập nhật trạng thái khóa.", "danger");
+    } finally {
+      setSubmittingLock(false);
     }
   };
 
@@ -60,12 +67,47 @@ export default function AdminUsersPage() {
             <Button
               key="lock"
               variant={user.status === "LOCKED" ? "secondary" : "danger"}
-              onClick={() => handleToggleLock(user.id)}
+              onClick={() => setConfirmUser(user)}
             >
               {user.status === "LOCKED" ? "Unlock" : "Lock"}
             </Button>
           ])}
         />
+      )}
+
+      {confirmUser && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="confirm-modal-title"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4"
+        >
+          <div className="w-full max-w-md rounded-panel border border-line bg-white p-6 shadow-xl animate-in fade-in zoom-in-95 duration-150">
+            <h3 id="confirm-modal-title" className="text-lg font-bold text-ink">
+              {confirmUser.status === "LOCKED" ? "Xác nhận mở khóa tài khoản" : "Xác nhận khóa tài khoản"}
+            </h3>
+            <p className="mt-2 text-sm text-muted">
+              Bạn có chắc chắn muốn {confirmUser.status === "LOCKED" ? "mở khóa" : "khóa"} tài khoản của người dùng{" "}
+              <strong className="text-ink">{confirmUser.fullName || confirmUser.email}</strong> không?
+            </p>
+            <div className="mt-6 flex justify-end gap-3">
+              <Button
+                variant="secondary"
+                disabled={submittingLock}
+                onClick={() => setConfirmUser(null)}
+              >
+                Hủy
+              </Button>
+              <Button
+                variant={confirmUser.status === "LOCKED" ? "primary" : "danger"}
+                disabled={submittingLock}
+                onClick={confirmToggleLock}
+              >
+                {submittingLock ? "Đang xử lý..." : (confirmUser.status === "LOCKED" ? "Mở khóa" : "Khóa tài khoản")}
+              </Button>
+            </div>
+          </div>
+        </div>
       )}
     </Section>
   );

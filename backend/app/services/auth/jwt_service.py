@@ -96,9 +96,9 @@ async def verify_refresh_token(db: AsyncSession, token: str) -> user.User:
     now = datetime.now(UTC)
     payload = decode_jwt_token(token=token)
 
-    if payload["type"] != "access":
+    if payload.get("type") != "refresh":
         raise HTTPException(
-            detail="Token không phải là access token!",
+            detail="Token không phải là refresh token!",
             status_code=status.HTTP_401_UNAUTHORIZED,
         )
 

@@ -47,7 +47,7 @@ def upgrade() -> None:
     sa.PrimaryKeyConstraint('id')
     )
     op.create_index('ix_seller_messages_conversation_id', 'seller_messages', ['conversation_id'], unique=False)
-    # op.add_column('seller_statistics', sa.Column('updated_at', sa.DateTime(), nullable=True))
+    op.add_column('seller_statistics', sa.Column('updated_at', sa.DateTime(), nullable=True))
     # op.alter_column('support_messages', 'sender_type',
     #            existing_type=mysql.ENUM('CUSTOMER', 'SUPPORTER', collation='utf8mb4_unicode_ci'),
     #            type_=sa.Enum('CUSTOMER', 'SUPPORTER', 'SYSTEM'),

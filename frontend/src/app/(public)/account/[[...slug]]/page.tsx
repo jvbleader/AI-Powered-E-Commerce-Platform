@@ -632,6 +632,16 @@ export default function AccountPage() {
     const [uploadingImage, setUploadingImage] = useState(false);
     
     useEffect(() => {
+      const handleKeyDown = (e: KeyboardEvent) => {
+        if (e.key === "Escape" && reviewingItem && !submittingReview) {
+          setReviewingItem(null);
+        }
+      };
+      window.addEventListener("keydown", handleKeyDown);
+      return () => window.removeEventListener("keydown", handleKeyDown);
+    }, [reviewingItem, submittingReview]);
+
+    useEffect(() => {
       const needsFetch = !order || !order.shipment || order.shipment.receiverName === "-";
       if (orderCode && needsFetch) {
         if (audience === "customer") {
@@ -1044,9 +1054,19 @@ export default function AccountPage() {
 
         {/* Review Modal */}
         {reviewingItem && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 animate-fade-in">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="review-modal-title"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 animate-fade-in"
+            onClick={(e) => {
+              if (e.target === e.currentTarget && !submittingReview) {
+                setReviewingItem(null);
+              }
+            }}
+          >
             <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
-              <h3 className="text-lg font-bold text-slate-900">Đánh giá sản phẩm</h3>
+              <h3 id="review-modal-title" className="text-lg font-bold text-slate-900">Đánh giá sản phẩm</h3>
               <p className="mt-1 text-xs text-slate-500 line-clamp-1">{reviewingItem.productNameSnapshot}</p>
               
               <div className="mt-4 flex items-center justify-center gap-2 py-2 bg-slate-50 rounded-xl">

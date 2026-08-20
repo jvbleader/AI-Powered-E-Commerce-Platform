@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Plus } from "lucide-react";
+import { Plus, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox, Field, Input, Select, Textarea } from "@/components/ui/input";
 import { MultiSelect } from "@/components/ui/multi-select";
@@ -63,6 +63,7 @@ export default function ProductForm({ productId }: { productId?: string }) {
   const [brand, setBrand] = useState(editing?.brand ?? "");
   const [origin, setOrigin] = useState(editing?.origin ?? "Việt Nam");
   const [warranty, setWarranty] = useState(editing?.warranty ?? "");
+  const [submitting, setSubmitting] = useState(false);
   const [categoryIds, setCategoryIds] = useState<string[]>(editing?.categoryIds ?? []);
   const [imageUrls, setImageUrls] = useState<string[]>(
     editing?.imageUrls?.length ? editing.imageUrls : (editing?.thumbnailUrl ? [editing.thumbnailUrl] : [])
@@ -334,7 +335,10 @@ export default function ProductForm({ productId }: { productId?: string }) {
 
         <div className="mt-8 flex justify-end">
           <Button
+              disabled={submitting}
+              className="gap-2"
               onClick={async () => {
+                if (submitting) return;
                 if (!shop) {
                   showToast("Shop của bạn chưa sẵn sàng để tạo sản phẩm.", "danger");
                   return;
@@ -364,22 +368,38 @@ export default function ProductForm({ productId }: { productId?: string }) {
                   }))
                 };
 
-                let res;
-                if (editing) {
-                  res = await updateSellerProduct(editing.id, payload);
-                } else {
-                  res = await createSellerProduct(payload);
-                }
+                setSubmitting(true);
+                try {
+                  let res;
+                  if (editing) {
+                    res = await updateSellerProduct(editing.id, payload);
+                  } else {
+                    res = await createSellerProduct(payload);
+                  }
 
-                if (res.ok) {
-                  showToast("Đã lưu sản phẩm.", "success");
-                  router.push("/seller/products");
-                } else {
-                  showToast(res.message || "Lỗi lưu sản phẩm", "danger");
+                  if (res.ok) {
+                    showToast("Đã lưu sản phẩm.", "success");
+                    router.push("/seller/products");
+                    // Giữ submitting = true để nút luôn bị vô hiệu hóa trong suốt quá trình chuyển trang Next.js
+                    return;
+                  } else {
+                    showToast(res.message || "Lỗi lưu sản phẩm", "danger");
+                    setSubmitting(false);
+                  }
+                } catch (err: any) {
+                  showToast(err.message || "Đã xảy ra lỗi khi lưu sản phẩm.", "danger");
+                  setSubmitting(false);
                 }
               }}
             >
-              Lưu sản phẩm
+              {submitting ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Đang lưu...
+                </>
+              ) : (
+                "Lưu sản phẩm"
+              )}
             </Button>
         </div>
       </Panel>

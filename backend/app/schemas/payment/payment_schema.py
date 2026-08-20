@@ -47,6 +47,7 @@ class VNPayRefundRequest(BaseModel):
     )
     reason: str = Field(min_length=1, max_length=500)
     partial: bool = False
+    order_id: Optional[int] = None
 
 
 class VNPayRefundResponse(BaseModel):

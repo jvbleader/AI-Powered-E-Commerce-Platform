@@ -120,9 +120,9 @@ export default function SellerRegisterPage() {
     setFormError("");
 
     const result = await store.saveSellerApplication(form, mode);
-    setSavingApplication(false);
 
     if (!result.ok) {
+      setSavingApplication(false);
       setFormError(result.message);
       showToast(result.message, "danger");
       return;

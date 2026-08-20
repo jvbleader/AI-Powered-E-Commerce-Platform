@@ -612,8 +612,13 @@ async def get_variants_for_checkout(
 ) -> list[ProductVariant]:
     stmt = (
         select(ProductVariant)
-        .options(selectinload(ProductVariant.product))
-        .where(ProductVariant.id.in_(variant_ids), ProductVariant.status == "ACTIVE")
+        .join(ProductVariant.product)
+        .options(selectinload(ProductVariant.product).selectinload(Product.seller))
+        .where(
+            ProductVariant.id.in_(variant_ids),
+            ProductVariant.status == "ACTIVE",
+            Product.status == "ACTIVE",
+        )
     )
     result = await db.execute(stmt)
     return list(result.scalars().all())

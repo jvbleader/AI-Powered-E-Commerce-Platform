@@ -145,6 +145,8 @@ async def get_user_orders(db: AsyncSession, user_id: int) -> list[Order]:
 async def get_order_by_code_and_user(
     db: AsyncSession, order_code: str, user_id: int, is_seller: bool = False
 ) -> Order | None:
+    from models.seller import SellerProfile
+
     stmt = (
         select(Order)
         .options(
@@ -155,7 +157,9 @@ async def get_order_by_code_and_user(
         )
     )
     if is_seller:
-        stmt = stmt.where(Order.order_code == order_code, Order.seller_id == user_id)
+        stmt = stmt.join(SellerProfile, Order.seller_id == SellerProfile.id).where(
+            Order.order_code == order_code, SellerProfile.user_id == user_id
+        )
     else:
         stmt = stmt.where(Order.order_code == order_code, Order.user_id == user_id)
     res = await db.execute(stmt)

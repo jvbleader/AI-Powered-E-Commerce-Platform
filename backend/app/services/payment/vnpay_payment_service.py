@@ -71,10 +71,18 @@ def _is_terminal_failure(params: dict[str, str]) -> bool:
 async def _mark_orders_for_paid_payment(payment: Payment, db: AsyncSession) -> None:
     for po in payment.order_links:
         order = po.order
-        if order.payment_status != "PENDING":
+        if order.payment_status not in ("PENDING", "FAILED"):
             continue
         if order.order_status == "CANCELLED":
             order.payment_status = "REFUND_PENDING"
+            db.add(
+                OrderStatusLog(
+                    order_id=order.id,
+                    old_status=order.order_status,
+                    new_status=order.order_status,
+                    note="Payment received after order cancellation. Marked for refund.",
+                )
+            )
         else:
             order.payment_status = "PAID"
             if order.seller_confirmed and order.order_status == "PLACED":
@@ -291,7 +299,9 @@ async def handle_vnpay_ipn(
         if not txn_ref:
             return {"RspCode": IPN_ORDER_NOT_FOUND, "Message": "Order not Found"}
 
-        payment = await payment_repository.get_payment_by_code_with_orders(db, txn_ref)
+        payment = await payment_repository.get_payment_by_code_with_orders(
+            db, txn_ref, for_update=True
+        )
         if not payment:
             return {"RspCode": IPN_ORDER_NOT_FOUND, "Message": "Order not Found"}
 
@@ -373,6 +383,7 @@ async def refund_vnpay_payment(
     db: AsyncSession,
     ip_addr: str,
     partial: bool = False,
+    order_id: int | None = None,
 ) -> Refund:
     payment = await payment_repository.get_payment_by_code_with_orders(db, payment_code)
     if not payment:
@@ -414,13 +425,22 @@ async def refund_vnpay_payment(
     refund_status = (
         "SUCCESS" if response.get("vnp_ResponseCode") == PAYMENT_SUCCESS else "FAILED"
     )
-    order_id = payment.order_links[0].order_id if payment.order_links else None
-    if order_id is None:
+    valid_order_ids = [po.order_id for po in payment.order_links]
+    if not valid_order_ids:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Giao dịch không liên kết đơn hàng")
+
+    if order_id is not None:
+        if order_id not in valid_order_ids:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST, "Đơn hàng không thuộc giao dịch thanh toán này"
+            )
+        target_order_id = order_id
+    else:
+        target_order_id = valid_order_ids[0]
 
     refund = Refund(
         payment_id=payment.id,
-        order_id=order_id,
+        order_id=target_order_id,
         amount=refund_amount,
         reason=reason,
         refund_status=refund_status,
@@ -429,10 +449,15 @@ async def refund_vnpay_payment(
     )
     db.add(refund)
 
-    if refund_status == "SUCCESS" and refund_amount == payment.amount:
-        payment.payment_status = "REFUNDED"
-        for po in payment.order_links:
-            if po.order.payment_status == "PAID":
-                po.order.payment_status = "REFUNDED"
+    if refund_status == "SUCCESS":
+        if refund_amount == payment.amount:
+            payment.payment_status = "REFUNDED"
+            for po in payment.order_links:
+                if po.order.payment_status in ("PAID", "REFUND_PENDING"):
+                    po.order.payment_status = "REFUNDED"
+        elif order_id is not None:
+            for po in payment.order_links:
+                if po.order_id == order_id and po.order.payment_status in ("PAID", "REFUND_PENDING"):
+                    po.order.payment_status = "REFUNDED"
 
     return refund

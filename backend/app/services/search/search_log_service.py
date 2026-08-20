@@ -16,19 +16,36 @@ DEFAULT_HOT_KEYWORDS = [
 ]
 
 async def log_search(
-    db: AsyncSession,
     keyword: str,
     user_id: int | None = None,
     result_count: int | None = None,
+    db: AsyncSession | None = None,
 ) -> None:
     """Log a search query to the SearchLog table."""
-    entry = SearchLog(
-        keyword=keyword.strip()[:255],
-        user_id=user_id,
-        result_count=result_count,
-    )
-    db.add(entry)
-    await db.flush()
+    if not keyword or not keyword.strip():
+        return
+    cleaned_keyword = keyword.strip()[:255]
+    if db is None:
+        from core.database import async_session_factory
+        try:
+            async with async_session_factory() as session:
+                entry = SearchLog(
+                    keyword=cleaned_keyword,
+                    user_id=user_id,
+                    result_count=result_count,
+                )
+                session.add(entry)
+                await session.commit()
+        except Exception:
+            pass
+    else:
+        entry = SearchLog(
+            keyword=cleaned_keyword,
+            user_id=user_id,
+            result_count=result_count,
+        )
+        db.add(entry)
+        await db.flush()
 
 async def get_hot_keywords(
     db: AsyncSession,

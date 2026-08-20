@@ -1,3 +1,4 @@
+import asyncio
 import os
 import secrets
 import smtplib
@@ -47,6 +48,19 @@ def _sender_email() -> str:
 def email_verification_link(token: str) -> str:
     query = urlencode({"token": token})
     return f"{FRONTEND_URL.rstrip('/')}/verify-email?{query}"
+
+
+def _send_smtp_sync(message: EmailMessage) -> None:
+    with smtplib.SMTP(
+        host=_clean(SMTP_HOST), port=SMTP_PORT, timeout=SMTP_TIMEOUT_SECONDS
+    ) as smtp:
+        if SMTP_USE_TLS:
+            smtp.starttls()
+        user_name = _clean(SMTP_USERNAME)
+        password = _clean(SMTP_PASSWORD)
+        if user_name and password:
+            smtp.login(user_name, password)
+        smtp.send_message(message)
 
 
 async def verify_email(token: str, db: AsyncSession):
@@ -141,16 +155,7 @@ async def send_email_token(email: str, full_name: str, db: AsyncSession):
     message.add_alternative(html_content, subtype="html")
 
     try:
-        with smtplib.SMTP(
-            host=_clean(SMTP_HOST), port=SMTP_PORT, timeout=SMTP_TIMEOUT_SECONDS
-        ) as smtp:
-            if SMTP_USE_TLS:
-                smtp.starttls()
-            user_name = _clean(SMTP_USERNAME)
-            password = _clean(SMTP_PASSWORD)
-            if user_name and password:
-                smtp.login(user_name, password)
-            smtp.send_message(message)
+        await asyncio.to_thread(_send_smtp_sync, message)
     except Exception as e:
         import traceback
         traceback.print_exc()

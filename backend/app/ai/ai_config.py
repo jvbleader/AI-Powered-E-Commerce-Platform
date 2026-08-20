@@ -23,7 +23,7 @@ class AISettings:
         model = os.getenv("MODEL")
         if model and model.strip():
             return model.strip()
-        return model.strip()
+        return "gpt-4o-mini"
 
     @property
     def EMBEDDING_API_KEY(self) -> str:

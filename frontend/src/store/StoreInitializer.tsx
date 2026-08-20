@@ -35,8 +35,23 @@ export function StoreInitializer() {
       }
     };
 
+    const handleUnauthorized = () => {
+      useMarketplaceStore.setState((prev) => {
+        const nextState = { ...prev.state, sessionUserId: undefined, activeRole: "GUEST" as const, cartItems: [] };
+        if (prev.state.sessionUserId) {
+          persistState(nextState);
+          window.location.href = "/login";
+        }
+        return { state: nextState };
+      });
+    };
+
     window.addEventListener("storage", handleStorage);
-    return () => window.removeEventListener("storage", handleStorage);
+    window.addEventListener("auth:unauthorized", handleUnauthorized);
+    return () => {
+      window.removeEventListener("storage", handleStorage);
+      window.removeEventListener("auth:unauthorized", handleUnauthorized);
+    };
   }, [initialize]);
 
   useEffect(() => {

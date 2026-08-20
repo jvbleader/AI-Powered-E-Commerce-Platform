@@ -411,22 +411,34 @@ export function useAIChatStream() {
       const ok = await deleteChatSession(sessionIdToDelete);
       if (!ok) return false;
 
-      setChatSessions((prev) => prev.filter((s) => s.sessionId !== sessionIdToDelete));
+      let nextSessionToSwitch: string | null = null;
+      let shouldClear = false;
+
+      setChatSessions((prev) => {
+        const remaining = prev.filter((s) => s.sessionId !== sessionIdToDelete);
+        if (sessionId === sessionIdToDelete) {
+          if (remaining.length > 0) {
+            nextSessionToSwitch = remaining[0].sessionId;
+          } else {
+            shouldClear = true;
+          }
+        }
+        return remaining;
+      });
 
       if (sessionId === sessionIdToDelete) {
         if (abortControllerRef.current) {
           abortControllerRef.current.abort();
         }
-        const remaining = chatSessions.filter((s) => s.sessionId !== sessionIdToDelete);
-        if (remaining.length > 0) {
-          switchChat(remaining[0].sessionId);
-        } else {
+        if (nextSessionToSwitch) {
+          switchChat(nextSessionToSwitch);
+        } else if (shouldClear) {
           clearChat();
         }
       }
       return true;
     },
-    [sessionId, chatSessions, switchChat, clearChat]
+    [sessionId, switchChat, clearChat]
   );
 
   return {

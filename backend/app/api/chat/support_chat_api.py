@@ -458,8 +458,20 @@ async def list_my_conversations(
 @router.get("/conversations/{conversation_id}", response_model=SupportConversationResponse)
 async def get_conversation(
     conversation_id: str,
+    guest_id: Optional[str] = Query(None),
+    current_user: Optional[User] = Depends(get_current_user_optional),
     db: AsyncSession = Depends(get_db),
 ):
+    access = await resolve_conversation_access(
+        db, conversation_id, current_user, guest_id=guest_id
+    )
+    if not access:
+        stmt_check = select(SupportConversation.id).where(SupportConversation.id == conversation_id)
+        res_check = await db.execute(stmt_check)
+        if not res_check.scalar_one_or_none():
+            raise HTTPException(status_code=404, detail="Không tìm thấy hội thoại")
+        raise HTTPException(status_code=403, detail="Không có quyền truy cập hội thoại này")
+
     stmt = select(SupportConversation).options(
         selectinload(SupportConversation.customer),
         selectinload(SupportConversation.supporter),
@@ -563,8 +575,20 @@ async def close_conversation(
 @router.get("/conversations/{conversation_id}/messages")
 async def get_messages(
     conversation_id: str,
+    guest_id: Optional[str] = Query(None),
+    current_user: Optional[User] = Depends(get_current_user_optional),
     db: AsyncSession = Depends(get_db),
 ):
+    access = await resolve_conversation_access(
+        db, conversation_id, current_user, guest_id=guest_id
+    )
+    if not access:
+        stmt_check = select(SupportConversation.id).where(SupportConversation.id == conversation_id)
+        res_check = await db.execute(stmt_check)
+        if not res_check.scalar_one_or_none():
+            raise HTTPException(status_code=404, detail="Không tìm thấy hội thoại")
+        raise HTTPException(status_code=403, detail="Không có quyền truy cập hội thoại này")
+
     stmt = select(SupportMessage).where(SupportMessage.conversation_id == conversation_id).order_by(SupportMessage.created_at.asc())
     result = await db.execute(stmt)
     return [serialize_support_message(message) for message in result.scalars().all()]

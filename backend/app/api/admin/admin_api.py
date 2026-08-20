@@ -425,15 +425,26 @@ async def reject_seller_application_api(
     return result
 
 
+ALLOWED_ROLES = {"ADMIN", "MANAGER", "SUPPORTER", "SELLER", "BUYER", "CUSTOMER"}
+
+
 @router.get(path="/users", response_model=list[UserMeResponse])
 async def list_users_api(
     user: CurrentAdmin,
     db: DBSession,
+    limit: int = 100,
+    offset: int = 0,
 ) -> list[UserMeResponse]:
     from sqlalchemy import select
     from models.user import User
 
-    result = await db.execute(select(User).order_by(User.created_at.desc()))
+    safe_limit = min(max(1, limit), 200)
+    result = await db.execute(
+        select(User)
+        .order_by(User.created_at.desc())
+        .limit(safe_limit)
+        .offset(offset)
+    )
     users = result.scalars().all()
     
     response_users = []
@@ -508,6 +519,23 @@ async def create_user_api(
     return await auth_service.user_to_response(new_user, db)
 
 
+@router.get(path="/users/{public_id}", response_model=UserMeResponse)
+async def get_user_detail_api(
+    public_id: str,
+    user: CurrentAdmin,
+    db: DBSession,
+) -> UserMeResponse:
+    from repositories.user.user_repository import get_user_by_public_id
+
+    target_user = await get_user_by_public_id(public_id, db)
+    if not target_user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Người dùng không tồn tại."
+        )
+
+    return await auth_service.user_to_response(target_user, db)
+
+
 @router.put(path="/users/{public_id}/roles", response_model=UserMeResponse)
 async def update_user_roles_api(
     public_id: str,
@@ -523,6 +551,13 @@ async def update_user_roles_api(
     if not target_user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Người dùng không tồn tại."
+        )
+
+    invalid_roles = [r for r in data.roles if r not in ALLOWED_ROLES]
+    if invalid_roles:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Role không hợp lệ: {', '.join(invalid_roles)}. Các role hợp lệ: {', '.join(sorted(ALLOWED_ROLES))}.",
         )
 
     if "ADMIN" in data.roles and "SUPPORTER" in data.roles:
@@ -803,6 +838,8 @@ async def delete_category_admin_api(
 async def list_products_admin_api(
     user: CurrentAdmin,
     db: DBSession,
+    limit: int = 100,
+    offset: int = 0,
 ) -> list[ProductDetailPublicResponse]:
     from sqlalchemy import select
     from sqlalchemy.orm import selectinload
@@ -810,6 +847,7 @@ async def list_products_admin_api(
     from models.catalog import ProductVariant
     from models.seller.seller_profile import SellerProfile
 
+    safe_limit = min(max(1, limit), 200)
     stmt = (
         select(Product)
         .options(
@@ -819,6 +857,8 @@ async def list_products_admin_api(
             selectinload(Product.variants).selectinload(ProductVariant.inventory)
         )
         .order_by(Product.created_at.desc())
+        .limit(safe_limit)
+        .offset(offset)
     )
     res = await db.execute(stmt)
     products = res.scalars().all()

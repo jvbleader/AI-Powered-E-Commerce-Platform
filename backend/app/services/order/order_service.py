@@ -81,6 +81,11 @@ async def _process_checkout(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Không tìm thấy Seller {seller_id}",
             )
+        if seller.status != "APPROVED":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Shop {seller.shop_name} hiện không khả dụng để đặt hàng",
+            )
 
         # Find shipping provider
         provider_pub_id = None
