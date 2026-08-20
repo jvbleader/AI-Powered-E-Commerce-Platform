@@ -15,6 +15,7 @@ import { createOrderSlice } from "./slices/orderSlice";
 import { createProductSlice } from "./slices/productSlice";
 import { createSellerSlice } from "./slices/sellerSlice";
 import { createAddressSlice } from "./slices/addressSlice";
+import { createWalletSlice } from "./slices/walletSlice";
 import { createCoreSlice } from "./slices/coreSlice";
 import { initialState } from "@/store/initial-state";
 
@@ -36,6 +37,7 @@ export const useMarketplaceStore = create<MarketplaceStore>()((set, get, store) 
   ...createProductSlice(set, get, store),
   ...createSellerSlice(set, get, store),
   ...createAddressSlice(set, get, store),
+  ...createWalletSlice(set, get, store),
   ...createCoreSlice(set, get, store),
 
   initialize: () => {

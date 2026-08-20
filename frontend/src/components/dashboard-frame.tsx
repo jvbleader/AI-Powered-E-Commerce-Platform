@@ -19,7 +19,8 @@ import {
   MessageSquare,
   ClipboardCheck,
   Bot,
-  UserPlus
+  UserPlus,
+  Scale
 } from "lucide-react";
 import { ChevronLeft, ChevronRight, Menu } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -99,13 +100,15 @@ export function DashboardFrame({
             ["/admin/categories", "Danh mục", PanelLeft],
             ["/admin/products", "Sản phẩm", Package],
             ["/admin/statistics", "Thống kê", ChartNoAxesCombined],
+            ["/admin/disputes", "Khiếu nại hoàn hàng", Scale],
             ["/admin/violation-reports", "Báo cáo vi phạm", ShieldCheck],
             ["/admin/ai/knowledge", "Tri thức AI", Bot],
             ["/admin/role-management", "Tạo tài khoản", UserPlus]
           ]
         : [
             ["/supporter", "Dashboard", LayoutDashboard],
-            ["/supporter/conversations", "Conversations", MessageSquare]
+            ["/supporter/conversations", "Conversations", MessageSquare],
+            ["/admin/disputes", "Khiếu nại hoàn hàng", Scale]
           ];
 
   const homeHref = roleHomePath(kind.toUpperCase() as any);

@@ -3,7 +3,7 @@ import logging
 import os
 from pathlib import Path
 from typing import List, Dict, Any
-from langchain_openai import OpenAIEmbeddings
+from langchain_openai import OpenAIEmbeddings, AzureOpenAIEmbeddings
 
 from ai.ai_config import ai_settings
 
@@ -51,19 +51,28 @@ def get_vector_cache() -> Dict[str, List[float]]:
     return _vector_cache
 
 
-def get_embeddings_model() -> OpenAIEmbeddings:
+def get_embeddings_model():
     global _embeddings
     if _embeddings is None:
         try:
-            _embeddings = OpenAIEmbeddings(
-                openai_api_key=ai_settings.EMBEDDING_API_KEY,
-                openai_api_base=ai_settings.EMBEDDING_BASE_URL,
-                model=ai_settings.EMBEDDING_MODEL,
-                dimensions=1024, # Jina v5-omni-small is 1024
-                check_embedding_ctx_length=False # Required for non-OpenAI endpoints like Jina
-            )
+            if ai_settings.IS_AZURE_EMBEDDING:
+                _embeddings = AzureOpenAIEmbeddings(
+                    azure_endpoint=ai_settings.EMBEDDING_BASE_URL,
+                    azure_deployment=ai_settings.EMBEDDING_MODEL,
+                    api_key=ai_settings.EMBEDDING_API_KEY,
+                    api_version=ai_settings.EMBEDDING_API_VERSION,
+                    check_embedding_ctx_length=False,
+                )
+            else:
+                _embeddings = OpenAIEmbeddings(
+                    openai_api_key=ai_settings.EMBEDDING_API_KEY,
+                    openai_api_base=ai_settings.EMBEDDING_BASE_URL,
+                    model=ai_settings.EMBEDDING_MODEL,
+                    dimensions=1024, # Jina v5-omni-small is 1024
+                    check_embedding_ctx_length=False # Required for non-OpenAI endpoints like Jina
+                )
         except Exception as e:
-            logger.error(f"Failed to initialize OpenAIEmbeddings: {e}")
+            logger.error(f"Failed to initialize embeddings model: {e}")
             raise
     return _embeddings
 

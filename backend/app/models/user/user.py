@@ -26,6 +26,7 @@ if TYPE_CHECKING:
     from models.payment import Payment
     from models.promotion import CouponUsage
     from models.seller import SellerProfile
+    from models.wallet import Wallet
     from .user_address import UserAddress
     from .user_role import UserRole
 
@@ -101,6 +102,10 @@ class User(Base):
         cascade="all, delete-orphan",
     )
     seller_profile: Mapped["SellerProfile | None"] = relationship(
+        back_populates="user",
+        uselist=False,
+    )
+    wallet: Mapped["Wallet | None"] = relationship(
         back_populates="user",
         uselist=False,
     )

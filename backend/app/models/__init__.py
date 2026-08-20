@@ -11,6 +11,7 @@ from . import (
     seller,
     shipping,
     user,
+    wallet,
 )
 
 __all__ = [
@@ -26,4 +27,5 @@ __all__ = [
     "seller",
     "shipping",
     "user",
+    "wallet",
 ]

@@ -7,8 +7,10 @@ export type OrderStatus =
   | "PLACED"
   | "READY_TO_SHIP"
   | "SHIPPING"
+  | "DELIVERED"
   | "COMPLETED"
   | "DELIVERY_FAILED"
+  | "RETURNED"
   | "CANCELLED";
 export type PaymentStatus =
   | "PENDING"
@@ -21,13 +23,56 @@ export type PaymentStatus =
   | "PARTIALLY_REFUNDED";
 export enum PaymentMethodEnum {
   MOCK = "MOCK",
-  BANK_TRANSFER = "BANK_TRANSFER",
-  MOMO = "MOMO",
-  CREDIT_CARD = "CREDIT_CARD",
   VNPAY = "VNPAY",
+  WALLET = "WALLET",
+  COD = "COD",
 }
-export type PaymentMethod = "MOCK" | "BANK_TRANSFER" | "MOMO" | "CREDIT_CARD" | "VNPAY";
+export type PaymentMethod = "MOCK" | "VNPAY" | "WALLET" | "COD";
+export type OrderReturnStatus =
+  | "REQUESTED"
+  | "SELLER_APPROVED"
+  | "RETURNING"
+  | "COMPLETED"
+  | "SELLER_REJECTED"
+  | "DISPUTED"
+  | "SUPPORT_APPROVED"
+  | "SUPPORT_REJECTED";
+export type ReturnTag =
+  | "DISPUTED"
+  | "RETURN_SUCCESS"
+  | "RETURN_FAILED_SELLER_REJECTED"
+  | "RETURN_SUCCESS_SUPPORT_APPROVED"
+  | "RETURN_FAILED_SUPPORT_REJECTED"
+  | string;
 export type AddressType = "HOME" | "OFFICE";
+
+export interface OrderReturn {
+  id: string | number;
+  publicId?: string;
+  returnCode: string;
+  orderId: string | number;
+  userId: string | number;
+  sellerId: string | number;
+  returnStatus: OrderReturnStatus;
+  reason: string;
+  description: string;
+  evidenceImages?: string[];
+  sellerRejectReason?: string;
+  sellerRespondedAt?: string;
+  returnShippingProvider?: string;
+  returnTrackingCode?: string;
+  pickupAddress?: string;
+  returnAddress?: string;
+  disputeReason?: string;
+  disputedAt?: string;
+  supporterId?: number;
+  supporterDecision?: string;
+  supporterNote?: string;
+  resolvedAt?: string;
+  createdAt: string;
+  updatedAt?: string;
+  order?: Order;
+}
 
 export interface User {
   id: string;
@@ -242,8 +287,12 @@ export interface Order {
   preferredPaymentMethod?: PaymentMethod;
   paymentExpiresAt: string;
   sellerConfirmExpiresAt: string;
+  deliveredAt?: string;
+  autoCompleteAt?: string;
   completedAt?: string;
   cancelledAt?: string;
+  returnTag?: string;
+  returnRequest?: OrderReturn;
   receiverName?: string;
   phone?: string;
   shippingAddress?: string;

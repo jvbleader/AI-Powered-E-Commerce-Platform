@@ -1,5 +1,5 @@
-import type { User, Shop, SellerApplication, Product, ProductVariant, Order, SellerStatus, AddressType, PaymentMethod } from "@/types/models";
-import type { BackendUser, BackendSellerApplication, BackendProductResponse, BackendOrderResponse } from "./types";
+import type { User, Shop, SellerApplication, Product, ProductVariant, Order, OrderReturn, SellerStatus, AddressType, PaymentMethod } from "@/types/models";
+import type { BackendUser, BackendSellerApplication, BackendProductResponse, BackendOrderResponse, BackendOrderReturnResponse } from "./types";
 import { DEFAULT_AVATAR, DEFAULT_SHOP_LOGO } from "./constants";
 import { slugifyShopName } from "./validators";
 
@@ -114,6 +114,40 @@ export const normalizeBackendProduct = (
   return { product, variants };
 };
 
+export const normalizeBackendOrderReturn = (backendReturn: BackendOrderReturnResponse | any): OrderReturn => ({
+  id: backendReturn.public_id ?? backendReturn.id ?? "",
+  publicId: backendReturn.public_id ?? backendReturn.publicId,
+  returnCode: backendReturn.return_code ?? backendReturn.returnCode,
+  orderId: backendReturn.order_id ?? backendReturn.orderId,
+  userId: backendReturn.user_id ?? backendReturn.userId,
+  sellerId: backendReturn.seller_id ?? backendReturn.sellerId,
+  returnStatus: backendReturn.return_status ?? backendReturn.returnStatus,
+  reason: backendReturn.reason,
+  description: backendReturn.description,
+  evidenceImages: backendReturn.evidence_images ?? backendReturn.evidenceImages ?? [],
+  sellerRejectReason: backendReturn.seller_reject_reason ?? backendReturn.sellerRejectReason ?? undefined,
+  sellerRespondedAt: backendReturn.seller_responded_at ?? backendReturn.sellerRespondedAt ?? undefined,
+  returnShippingProvider: backendReturn.return_shipping_provider ?? backendReturn.returnShippingProvider ?? undefined,
+  returnTrackingCode: backendReturn.return_tracking_code ?? backendReturn.returnTrackingCode ?? undefined,
+  pickupAddress: backendReturn.pickup_address ?? backendReturn.pickupAddress ?? undefined,
+  returnAddress: backendReturn.return_address ?? backendReturn.returnAddress ?? undefined,
+  disputeReason: backendReturn.dispute_reason ?? backendReturn.disputeReason ?? undefined,
+  disputedAt: backendReturn.disputed_at ?? backendReturn.disputedAt ?? undefined,
+  supporterId: backendReturn.supporter_id ?? backendReturn.supporterId ?? undefined,
+  supporterDecision: backendReturn.supporter_decision ?? backendReturn.supporterDecision ?? undefined,
+  supporterNote: backendReturn.supporter_note ?? backendReturn.supporterNote ?? undefined,
+  resolvedAt: backendReturn.resolved_at ?? backendReturn.resolvedAt ?? undefined,
+  createdAt: backendReturn.created_at ?? backendReturn.createdAt,
+  updatedAt: backendReturn.updated_at ?? backendReturn.updatedAt ?? undefined,
+  order: backendReturn.order
+    ? normalizeBackendOrder(
+        backendReturn.order,
+        backendReturn.order.seller?.public_id || "UNKNOWN_SELLER",
+        backendReturn.order.user?.public_id || "UNKNOWN_USER"
+      )
+    : undefined
+});
+
 export const normalizeBackendOrder = (
   backendOrder: BackendOrderResponse,
   sellerId: string,
@@ -143,8 +177,16 @@ export const normalizeBackendOrder = (
   preferredPaymentMethod: backendOrder.preferred_payment_method as PaymentMethod | undefined,
   paymentExpiresAt: backendOrder.payment_expires_at,
   sellerConfirmExpiresAt: backendOrder.seller_confirm_expires_at,
+  deliveredAt: backendOrder.delivered_at ?? (backendOrder as any).deliveredAt ?? undefined,
+  autoCompleteAt: backendOrder.auto_complete_at ?? (backendOrder as any).autoCompleteAt ?? undefined,
   completedAt: backendOrder.completed_at ?? undefined,
   cancelledAt: backendOrder.cancelled_at ?? undefined,
+  returnTag: backendOrder.return_tag ?? (backendOrder as any).returnTag ?? undefined,
+  returnRequest: backendOrder.return_request
+    ? normalizeBackendOrderReturn(backendOrder.return_request)
+    : (backendOrder as any).returnRequest
+      ? normalizeBackendOrderReturn((backendOrder as any).returnRequest)
+      : undefined,
   items: (backendOrder.items || []).map((item: any) => ({
     id: String(item.id),
     productId: item.product_id ? String(item.product_id) : undefined,
@@ -182,7 +224,13 @@ export const normalizeBackendOrder = (
     detailAddress: "-",
     addressType: "HOME"
   },
-  timeline: [],
+  timeline: (backendOrder.status_logs || (backendOrder as any).statusLogs || []).map((l: any) => ({
+    id: String(l.id || Math.random()),
+    oldStatus: l.old_status || l.oldStatus,
+    newStatus: l.new_status || l.newStatus,
+    note: l.note || "",
+    createdAt: l.created_at || l.createdAt
+  })),
   createdAt: backendOrder.created_at,
   printCount: (backendOrder as any).print_count ?? 0
   };

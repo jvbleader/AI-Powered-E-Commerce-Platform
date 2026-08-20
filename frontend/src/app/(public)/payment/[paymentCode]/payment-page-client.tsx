@@ -10,6 +10,8 @@ import { StatusBadge } from "@/components/ui/badge";
 import { useMarketplaceStore } from "@/store/use-marketplace-store";
 import { paymentStatusLabel, paymentMethodLabel, orderStatusLabel, formatVnd, formatDate, parseApiDateTime } from "@/lib/helpers";
 import { paymentApi } from "@/services/payment-api";
+import { walletApi, type WalletInfo } from "@/services/wallet-api";
+import { Field, Input } from "@/components/ui/input";
 import NotFoundPage from "@/components/shared/not-found-page";
 import { PaymentLoading } from "./payment-loading";
 
@@ -25,6 +27,10 @@ export default function PaymentPageClient({ paymentCode }: PaymentPageClientProp
   const fetchPaymentDetail = useMarketplaceStore((s) => s.fetchPaymentDetail);
   const [resuming, setResuming] = useState(false);
   const [mockPaying, setMockPaying] = useState(false);
+  const [walletPaying, setWalletPaying] = useState(false);
+  const [walletPin, setWalletPin] = useState("");
+  const [walletInfo, setWalletInfo] = useState<WalletInfo | null>(null);
+  const [loadingWallet, setLoadingWallet] = useState(false);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
 
@@ -54,6 +60,19 @@ export default function PaymentPageClient({ paymentCode }: PaymentPageClientProp
     };
   }, [paymentCode, ready, fetchPaymentDetail]);
 
+  const isWallet = payment?.paymentMethod === "WALLET";
+
+  useEffect(() => {
+    if (isWallet && ready) {
+      setLoadingWallet(true);
+      walletApi
+        .getWallet()
+        .then((data) => setWalletInfo({ ...data, balance: Number(data.balance) }))
+        .catch(() => {})
+        .finally(() => setLoadingWallet(false));
+    }
+  }, [isWallet, ready]);
+
   if (!paymentCode || notFound) return <NotFoundPage />;
 
   if (!ready || loading || !payment) return <PaymentLoading />;
@@ -63,8 +82,9 @@ export default function PaymentPageClient({ paymentCode }: PaymentPageClientProp
   const hasCancelledOrder = linkedOrders.some((order) => order.orderStatus === "CANCELLED");
   const canPayPayment = (payment.paymentStatus === "PENDING" || payment.paymentStatus === "FAILED") && !isExpired && !hasCancelledOrder;
   const isVNPay = payment.paymentMethod === "VNPAY";
-  const canMockPay = canPayPayment && !isVNPay && payment.paymentMethod === "MOCK";
+  const canMockPay = canPayPayment && !isVNPay && !isWallet && payment.paymentMethod === "MOCK";
   const canResumeVNPay = isVNPay && canPayPayment;
+  const canWalletPay = isWallet && canPayPayment;
 
   function InfoRow({ label, value }: { label: string; value: string }) {
     return (
@@ -147,8 +167,92 @@ export default function PaymentPageClient({ paymentCode }: PaymentPageClientProp
                   {mockPaying ? "Đang xử lý thanh toán..." : "Thanh toán ngay"}
                 </Button>
               ) : null}
+              {canWalletPay ? (
+                <div className="space-y-3">
+                  <div className="rounded-xl border border-line bg-slate-50 p-3 text-xs space-y-1.5">
+                    <div className="flex justify-between items-center">
+                      <span className="text-muted">Số dư ví:</span>
+                      <span className="font-bold text-ink text-sm">
+                        {loadingWallet ? "..." : formatVnd(walletInfo?.balance ?? 0)}
+                      </span>
+                    </div>
+                    {walletInfo && !walletInfo.has_pin && (
+                      <p className="text-coral font-semibold">
+                        Bạn chưa tạo mã PIN ví. Vui lòng vào{" "}
+                        <Link href="/account/wallet" className="underline font-bold text-primary">
+                          Quản lý Ví
+                        </Link>{" "}
+                        để tạo PIN trước.
+                      </p>
+                    )}
+                    {walletInfo && walletInfo.has_pin && (walletInfo.balance ?? 0) < payment.amount && (
+                      <p className="text-coral font-semibold">
+                        Số dư không đủ. Vui lòng{" "}
+                        <Link href="/account/wallet" className="underline font-bold text-primary">
+                          Nạp thêm tiền
+                        </Link>{" "}
+                        vào ví.
+                      </p>
+                    )}
+                  </div>
+
+                  {walletInfo?.has_pin && (walletInfo.balance ?? 0) >= payment.amount && (
+                    <Field label="Nhập mã PIN ví (6 số)">
+                      <Input
+                        type="password"
+                        maxLength={6}
+                        inputMode="numeric"
+                        placeholder="••••••"
+                        value={walletPin}
+                        onChange={(e) => setWalletPin(e.target.value.replace(/\D/g, ""))}
+                        className="text-center font-mono tracking-widest text-base bg-white"
+                      />
+                    </Field>
+                  )}
+
+                  <Button
+                    disabled={
+                      walletPaying ||
+                      loadingWallet ||
+                      !walletInfo?.has_pin ||
+                      (walletInfo.balance ?? 0) < payment.amount ||
+                      walletPin.length !== 6
+                    }
+                    onClick={async () => {
+                      if (walletPin.length !== 6) {
+                        showToast("Vui lòng nhập đúng 6 chữ số mã PIN ví", "danger");
+                        return;
+                      }
+                      setWalletPaying(true);
+                      try {
+                        await walletApi.payWithWallet(payment.orderCodes, walletPin);
+                        store.updatePaymentStatus(payment.paymentCode, "PAID");
+                        showToast("Thanh toán đơn hàng bằng ví thành công!", "success");
+                        await fetchPaymentDetail(payment.paymentCode);
+                      } catch (err: any) {
+                        showToast(err?.message || "Thanh toán bằng ví thất bại.", "danger");
+                      } finally {
+                        setWalletPaying(false);
+                      }
+                    }}
+                    className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold"
+                  >
+                    {walletPaying ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                        <span>Đang trừ ví...</span>
+                      </>
+                    ) : (
+                      <>
+                        <CreditCard className="h-4 w-4" aria-hidden="true" />
+                        <span>Xác nhận thanh toán ví</span>
+                      </>
+                    )}
+                  </Button>
+                </div>
+              ) : null}
               {payment.paymentStatus === "PAID" ? (
-                <Button disabled>
+                <Button disabled className="w-full">
                   <CreditCard className="h-4 w-4" aria-hidden="true" />
                   Đã thanh toán
                 </Button>

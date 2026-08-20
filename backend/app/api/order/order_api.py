@@ -14,6 +14,11 @@ from schemas.order.order_schema import (
     OrderListResponse,
     OrderResponse,
 )
+from schemas.order.order_return_schema import (
+    OrderReturnResponse,
+    ReturnRequestCreate,
+    ReturnDisputeRequest,
+)
 import services.order.order_service as order_service
 from services.search.search_helpers import update_products_in_es
 
@@ -142,4 +147,58 @@ async def cancel_order(
     except Exception:
         await db.rollback()
         raise
+
+
+@router.post(
+    "/{order_code}/return/request",
+    response_model=OrderReturnResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def request_order_return_api(
+    order_code: str,
+    data: ReturnRequestCreate,
+    user: CurrentUser,
+    db: DBSession,
+):
+    try:
+        order_return = await order_service.request_order_return(user, order_code, data, db)
+        await db.commit()
+        await db.refresh(order_return)
+        return order_return
+    except Exception:
+        await db.rollback()
+        raise
+
+
+@router.post(
+    "/{order_code}/return/dispute",
+    response_model=OrderReturnResponse,
+)
+async def dispute_order_return_api(
+    order_code: str,
+    data: ReturnDisputeRequest,
+    user: CurrentUser,
+    db: DBSession,
+):
+    try:
+        order_return = await order_service.dispute_order_return(user, order_code, data, db)
+        await db.commit()
+        await db.refresh(order_return)
+        return order_return
+    except Exception:
+        await db.rollback()
+        raise
+
+
+@router.get(
+    "/{order_code}/return",
+    response_model=OrderReturnResponse,
+)
+async def get_order_return_detail_api(
+    order_code: str,
+    user: CurrentUser,
+    db: DBSession,
+):
+    return await order_service.get_order_return_detail(user, order_code, db)
+
 

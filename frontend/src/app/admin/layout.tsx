@@ -55,23 +55,25 @@ export default function AdminLayout({
     );
   }
 
-  if (!store.getCurrentUser()) {
+  const currentUser = store.getCurrentUser();
+  if (!currentUser) {
     return (
       <Unauthorized
         title="Không có quyền truy cập"
-        description="Bạn cần đăng nhập với tài khoản Admin để tiếp tục."
+        description="Bạn cần đăng nhập với tài khoản Quản trị viên hoặc Hỗ trợ viên để tiếp tục."
       />
     );
   }
 
-  if (!store.getCurrentUser()!.roles.includes("ADMIN")) {
+  if (!currentUser.roles.includes("ADMIN") && !currentUser.roles.includes("SUPPORTER")) {
     return (
       <Unauthorized
         title="Không có quyền truy cập"
-        description="Bạn không có quyền truy cập trang quản trị."
+        description="Bạn không có quyền truy cập trang quản trị & hỗ trợ."
       />
     );
   }
 
-  return <DashboardFrame kind="admin">{children}</DashboardFrame>;
+  const frameKind = currentUser.roles.includes("ADMIN") ? "admin" : "supporter";
+  return <DashboardFrame kind={frameKind}>{children}</DashboardFrame>;
 }

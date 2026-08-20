@@ -55,7 +55,18 @@ export const SELLER_ORDER_ROUTES = {
   list: "/seller/orders",
   confirm: (orderId: string) => `/seller/orders/${orderId}/confirm`,
   shipping: (orderId: string) => `/seller/orders/${orderId}/shipping`,
-  cancel: (orderId: string) => `/seller/orders/${orderId}/cancel`
+  delivered: (orderId: string) => `/seller/orders/${orderId}/delivered`,
+  cancel: (orderId: string) => `/seller/orders/${orderId}/cancel`,
+  incrementPrintCount: (orderId: string) => `/seller/orders/${orderId}/increment-print-count`,
+  approveReturn: (orderId: string) => `/seller/orders/${orderId}/return/approve`,
+  rejectReturn: (orderId: string) => `/seller/orders/${orderId}/return/reject`,
+  confirmReceivedReturn: (orderId: string) => `/seller/orders/${orderId}/return/confirm-received`,
+};
+
+export const MODERATION_DISPUTE_ROUTES = {
+  list: "/api/moderation/disputes",
+  detail: (disputeId: string) => `/api/moderation/disputes/${disputeId}`,
+  resolve: (disputeId: string) => `/api/moderation/disputes/${disputeId}/resolve`,
 };
 
 export const cloneState = (): AppState => JSON.parse(JSON.stringify(initialState)) as AppState;

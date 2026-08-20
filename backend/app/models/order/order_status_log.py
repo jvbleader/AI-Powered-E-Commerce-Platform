@@ -15,14 +15,14 @@ class OrderStatusLog(Base):
     __table_args__ = (
         CheckConstraint(
             "new_status IN "
-            "('PLACED', 'READY_TO_SHIP', 'SHIPPING', 'COMPLETED', "
-            "'DELIVERY_FAILED', 'CANCELLED')",
+            "('PLACED', 'READY_TO_SHIP', 'SHIPPING', 'DELIVERED', 'COMPLETED', "
+            "'DELIVERY_FAILED', 'CANCELLED', 'RETURNED')",
             name="ck_order_status_logs_new_status",
         ),
         CheckConstraint(
             "old_status IS NULL OR old_status IN "
-            "('PLACED', 'READY_TO_SHIP', 'SHIPPING', 'COMPLETED', "
-            "'DELIVERY_FAILED', 'CANCELLED')",
+            "('PLACED', 'READY_TO_SHIP', 'SHIPPING', 'DELIVERED', 'COMPLETED', "
+            "'DELIVERY_FAILED', 'CANCELLED', 'RETURNED')",
             name="ck_order_status_logs_old_status",
         ),
         Index("ix_order_status_logs_order_id", "order_id"),

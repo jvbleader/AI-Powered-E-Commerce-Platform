@@ -99,6 +99,7 @@ from api.user.user_address_api import router as user_address_router
 from api.chat.chat_ai_api import router as chat_ai_router
 from api.catalog.review_api import router as review_router
 from api.moderation.violation_report_api import router as violation_report_router
+from api.moderation.dispute_api import router as dispute_router
 from api.chat.support_chat_api import router as support_chat_router
 from api.chat.seller_chat_api import router as seller_chat_router
 from api.engagement.notification_api import router as notifications_router
@@ -106,6 +107,7 @@ from api.search.search_api import router as search_router
 
 from api.common.upload_api import router as upload_router
 from api.shipping.shipping_api import router as shipping_router
+from api.wallet.wallet_api import router as wallet_router
 
 app.include_router(auth_router)
 app.include_router(seller_router)
@@ -121,12 +123,15 @@ app.include_router(user_address_router)
 app.include_router(chat_ai_router)
 app.include_router(review_router)
 app.include_router(violation_report_router)
+app.include_router(dispute_router)
 app.include_router(support_chat_router, prefix="/api/support-chat")
 app.include_router(seller_chat_router, prefix="/api/seller-chat")
 app.include_router(notifications_router, prefix="/notifications", tags=["notifications"])
 app.include_router(search_router)
 app.include_router(upload_router, prefix="/api")
 app.include_router(shipping_router)
+app.include_router(wallet_router)
+
 
 
 

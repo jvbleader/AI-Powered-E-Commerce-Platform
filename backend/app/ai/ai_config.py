@@ -6,40 +6,70 @@ load_dotenv()
 class AISettings:
     @property
     def API_KEY(self) -> str:
-        key = os.getenv("API_KEY")
+        key = os.getenv("AZURE_OPENAI_API_KEY") or os.getenv("API_KEY")
         if not key or not key.strip():
             raise ValueError("Thiếu cấu hình API_KEY trong biến môi trường (.env)")
         return key.strip()
 
     @property
     def BASE_URL(self) -> str:
-        url = os.getenv("BASE_URL")
+        url = os.getenv("AZURE_OPENAI_ENDPOINT") or os.getenv("BASE_URL")
         if not url or not url.strip():
             raise ValueError("Thiếu cấu hình BASE_URL trong biến môi trường (.env)")
         return url.strip()
 
     @property
     def MODEL(self) -> str:
-        model = os.getenv("MODEL")
+        model = os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME") or os.getenv("MODEL")
         if model and model.strip():
             return model.strip()
         return "gpt-4o-mini"
 
     @property
+    def API_VERSION(self) -> str:
+        version = os.getenv("AZURE_OPENAI_API_VERSION") or os.getenv("API_VERSION")
+        if version and version.strip():
+            return version.strip()
+        return "2024-08-01-preview"
+
+    @property
+    def IS_AZURE(self) -> bool:
+        flag = os.getenv("IS_AZURE") or os.getenv("OPENAI_API_TYPE")
+        if flag and flag.strip().lower() in ("true", "1", "azure"):
+            return True
+        url = os.getenv("AZURE_OPENAI_ENDPOINT") or os.getenv("BASE_URL") or ""
+        return "openai.azure.com" in url.lower()
+
+    @property
     def EMBEDDING_API_KEY(self) -> str:
-        key = os.getenv("EMBEDDING_API_KEY") or self.API_KEY
+        key = os.getenv("AZURE_EMBEDDING_API_KEY") or os.getenv("EMBEDDING_API_KEY") or self.API_KEY
         if not key or not key.strip():
             raise ValueError("Thiếu cấu hình EMBEDDING_API_KEY (hoặc API_KEY) trong biến môi trường (.env)")
         return key.strip()
 
     @property
     def EMBEDDING_BASE_URL(self) -> str:
-        url = os.getenv("EMBEDDING_BASE_URL") or "https://api.openai.com/v1"
+        url = os.getenv("AZURE_EMBEDDING_ENDPOINT") or os.getenv("EMBEDDING_BASE_URL") or "https://api.openai.com/v1"
         return url.strip()
 
     @property
     def EMBEDDING_MODEL(self) -> str:
-        model = os.getenv("EMBEDDING_MODEL") or "text-embedding-3-small"
+        model = os.getenv("AZURE_EMBEDDING_DEPLOYMENT_NAME") or os.getenv("EMBEDDING_MODEL") or "text-embedding-3-small"
         return model.strip()
+
+    @property
+    def EMBEDDING_API_VERSION(self) -> str:
+        version = os.getenv("AZURE_EMBEDDING_API_VERSION") or os.getenv("EMBEDDING_API_VERSION") or self.API_VERSION
+        if version and version.strip():
+            return version.strip()
+        return "2024-08-01-preview"
+
+    @property
+    def IS_AZURE_EMBEDDING(self) -> bool:
+        flag = os.getenv("IS_AZURE_EMBEDDING")
+        if flag and flag.strip().lower() in ("true", "1", "azure"):
+            return True
+        url = os.getenv("AZURE_EMBEDDING_ENDPOINT") or os.getenv("EMBEDDING_BASE_URL") or ""
+        return "openai.azure.com" in url.lower()
 
 ai_settings = AISettings()

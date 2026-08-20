@@ -3,6 +3,7 @@ import {
   persistState, 
   SELLER_ORDER_ROUTES, 
   normalizeBackendOrder,
+  normalizeBackendOrderReturn,
   BackendOrderResponse,
   BackendOrderListResponse
 } from './types';
@@ -470,6 +471,221 @@ export const createOrderSlice: StateCreator<MarketplaceStore, [], [], any> = (se
         return { ok: true, order };
       } catch (error) {
         return { ok: false, message: error instanceof ApiError ? error.message : "Lỗi khi tăng số lần in." };
+      }
+    },
+    markOrderDelivered: async (orderId: string) => {
+      if (!get().getCurrentShop() || !get().getCurrentUser()) return { ok: false, message: "Shop không tồn tại." };
+      try {
+        const response = await orderApi.markOrderDelivered(orderId);
+        const order = normalizeBackendOrder(response, get().getCurrentShop()!.id, get().getCurrentUser()!.id);
+        setState((prev: AppState) => ({
+          ...prev,
+          orders: prev.orders.some((o) => o.id === order.id || o.orderCode === order.orderCode)
+            ? prev.orders.map((o) => (o.id === order.id || o.orderCode === order.orderCode ? order : o))
+            : [...prev.orders, order]
+        }));
+        return { ok: true, order };
+      } catch (error) {
+        return { ok: false, message: error instanceof ApiError ? error.message : "Lỗi khi cập nhật trạng thái đã giao hàng." };
+      }
+    },
+    requestOrderReturn: async (orderCode: string, payload: { reason: string; description: string; evidence_images?: string[] }) => {
+      const currentUser = get().getCurrentUser();
+      if (!currentUser) return { ok: false, message: "Người dùng chưa đăng nhập." };
+      try {
+        const rawReturn = await orderApi.requestOrderReturn(orderCode, payload);
+        const orderReturn = normalizeBackendOrderReturn(rawReturn);
+        setState((prev: AppState) => ({
+          ...prev,
+          orders: prev.orders.map((o) =>
+            o.orderCode === orderCode
+              ? { ...o, returnRequest: orderReturn }
+              : o
+          )
+        }));
+        return { ok: true, orderReturn };
+      } catch (error) {
+        return { ok: false, message: error instanceof ApiError ? error.message : "Lỗi khi gửi yêu cầu trả hàng." };
+      }
+    },
+    disputeOrderReturn: async (orderCode: string, payload: { dispute_reason: string }) => {
+      const currentUser = get().getCurrentUser();
+      if (!currentUser) return { ok: false, message: "Người dùng chưa đăng nhập." };
+      try {
+        const rawReturn = await orderApi.disputeOrderReturn(orderCode, payload);
+        const orderReturn = normalizeBackendOrderReturn(rawReturn);
+        setState((prev: AppState) => ({
+          ...prev,
+          orders: prev.orders.map((o) =>
+            o.orderCode === orderCode
+              ? { ...o, returnRequest: orderReturn, returnTag: "DISPUTED" }
+              : o
+          )
+        }));
+        return { ok: true, orderReturn };
+      } catch (error) {
+        return { ok: false, message: error instanceof ApiError ? error.message : "Lỗi khi khiếu nại lên Sàn." };
+      }
+    },
+    approveSellerReturn: async (orderId: string) => {
+      const currentShop = get().getCurrentShop();
+      if (!currentShop || !get().getCurrentUser()) return { ok: false, message: "Shop không tồn tại." };
+      try {
+        const rawReturn = await orderApi.approveSellerReturn(orderId);
+        const orderReturn = normalizeBackendOrderReturn(rawReturn);
+        setState((prev: AppState) => ({
+          ...prev,
+          orders: prev.orders.map((o) =>
+            o.id === orderId || o.orderCode === orderId || (o.returnRequest && (o.returnRequest.id === rawReturn.id || o.returnRequest.publicId === rawReturn.public_id))
+              ? { ...o, returnRequest: orderReturn }
+              : o
+          )
+        }));
+        return { ok: true, orderReturn };
+      } catch (error) {
+        return { ok: false, message: error instanceof ApiError ? error.message : "Lỗi khi đồng ý trả hàng." };
+      }
+    },
+    rejectSellerReturn: async (orderId: string, rejectReason: string) => {
+      const currentShop = get().getCurrentShop();
+      if (!currentShop || !get().getCurrentUser()) return { ok: false, message: "Shop không tồn tại." };
+      try {
+        const rawReturn = await orderApi.rejectSellerReturn(orderId, { reject_reason: rejectReason });
+        const orderReturn = normalizeBackendOrderReturn(rawReturn);
+        setState((prev: AppState) => ({
+          ...prev,
+          orders: prev.orders.map((o) =>
+            o.id === orderId || o.orderCode === orderId || (o.returnRequest && (o.returnRequest.id === rawReturn.id || o.returnRequest.publicId === rawReturn.public_id))
+              ? { ...o, returnRequest: orderReturn, returnTag: "RETURN_FAILED_SELLER_REJECTED" }
+              : o
+          )
+        }));
+        return { ok: true, orderReturn };
+      } catch (error) {
+        return { ok: false, message: error instanceof ApiError ? error.message : "Lỗi khi từ chối trả hàng." };
+      }
+    },
+    confirmReceivedReturn: async (orderId: string) => {
+      const currentShop = get().getCurrentShop();
+      if (!currentShop || !get().getCurrentUser()) return { ok: false, message: "Shop không tồn tại." };
+      try {
+        const rawReturn = await orderApi.confirmReceivedReturn(orderId);
+        const orderReturn = normalizeBackendOrderReturn(rawReturn);
+        setState((prev: AppState) => ({
+          ...prev,
+          orders: prev.orders.map((o) =>
+            o.id === orderId || o.orderCode === orderId || (o.returnRequest && (o.returnRequest.id === rawReturn.id || o.returnRequest.publicId === rawReturn.public_id))
+              ? { ...o, orderStatus: "RETURNED" as OrderStatus, returnRequest: orderReturn, returnTag: "RETURN_SUCCESS" }
+              : o
+          )
+        }));
+        return { ok: true, orderReturn };
+      } catch (error) {
+        return { ok: false, message: error instanceof ApiError ? error.message : "Lỗi khi xác nhận đã nhận hàng hoàn." };
+      }
+    },
+    fetchDisputes: async (statusFilter?: string, skip = 0, limit = 50) => {
+      try {
+        const response = await orderApi.fetchDisputes(statusFilter, skip, limit);
+        const disputes = response.items.map((item) => normalizeBackendOrderReturn(item));
+        return { ok: true, disputes, total: response.total };
+      } catch (error) {
+        const localDisputes = get().state.orders
+          .filter((o) => o.returnRequest)
+          .map((o) => ({
+            ...o.returnRequest!,
+            order: o
+          }))
+          .filter((ret) => {
+            if (!statusFilter || statusFilter === "" || statusFilter === "ALL") return true;
+            return ret.returnStatus === statusFilter;
+          });
+
+        if (localDisputes.length > 0) {
+          return { ok: true, disputes: localDisputes, total: localDisputes.length };
+        }
+        return { ok: false, message: error instanceof ApiError ? error.message : "Lỗi khi tải danh sách tranh chấp." };
+      }
+    },
+    fetchDisputeDetail: async (disputeId: string) => {
+      try {
+        const response = await orderApi.fetchDisputeDetail(disputeId);
+        const dispute = normalizeBackendOrderReturn(response);
+        return { ok: true, dispute };
+      } catch (error) {
+        const localOrder = get().state.orders.find(
+          (o) =>
+            o.returnRequest &&
+            (String(o.returnRequest.id) === disputeId ||
+              o.returnRequest.publicId === disputeId ||
+              o.returnRequest.returnCode === disputeId ||
+              o.orderCode === disputeId)
+        );
+        if (localOrder && localOrder.returnRequest) {
+          return {
+            ok: true,
+            dispute: {
+              ...localOrder.returnRequest,
+              order: localOrder
+            }
+          };
+        }
+        return { ok: false, message: error instanceof ApiError ? error.message : "Lỗi khi tải chi tiết tranh chấp." };
+      }
+    },
+    resolveDispute: async (disputeId: string, decision: string, note: string) => {
+      try {
+        const response = await orderApi.resolveDispute(disputeId, { decision, note });
+        const dispute = normalizeBackendOrderReturn(response);
+        setState((prev: AppState) => ({
+          ...prev,
+          orders: prev.orders.map((o) =>
+            (o.returnRequest && (String(o.returnRequest.id) === disputeId || o.returnRequest.publicId === disputeId || o.returnRequest.returnCode === disputeId)) ||
+            (dispute.order && o.orderCode === dispute.order.orderCode)
+              ? {
+                  ...o,
+                  orderStatus: (decision === "APPROVE_REFUND" ? "RETURNED" : "COMPLETED") as OrderStatus,
+                  returnTag: decision === "APPROVE_REFUND" ? "RETURN_SUCCESS_SUPPORT_APPROVED" : "RETURN_FAILED_SUPPORT_REJECTED",
+                  returnRequest: dispute
+                }
+              : o
+          )
+        }));
+        return { ok: true, dispute };
+      } catch (error) {
+        const localOrder = get().state.orders.find(
+          (o) =>
+            o.returnRequest &&
+            (String(o.returnRequest.id) === disputeId ||
+              o.returnRequest.publicId === disputeId ||
+              o.returnRequest.returnCode === disputeId)
+        );
+        if (localOrder && localOrder.returnRequest) {
+          const now = new Date().toISOString();
+          const newStatus = decision === "APPROVE_REFUND" ? "SUPPORT_APPROVED" : "SUPPORT_REJECTED";
+          const updatedReturn = {
+            ...localOrder.returnRequest,
+            returnStatus: newStatus as any,
+            supporterDecision: decision,
+            supporterNote: note,
+            resolvedAt: now
+          };
+          setState((prev: AppState) => ({
+            ...prev,
+            orders: prev.orders.map((o) =>
+              o.id === localOrder.id
+                ? {
+                    ...o,
+                    orderStatus: (decision === "APPROVE_REFUND" ? "RETURNED" : "COMPLETED") as OrderStatus,
+                    returnTag: decision === "APPROVE_REFUND" ? "RETURN_SUCCESS_SUPPORT_APPROVED" : "RETURN_FAILED_SUPPORT_REJECTED",
+                    returnRequest: updatedReturn
+                  }
+                : o
+            )
+          }));
+          return { ok: true, dispute: { ...updatedReturn, order: localOrder } };
+        }
+        return { ok: false, message: error instanceof ApiError ? error.message : "Lỗi khi xử lý khiếu nại." };
       }
     },
   };

@@ -3,14 +3,17 @@ import logging
 from datetime import datetime
 from core.database import AsyncSessionLocal
 from services.admin.statistics_service import recalculate_all_statistics
-from services.order.order_service import process_expired_orders
+from services.order.order_service import (
+    auto_complete_delivered_orders,
+    process_expired_orders,
+)
 
 logger = logging.getLogger("scheduler")
 
 # Run 2 times a day = Every 12 hours (43,200 seconds)
 STATISTICS_INTERVAL_SECONDS = 12 * 60 * 60
 
-# Check expired orders every 5 minutes (300 seconds)
+# Check expired & auto-complete orders every 5 minutes (300 seconds)
 ORDER_EXPIRATION_INTERVAL_SECONDS = 5 * 60
 
 _scheduler_task: asyncio.Task | None = None
@@ -31,15 +34,27 @@ async def _statistics_loop():
         await asyncio.sleep(STATISTICS_INTERVAL_SECONDS)
 
 async def _order_expiration_loop():
-    logger.info("Starting background scheduler: Order Expiration check job (runs every 5 minutes)")
+    logger.info("Starting background scheduler: Order Expiration & Auto-complete check job (runs every 5 minutes)")
     while True:
         try:
             async with AsyncSessionLocal() as db:
                 res = await process_expired_orders(db)
-                if res.get("expired_payments", 0) > 0 or res.get("expired_seller_confirms", 0) > 0:
-                    logger.info(f"[{datetime.utcnow().isoformat()}] Scheduled order expiration job finished: {res}")
+                auto_completed = await auto_complete_delivered_orders(db)
+                from services.wallet.wallet_service import expire_stale_pending_topups
+                expired_topups = await expire_stale_pending_topups(db)
+                await db.commit()
+                if (
+                    res.get("expired_payments", 0) > 0
+                    or res.get("expired_seller_confirms", 0) > 0
+                    or auto_completed > 0
+                    or expired_topups > 0
+                ):
+                    logger.info(
+                        f"[{datetime.utcnow().isoformat()}] Scheduled expiration & auto-complete job finished: "
+                        f"orders={res}, auto_completed={auto_completed}, expired_wallet_topups={expired_topups}"
+                    )
         except Exception as e:
-            logger.error(f"Error executing scheduled order expiration job: {e}", exc_info=True)
+            logger.error(f"Error executing scheduled order expiration & auto-complete job: {e}", exc_info=True)
 
         # Sleep for 5 minutes until next run
         await asyncio.sleep(ORDER_EXPIRATION_INTERVAL_SECONDS)

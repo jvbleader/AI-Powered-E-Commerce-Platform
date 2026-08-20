@@ -12,8 +12,10 @@ from models.order import Order
 from models.order import OrderCancellation
 from models.order import OrderItem
 from models.order import OrderStatusLog
+from models.order import OrderReturn
 from models.user import User
 from schemas.order.order_schema import CheckoutCartRequest, CheckoutDirectRequest
+from schemas.order.order_return_schema import ReturnRequestCreate, ReturnDisputeRequest
 import repositories.order.order_repository as order_repository
 import repositories.inventory.inventory_repository as inventory_repository
 import repositories.cart.cart_repository as cart_repository
@@ -257,6 +259,12 @@ async def _process_checkout(
     if cart_item_ids:
         await cart_repository.remove_cart_items_by_ids(db, cart_item_ids)
 
+    for order in created_orders:
+        await db.refresh(order, [
+            "items", "seller", "user", "shipment",
+            "status_logs", "return_request", "cancellation",
+        ])
+
     return created_orders
 
 
@@ -281,8 +289,6 @@ async def checkout_from_cart(user: User, data: CheckoutCartRequest, db: AsyncSes
     orders = await _process_checkout(
         user, items_to_checkout, data.address_id, data.customer_note, db, data.payment_method, shop_shipping_map
     )
-    for o in orders:
-        await db.refresh(o, ["items", "seller", "shipment"])
     return orders
 
 
@@ -312,8 +318,6 @@ async def checkout_direct(user: User, data: CheckoutDirectRequest, db: AsyncSess
     orders = await _process_checkout(
         user, items_to_checkout, data.address_id, data.customer_note, db, data.payment_method, shop_shipping_map
     )
-    for o in orders:
-        await db.refresh(o, ["items", "seller", "shipment"])
     return orders
 
 
@@ -333,10 +337,10 @@ async def get_order_detail(user: User, order_code: str, db: AsyncSession):
 async def confirm_receipt(user: User, order_code: str, db: AsyncSession):
     order = await get_order_detail(user, order_code, db)
 
-    if order.order_status not in ["SHIPPING"]:
+    if order.order_status != "DELIVERED":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Không thể xác nhận nhận hàng ở trạng thái {order.order_status}",
+            detail="Chỉ có thể xác nhận nhận hàng khi đơn ở trạng thái đã giao hàng (DELIVERED)",
         )
 
     old_status = order.order_status
@@ -443,7 +447,14 @@ async def cancel_order(user: User, order_code: str, reason: str, db: AsyncSessio
     )
 
     if order.payment_status == "PAID":
-        order.payment_status = "REFUND_PENDING"
+        from services.wallet.wallet_service import credit_wallet_for_refund
+        await credit_wallet_for_refund(
+            user_id=user.id,
+            amount=order.total_amount,
+            order=order,
+            db=db,
+        )
+        order.payment_status = "REFUNDED"
 
     for item in order.items:
         if not item.variant_id:
@@ -484,14 +495,14 @@ async def cancel_order(user: User, order_code: str, reason: str, db: AsyncSessio
 
 
 async def process_expired_orders(db: AsyncSession) -> dict:
-    from sqlalchemy import select
+    from sqlalchemy import select, or_
     from sqlalchemy.orm import selectinload
 
     now = utc_now()
     expired_payment_count = 0
     expired_confirm_count = 0
 
-    # 1. Hủy các đơn hàng quá hạn thanh toán (payment_expires_at < now và payment_status == 'PENDING')
+    # 1. Hủy các đơn hàng quá hạn thanh toán (payment_expires_at < now và payment_status == 'PENDING', không áp dụng COD)
     stmt_payment = (
         select(Order)
         .options(
@@ -501,6 +512,7 @@ async def process_expired_orders(db: AsyncSession) -> dict:
             Order.payment_expires_at < now,
             Order.payment_status == "PENDING",
             Order.order_status.in_(["PLACED", "PENDING"]),
+            or_(Order.preferred_payment_method.is_(None), Order.preferred_payment_method != "COD"),
         )
     )
     payment_orders_res = await db.execute(stmt_payment)
@@ -578,7 +590,14 @@ async def process_expired_orders(db: AsyncSession) -> dict:
         order.cancelled_at = now
 
         if order.payment_status == "PAID":
-            order.payment_status = "REFUND_PENDING"
+            from services.wallet.wallet_service import credit_wallet_for_refund
+            await credit_wallet_for_refund(
+                user_id=order.user_id,
+                amount=order.total_amount,
+                order=order,
+                db=db,
+            )
+            order.payment_status = "REFUNDED"
 
         await order_repository.add_order_status_log(
             db,
@@ -625,11 +644,227 @@ async def process_expired_orders(db: AsyncSession) -> dict:
                 )
         expired_confirm_count += 1
 
-    if expired_payment_count > 0 or expired_confirm_count > 0:
-        await db.commit()
-
     return {
         "expired_payments": expired_payment_count,
         "expired_seller_confirms": expired_confirm_count,
     }
+
+
+def generate_return_code() -> str:
+    return f"RET-{secrets.token_hex(6).upper()}"
+
+
+async def request_order_return(
+    user: User, order_code: str, data: ReturnRequestCreate, db: AsyncSession
+) -> OrderReturn:
+    order = await get_order_detail(user, order_code, db)
+
+    if order.order_status != "DELIVERED":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Chỉ có thể yêu cầu trả hàng/hoàn tiền khi đơn ở trạng thái đã giao hàng (DELIVERED)",
+        )
+
+    existing_return = await order_repository.get_order_return_by_order_id(db, order.id)
+    if existing_return:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Đơn hàng đã có yêu cầu trả hàng/hoàn tiền",
+        )
+
+    order_return = OrderReturn(
+        return_code=generate_return_code(),
+        order_id=order.id,
+        user_id=user.id,
+        seller_id=order.seller_id,
+        return_status="REQUESTED",
+        reason=data.reason,
+        description=data.description,
+        evidence_images=data.evidence_images,
+    )
+    await order_repository.create_order_return(db, order_return)
+
+    await order_repository.add_order_status_log(
+        db,
+        OrderStatusLog(
+            order_id=order.id,
+            old_status=order.order_status,
+            new_status=order.order_status,
+            note=f"Người mua yêu cầu trả hàng/hoàn tiền: {data.reason}",
+        ),
+    )
+
+    seller = await seller_profile_repository.get_seller_profile_by_id(order.seller_id, db)
+    if seller:
+        await send_notification(
+            db=db,
+            user_id=seller.user_id,
+            type="order",
+            title="Yêu cầu trả hàng / hoàn tiền mới",
+            content=f"Đơn hàng {order.order_code} có yêu cầu trả hàng từ người mua: {data.reason}.",
+            action_url=f"/seller/orders/{order.order_code}",
+        )
+
+    return order_return
+
+
+async def dispute_order_return(
+    user: User, order_code: str, data: ReturnDisputeRequest, db: AsyncSession
+) -> OrderReturn:
+    order = await get_order_detail(user, order_code, db)
+
+    return_req = await order_repository.get_order_return_by_order_id(db, order.id)
+    if not return_req:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Không tìm thấy yêu cầu trả hàng cho đơn này",
+        )
+
+    if return_req.return_status != "SELLER_REJECTED":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Chỉ có thể khiếu nại lên Sàn khi Shop từ chối yêu cầu trả hàng",
+        )
+
+    return_req.return_status = "DISPUTED"
+    return_req.dispute_reason = data.dispute_reason
+    return_req.disputed_at = utc_now()
+    order.return_tag = "DISPUTED"
+
+    await order_repository.add_order_status_log(
+        db,
+        OrderStatusLog(
+            order_id=order.id,
+            old_status=order.order_status,
+            new_status=order.order_status,
+            note=f"Người mua khiếu nại lên Sàn: {data.dispute_reason}",
+        ),
+    )
+
+    return return_req
+
+
+async def get_order_return_detail(
+    user: User, order_code: str, db: AsyncSession
+) -> OrderReturn:
+    order = await get_order_detail(user, order_code, db)
+
+    return_req = await order_repository.get_order_return_by_order_id(db, order.id)
+    if not return_req:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Không tìm thấy thông tin yêu cầu trả hàng cho đơn này",
+        )
+
+    return return_req
+
+
+async def auto_complete_delivered_orders(db: AsyncSession) -> int:
+    from sqlalchemy import select
+    from sqlalchemy.orm import selectinload
+    from models.seller import SellerStatistics
+
+    now = utc_now()
+    completed_count = 0
+
+    stmt = (
+        select(Order)
+        .options(
+            selectinload(Order.items),
+            selectinload(Order.return_request),
+        )
+        .where(
+            Order.order_status == "DELIVERED",
+            Order.auto_complete_at.is_not(None),
+            Order.auto_complete_at <= now,
+        )
+    )
+    res = await db.execute(stmt)
+    orders = list(res.scalars().all())
+
+    for order in orders:
+        if order.return_request and order.return_request.return_status in (
+            "REQUESTED",
+            "SELLER_APPROVED",
+            "RETURNING",
+            "DISPUTED",
+        ):
+            continue
+
+        old_status = order.order_status
+        order.order_status = "COMPLETED"
+        order.completed_at = now
+
+        await order_repository.add_order_status_log(
+            db,
+            OrderStatusLog(
+                order_id=order.id,
+                old_status=old_status,
+                new_status="COMPLETED",
+                note="Hệ thống tự động hoàn tất đơn hàng sau 7 ngày giao hàng",
+            ),
+        )
+
+        for item in order.items:
+            if not item.variant_id:
+                continue
+            inv = await inventory_repository.get_inventory_for_update(db, item.variant_id)
+            if inv:
+                qty_before = inv.quantity
+                inv.quantity = max(0, inv.quantity - item.quantity)
+                inv.reserved_quantity = max(0, inv.reserved_quantity - item.quantity)
+                qty_after = inv.quantity
+
+                await inventory_repository.add_inventory_transaction(
+                    db,
+                    InventoryTransaction(
+                        variant_id=inv.variant_id,
+                        transaction_type="ORDER_DEDUCT",
+                        quantity_change=-item.quantity,
+                        quantity_before=qty_before,
+                        quantity_after=qty_after,
+                        reference_type="ORDER",
+                        reference_id=order.id,
+                        note=f"Trừ tồn kho khi đơn {order.order_code} tự động hoàn tất sau 7 ngày",
+                    ),
+                )
+
+            if item.product_id:
+                from models.catalog import Product
+                prod = await db.get(Product, item.product_id)
+                if prod:
+                    prod.sold_count += item.quantity
+
+        seller_stats_res = await db.execute(
+            select(SellerStatistics).where(SellerStatistics.seller_id == order.seller_id)
+        )
+        stats = seller_stats_res.scalar_one_or_none()
+        if stats:
+            stats.total_sold += sum(i.quantity for i in order.items)
+            stats.total_revenue += Decimal(str(order.total_amount))
+
+        seller = await seller_profile_repository.get_seller_profile_by_id(order.seller_id, db)
+        if seller:
+            await send_notification(
+                db=db,
+                user_id=seller.user_id,
+                type="order",
+                title="Đơn hàng đã hoàn tất",
+                content=f"Đơn hàng {order.order_code} đã tự động hoàn tất sau 7 ngày. Doanh thu đã được ghi nhận.",
+                action_url=f"/seller/orders/{order.order_code}",
+            )
+
+        await send_notification(
+            db=db,
+            user_id=order.user_id,
+            type="order",
+            title="Đơn hàng đã hoàn tất",
+            content=f"Đơn hàng {order.order_code} đã tự động hoàn tất sau 7 ngày nhận hàng.",
+            action_url=f"/account/orders/{order.order_code}",
+        )
+
+        completed_count += 1
+
+    return completed_count
+
 

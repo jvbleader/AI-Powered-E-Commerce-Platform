@@ -3,6 +3,7 @@ from typing import Optional, List
 from pydantic import BaseModel
 from decimal import Decimal
 from schemas.order.order_schema import OrderItemResponse, ShipmentResponse, UserInfo
+from schemas.order.order_return_schema import OrderReturnResponse
 
 
 class OrderResponse(BaseModel):
@@ -23,12 +24,16 @@ class OrderResponse(BaseModel):
     seller_confirm_expires_at: datetime
     completed_at: Optional[datetime]
     cancelled_at: Optional[datetime]
+    delivered_at: Optional[datetime] = None
+    auto_complete_at: Optional[datetime] = None
+    return_tag: Optional[str] = None
     created_at: datetime
     updated_at: Optional[datetime]
     print_count: int = 0
     user: Optional[UserInfo] = None
     items: List[OrderItemResponse] = []
     shipment: Optional[ShipmentResponse] = None
+    return_request: Optional[OrderReturnResponse] = None
 
     class Config:
         from_attributes = True

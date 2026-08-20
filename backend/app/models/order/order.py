@@ -26,8 +26,8 @@ class Order(Base):
     __table_args__ = (
         CheckConstraint(
             "order_status IN "
-            "('PLACED', 'READY_TO_SHIP', 'SHIPPING', 'COMPLETED', "
-            "'DELIVERY_FAILED', 'CANCELLED')",
+            "('PLACED', 'READY_TO_SHIP', 'SHIPPING', 'DELIVERED', 'COMPLETED', "
+            "'DELIVERY_FAILED', 'CANCELLED', 'RETURNED')",
             name="ck_orders_order_status",
         ),
         CheckConstraint(
@@ -54,6 +54,7 @@ class Order(Base):
         Index("ix_orders_created_at", "created_at"),
         Index("ix_orders_payment_expires_at", "payment_expires_at"),
         Index("ix_orders_seller_confirm_expires_at", "seller_confirm_expires_at"),
+        Index("ix_orders_auto_complete_at", "auto_complete_at"),
     )
 
     id: Mapped[int] = mapped_column(
@@ -125,6 +126,9 @@ class Order(Base):
     )
     completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     cancelled_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    delivered_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    auto_complete_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    return_tag: Mapped[str | None] = mapped_column(String(40), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime,
         nullable=False,
@@ -152,6 +156,11 @@ class Order(Base):
         cascade="all, delete-orphan",
     )
     cancellation: Mapped["OrderCancellation | None"] = relationship(
+        back_populates="order",
+        cascade="all, delete-orphan",
+        uselist=False,
+    )
+    return_request: Mapped["OrderReturn | None"] = relationship(
         back_populates="order",
         cascade="all, delete-orphan",
         uselist=False,

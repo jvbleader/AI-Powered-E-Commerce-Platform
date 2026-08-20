@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Loader2 } from "lucide-react";
+import { Plus, Loader2, Truck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Radio, Select, Textarea } from "@/components/ui/input";
 import { Panel, Section } from "@/components/ui/containers";
@@ -10,6 +10,7 @@ import { EmptyState } from "@/components/ui/feedback";
 import { useMarketplaceStore } from "@/store/use-marketplace-store";
 import { selectedCheckoutGroups, paymentMethodLabel, formatVnd } from "@/lib/helpers";
 import type { Address, AddressType, PaymentMethod, ShippingProvider } from "@/types/models";
+import { walletApi, type WalletInfo } from "@/services/wallet-api";
 import Unauthorized from "@/components/shared/unauthorized-page";
 
 export default function CheckoutPage() {
@@ -26,6 +27,19 @@ export default function CheckoutPage() {
   const [method, setMethod] = useState<PaymentMethod>("MOCK");
   const [note, setNote] = useState("");
   const [shopShippingMap, setShopShippingMap] = useState<Record<string, string>>({});
+  const [walletInfo, setWalletInfo] = useState<WalletInfo | null>(null);
+  const [walletLoading, setWalletLoading] = useState(false);
+
+  useEffect(() => {
+    if (user) {
+      setWalletLoading(true);
+      walletApi
+        .getWallet()
+        .then((info) => setWalletInfo(info))
+        .catch(() => setWalletInfo(null))
+        .finally(() => setWalletLoading(false));
+    }
+  }, [user?.id]);
 
   const rows = store.getCartRows();
   const rawGroups = selectedCheckoutGroups(rows);
@@ -182,16 +196,45 @@ export default function CheckoutPage() {
                 </Field>
                 <Field label="Phương thức thanh toán">
                   <Select value={method} onChange={(event) => setMethod(event.target.value as PaymentMethod)}>
-                    {/* Chỉ liệt kê phương thức đã tích hợp end-to-end (tránh BANK_TRANSFER/MOMO chưa có gateway). */}
-                    {(["MOCK", "VNPAY"] as PaymentMethod[]).map((key) => (
+                    {(["MOCK", "VNPAY", "WALLET", "COD"] as PaymentMethod[]).map((key) => (
                       <option key={key} value={key}>{paymentMethodLabel[key]}</option>
                     ))}
                   </Select>
                 </Field>
+                {method === "COD" && (
+                  <div className="rounded-panel border border-emerald-200 bg-emerald-50/80 p-3 text-xs text-emerald-800 flex items-start gap-2">
+                    <Truck className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" />
+                    <span>Bạn sẽ thanh toán tiền mặt trực tiếp cho nhân viên giao hàng khi nhận kiện hàng.</span>
+                  </div>
+                )}
+                {method === "WALLET" && (
+                  <div className="rounded-panel border border-line bg-neutral-50/70 p-3 space-y-2">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-muted">Số dư ví:</span>
+                      <span className="font-bold text-ink">
+                        {walletLoading ? "Đang tải..." : formatVnd(walletInfo?.balance ?? 0)}
+                      </span>
+                    </div>
+                    {!walletLoading && walletInfo && !walletInfo.has_pin && (
+                      <p className="rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-800">
+                        Bạn chưa tạo mã PIN. Vui lòng vào Tài khoản → Ví tiền để tạo PIN trước khi thanh toán.
+                      </p>
+                    )}
+                    {!walletLoading && walletInfo && (walletInfo.balance ?? 0) < total && (
+                      <p className="rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-800">
+                        Số dư không đủ. Vui lòng nạp thêm tiền vào ví.
+                      </p>
+                    )}
+                  </div>
+                )}
                 <InfoRow label="Số đơn hàng" value={`${groups.length}`} />
                 <InfoRow label="Tổng thanh toán" value={formatVnd(total)} />
                 <Button
-                  disabled={!addressId || isOrdering}
+                  disabled={
+                    !addressId ||
+                    isOrdering ||
+                    (method === "WALLET" && (!walletInfo?.has_pin || (walletInfo?.balance ?? 0) < total))
+                  }
                   onClick={async () => {
                     setIsOrdering(true);
                     try {

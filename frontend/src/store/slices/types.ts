@@ -1,5 +1,49 @@
-import type { Address, AddressType, AppState, OrderStatus, PaymentMethod, PaymentStatus, Product, Role, SellerApplication, SellerStatus, Shop, User, ProductVariant, Order, Payment, Category, Conversation, VerificationContext } from "@/types/models";
-export type { Address, AddressType, AppState, OrderStatus, PaymentMethod, PaymentStatus, Product, Role, SellerApplication, SellerStatus, Shop, User, ProductVariant, Order, Payment, Category, Conversation, VerificationContext };
+import type {
+  Address,
+  AddressType,
+  AppState,
+  OrderStatus,
+  OrderReturn,
+  OrderReturnStatus,
+  ReturnTag,
+  PaymentMethod,
+  PaymentStatus,
+  Product,
+  Role,
+  SellerApplication,
+  SellerStatus,
+  Shop,
+  User,
+  ProductVariant,
+  Order,
+  Payment,
+  Category,
+  Conversation,
+  VerificationContext
+} from "@/types/models";
+export type {
+  Address,
+  AddressType,
+  AppState,
+  OrderStatus,
+  OrderReturn,
+  OrderReturnStatus,
+  ReturnTag,
+  PaymentMethod,
+  PaymentStatus,
+  Product,
+  Role,
+  SellerApplication,
+  SellerStatus,
+  Shop,
+  User,
+  ProductVariant,
+  Order,
+  Payment,
+  Category,
+  Conversation,
+  VerificationContext
+};
 export { useCallback, useEffect, useMemo, useRef, useState, createContext, useContext, createElement } from "react";
 import { initialState } from "@/store/initial-state";
 export { initialState };
@@ -155,6 +199,44 @@ export type BackendProductListResponse = {
   total: number;
 };
 
+export type BackendOrderReturnResponse = {
+  id: number;
+  public_id: string;
+  return_code: string;
+  order_id: number;
+  user_id: number;
+  seller_id: number;
+  return_status: string;
+  reason: string;
+  description: string;
+  evidence_images?: string[] | null;
+  seller_reject_reason?: string | null;
+  seller_responded_at?: string | null;
+  return_shipping_provider?: string | null;
+  return_tracking_code?: string | null;
+  pickup_address?: string | null;
+  return_address?: string | null;
+  dispute_reason?: string | null;
+  disputed_at?: string | null;
+  supporter_id?: number | null;
+  supporter_decision?: string | null;
+  supporter_note?: string | null;
+  resolved_at?: string | null;
+  created_at: string;
+  updated_at?: string | null;
+  order?: BackendOrderResponse | null;
+  user?: { public_id: string; full_name: string; email?: string; avatar_url?: string | null } | null;
+  seller?: { id?: number; public_id: string; shop_name: string; shop_logo_url?: string | null; shop_slug?: string } | null;
+  supporter?: { public_id: string; full_name: string; email?: string; avatar_url?: string | null } | null;
+};
+
+export type BackendDisputeListResponse = {
+  items: BackendOrderReturnResponse[];
+  total: number;
+  skip: number;
+  limit: number;
+};
+
 export type BackendOrderResponse = {
   public_id: string;
   order_code: string;
@@ -171,14 +253,19 @@ export type BackendOrderResponse = {
   preferred_payment_method?: string | null;
   payment_expires_at: string;
   seller_confirm_expires_at: string;
+  delivered_at?: string | null;
+  auto_complete_at?: string | null;
   completed_at?: string | null;
   cancelled_at?: string | null;
+  return_tag?: string | null;
+  return_request?: BackendOrderReturnResponse | null;
   created_at: string;
   updated_at?: string | null;
   user?: { public_id: string; full_name: string; avatar_url?: string | null };
   seller?: { id?: number; public_id: string; shop_name: string; shop_logo_url?: string | null; shop_slug?: string };
   items?: any[];
   shipment?: any;
+  status_logs?: any[];
 };
 
 export type BackendOrderListResponse = {
@@ -260,8 +347,17 @@ export type MarketplaceStore = {
   fetchCustomerOrders: (status?: OrderStatus | "", force?: boolean) => Promise<any>;
   confirmSellerOrder: (orderCode: string) => Promise<any>;
   shippingSellerOrder: (orderCode: string) => Promise<any>;
+  markOrderDelivered: (orderId: string) => Promise<any>;
   cancelSellerOrder: (orderCode: string) => Promise<any>;
   incrementPrintCount: (orderCode: string) => Promise<any>;
+  requestOrderReturn: (orderCode: string, payload: { reason: string; description: string; evidence_images?: string[] }) => Promise<any>;
+  disputeOrderReturn: (orderCode: string, payload: { dispute_reason: string }) => Promise<any>;
+  approveSellerReturn: (orderId: string) => Promise<any>;
+  rejectSellerReturn: (orderId: string, rejectReason: string) => Promise<any>;
+  confirmReceivedReturn: (orderId: string) => Promise<any>;
+  fetchDisputes: (statusFilter?: string, skip?: number, limit?: number) => Promise<any>;
+  fetchDisputeDetail: (disputeId: string) => Promise<any>;
+  resolveDispute: (disputeId: string, decision: string, note: string) => Promise<any>;
 
   // ── Product slice ──
   fetchSellerProducts: () => Promise<any>;
@@ -288,6 +384,11 @@ export type MarketplaceStore = {
   addAddress: (address: any) => Promise<any>;
   updateAddress: (addressId: string, updates: any) => Promise<any>;
   removeAddress: (addressId: string) => Promise<any>;
+
+  // ── Wallet slice ──
+  fetchWallet: () => Promise<any>;
+  walletTopup: (amount: number, method: string) => Promise<any>;
+  walletPayOrders: (orderCodes: string[], pin: string) => Promise<any>;
 
   // ── Core slice ──
   resetDemo: () => Promise<void>;

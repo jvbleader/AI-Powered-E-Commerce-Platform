@@ -1,3 +1,4 @@
+from datetime import timedelta
 from typing import List, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, or_
@@ -5,6 +6,7 @@ from sqlalchemy.orm import selectinload
 from models.order import Order
 from models.order import OrderItem
 from models.order import OrderStatusLog
+from models.order import OrderReturn
 from models.order import Shipment
 from models.base import utc_now
 
@@ -35,6 +37,8 @@ async def get_orders_by_seller_and_status(
             selectinload(Order.items).selectinload(OrderItem.product),
             selectinload(Order.shipment).selectinload(Shipment.shipping_provider),
             selectinload(Order.user),
+            selectinload(Order.return_request),
+            selectinload(Order.status_logs),
         )
         .order_by(Order.created_at.desc())
         .offset(skip)
@@ -56,6 +60,8 @@ async def get_order_by_public_id_and_seller(
             selectinload(Order.items).selectinload(OrderItem.product),
             selectinload(Order.shipment).selectinload(Shipment.shipping_provider),
             selectinload(Order.user),
+            selectinload(Order.return_request),
+            selectinload(Order.status_logs),
         )
         .filter(
             or_(Order.public_id == public_id, Order.order_code == public_id),
@@ -72,9 +78,7 @@ async def confirm_order(db: AsyncSession, order: Order) -> Order:
     order.seller_confirmed = True
     order.seller_confirmed_at = utc_now()
 
-    # Only transition to READY_TO_SHIP if payment is already PAID.
-    # Because COD is not supported in MVP — payment must be online.
-    if order.payment_status == "PAID":
+    if order.payment_status == "PAID" or order.preferred_payment_method == "COD":
         order.order_status = "READY_TO_SHIP"
 
         # Log the status change
@@ -82,12 +86,11 @@ async def confirm_order(db: AsyncSession, order: Order) -> Order:
             order_id=order.id,
             old_status=old_status,
             new_status="READY_TO_SHIP",
-            note="Seller confirmed and payment already paid",
+            note="Shop xác nhận đơn hàng (COD hoặc đã thanh toán)",
         )
         db.add(log)
 
     await db.flush()
-    await db.refresh(order)
     return order
 
 
@@ -105,7 +108,27 @@ async def update_order_status_to_shipping(db: AsyncSession, order: Order) -> Ord
     db.add(log)
 
     await db.flush()
-    await db.refresh(order)
+    return order
+
+
+async def update_order_status_to_delivered(db: AsyncSession, order: Order) -> Order:
+    old_status = order.order_status
+    order.order_status = "DELIVERED"
+    order.delivered_at = utc_now()
+    order.auto_complete_at = utc_now() + timedelta(days=7)
+
+    if order.preferred_payment_method == "COD":
+        order.payment_status = "PAID"
+
+    log = OrderStatusLog(
+        order_id=order.id,
+        old_status=old_status,
+        new_status="DELIVERED",
+        note="Đơn hàng đã được giao thành công tới người mua",
+    )
+    db.add(log)
+
+    await db.flush()
     return order
 
 
@@ -134,6 +157,8 @@ async def get_user_orders(db: AsyncSession, user_id: int) -> list[Order]:
             selectinload(Order.items).selectinload(OrderItem.product),
             selectinload(Order.seller),
             selectinload(Order.shipment).selectinload(Shipment.shipping_provider),
+            selectinload(Order.return_request),
+            selectinload(Order.status_logs),
         )
         .where(Order.user_id == user_id)
         .order_by(Order.created_at.desc())
@@ -154,6 +179,8 @@ async def get_order_by_code_and_user(
             selectinload(Order.items).selectinload(OrderItem.product),
             selectinload(Order.seller),
             selectinload(Order.shipment).selectinload(Shipment.shipping_provider),
+            selectinload(Order.return_request),
+            selectinload(Order.status_logs),
         )
     )
     if is_seller:
@@ -176,3 +203,24 @@ async def get_orders_by_codes_and_user(
     )
     res = await db.execute(stmt)
     return list(res.scalars().all())
+
+
+async def create_order_return(db: AsyncSession, order_return: OrderReturn) -> OrderReturn:
+    db.add(order_return)
+    await db.flush()
+    await db.refresh(order_return)
+    return order_return
+
+
+async def get_order_return_by_order_id(db: AsyncSession, order_id: int) -> Optional[OrderReturn]:
+    stmt = select(OrderReturn).where(OrderReturn.order_id == order_id)
+    res = await db.execute(stmt)
+    return res.scalar_one_or_none()
+
+
+async def get_order_return_by_public_id(db: AsyncSession, public_id: str) -> Optional[OrderReturn]:
+    stmt = select(OrderReturn).where(
+        or_(OrderReturn.public_id == public_id, OrderReturn.return_code == public_id)
+    )
+    res = await db.execute(stmt)
+    return res.scalar_one_or_none()

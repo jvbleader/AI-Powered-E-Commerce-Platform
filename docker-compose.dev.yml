@@ -48,35 +48,13 @@ services:
       retries: 20
       start_period: 40s
 
-  # One-shot: bootstrap/upgrade schema before seed.
-  # Fresh DB: create_all from models + alembic stamp head
-  # Existing DB: alembic upgrade head
-  db-migrate:
-    image: ai-ecommerce-backend:dev
-    build:
-      context: ./backend
-      dockerfile: Dockerfile.dev
-    restart: "no"
-    depends_on:
-      mysql:
-        condition: service_healthy
-    env_file:
-      - .env
-      - ./backend/.env
-    environment:
-      DATABASE_URL: mysql+asyncmy://${MYSQL_USER}:${MYSQL_PASSWORD}@${MYSQL_HOST}:${MYSQL_PORT}/${MYSQL_DATABASE}
-      INIT_DB_ON_START: "false"
-    volumes:
-      - ./backend:/app
-    entrypoint: ["python", "scripts/migrate_db.py"]
-
   # One-shot: load seed into MySQL using the official mysql client image.
   db-seed:
     image: mysql:8.0
     restart: "no"
     depends_on:
-      db-migrate:
-        condition: service_completed_successfully
+      mysql:
+        condition: service_healthy
     environment:
       MYSQL_HOST: ${MYSQL_HOST}
       MYSQL_PORT: ${MYSQL_PORT}
@@ -88,6 +66,28 @@ services:
       - ./database/seed:/seed:ro
     entrypoint: ["/bin/bash", "/seed/seed.sh"]
 
+  # One-shot: bootstrap/upgrade schema after seed.
+  # Fresh DB (without seed): create_all from models + alembic stamp head
+  # Seeded / Existing DB: alembic upgrade head
+  db-migrate:
+    image: ai-ecommerce-backend:dev
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+    restart: "no"
+    depends_on:
+      db-seed:
+        condition: service_completed_successfully
+    env_file:
+      - .env
+      - ./backend/.env
+    environment:
+      DATABASE_URL: mysql+asyncmy://${MYSQL_USER}:${MYSQL_PASSWORD}@${MYSQL_HOST}:${MYSQL_PORT}/${MYSQL_DATABASE}
+      INIT_DB_ON_START: "false"
+    volumes:
+      - ./backend:/app
+    entrypoint: ["python", "scripts/migrate_db.py"]
+
   backend:
     image: ai-ecommerce-backend:dev
     build:
@@ -95,7 +95,7 @@ services:
       dockerfile: Dockerfile.dev
     restart: unless-stopped
     depends_on:
-      db-seed:
+      db-migrate:
         condition: service_completed_successfully
       redis:
         condition: service_healthy
@@ -152,18 +152,6 @@ services:
       timeout: 5s
       retries: 18
       start_period: 60s
-
-  nginx:
-    image: nginx:alpine
-    restart: unless-stopped
-    depends_on:
-      - frontend
-      - backend
-    ports:
-      - "${NGINX_HOST_PORT:-80}:80"
-    volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./nginx/conf.d:/etc/nginx/conf.d:ro
 
 volumes:
   mysql_data_dev:

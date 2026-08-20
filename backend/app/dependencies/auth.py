@@ -87,3 +87,19 @@ async def get_current_seller(
 CurrentAdmin = Annotated[User, Depends(get_current_admin)]
 CurrentSeller = Annotated[User, Depends(get_current_seller)]
 
+
+async def get_current_supporter(
+    user: CurrentUser,
+    db: DBSession,
+) -> User:
+    roles = await get_role_list_by_user_id(user.id, db)
+    if not any(role in roles for role in ["ADMIN", "MANAGER", "SUPPORTER"]):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Bạn không có quyền thực hiện hành động này.",
+        )
+    return user
+
+
+CurrentSupporter = Annotated[User, Depends(get_current_supporter)]
+

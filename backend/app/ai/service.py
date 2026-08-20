@@ -12,10 +12,10 @@ if str(app_dir) not in sys.path:
     sys.path.insert(0, str(app_dir))
 
 try:
-    from langchain_openai import ChatOpenAI
+    from langchain_openai import ChatOpenAI, AzureChatOpenAI
     from langchain_core.messages import SystemMessage, HumanMessage, AIMessage, ToolMessage
 except ImportError:
-    ChatOpenAI = None
+    ChatOpenAI = AzureChatOpenAI = None
     SystemMessage = HumanMessage = AIMessage = ToolMessage = None
 
 from ai.ai_config import ai_settings
@@ -53,7 +53,17 @@ def _clean_reasoning_tags(text: Any) -> str:
     return cleaned.strip()
 
 
-def get_llm(streaming: bool = False) -> ChatOpenAI:
+def get_llm(streaming: bool = False):
+    if ai_settings.IS_AZURE:
+        return AzureChatOpenAI(
+            azure_endpoint=ai_settings.BASE_URL,
+            azure_deployment=ai_settings.MODEL,
+            api_key=ai_settings.API_KEY,
+            api_version=ai_settings.API_VERSION,
+            temperature=0.2,
+            streaming=streaming,
+            max_retries=2,
+        )
     return ChatOpenAI(
         openai_api_base=ai_settings.BASE_URL,
         openai_api_key=ai_settings.API_KEY,

@@ -1,15 +1,16 @@
 "use client";
 
 import { useEffect, useState, useRef, useCallback } from "react";
-import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, Bell, CreditCard, LogOut, Plus, Store, Star, Copy, Check, ExternalLink, RotateCcw, Truck, MapPin, MessageSquare, ShieldCheck, FileText, HelpCircle, Loader2, Package, Headset, LayoutDashboard, User as UserIcon, Mail, Smartphone, X, Upload, ChevronLeft, ChevronRight } from "lucide-react";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { ArrowLeft, Bell, CreditCard, LogOut, Plus, Store, Star, Copy, Check, ExternalLink, RotateCcw, Truck, MapPin, MessageSquare, ShieldCheck, FileText, HelpCircle, Loader2, Package, Headset, LayoutDashboard, User as UserIcon, Mail, Smartphone, X, Upload, ChevronLeft, ChevronRight, Wallet as WalletIcon, KeyRound, RefreshCw, AlertCircle, CheckCircle2 } from "lucide-react";
 import { createReviewApi, fetchMyReviewsApi, type UserReviewResponse } from "@/services/review-api";
 import { uploadImage } from "@/services/upload-api";
+import { walletApi, type WalletInfo, type WalletTransaction } from "@/services/wallet-api";
 import { Button } from "@/components/ui/button";
 import { ImageUpload } from "@/components/ui/image-upload";
 import { Field, Input, Select, Textarea } from "@/components/ui/input";
 import { Panel, Section } from "@/components/ui/containers";
-import { StatusBadge } from "@/components/ui/badge";
+import { Badge, StatusBadge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/feedback";
 import { DataTable } from "@/components/ui/data-table";
 import { cn } from "@/lib/utils";
@@ -28,8 +29,12 @@ import {
   orderPaymentMethodLabel,
   roleLabel,
   sellerStatusLabel,
+  canContinuePayment,
   canCustomerCancel,
   canCustomerConfirmReceipt,
+  canCustomerReturn,
+  canCustomerDispute,
+  returnStatusLabel,
   canSellerCancel,
   canSellerConfirm,
   canSellerShip
@@ -44,6 +49,7 @@ const activeLinkClass = "bg-primary/5 text-primary hover:bg-primary/10 hover:tex
 export default function AccountPage() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const slug = params.slug as string[] | undefined;
   const currentSection = slug?.[0] ?? "overview";
   const detailId = slug?.[1];
@@ -77,6 +83,7 @@ export default function AccountPage() {
     { key: "security", href: "/account/security", label: "Bảo mật", icon: ShieldCheck },
     { key: "addresses", href: "/account/addresses", label: "Địa chỉ", icon: MapPin },
     { key: "orders", href: "/account/orders", label: "Đơn hàng", icon: Package },
+    { key: "wallet", href: "/account/wallet", label: "Ví tiền", icon: WalletIcon },
     { key: "notifications", href: "/account/notifications", label: "Thông báo", icon: Bell },
     { key: "reviews", href: "/account/reviews", label: "Đánh giá", icon: Star }
   ];
@@ -130,6 +137,7 @@ export default function AccountPage() {
         {currentSection === "addresses" ? <AddressBook store={store} showToast={showToast} /> : null}
         {currentSection === "orders" && detailId ? <OrderDetailPage orderCode={detailId} audience="customer" /> : null}
         {currentSection === "orders" && !detailId ? <OrdersList audience="customer" /> : null}
+        {currentSection === "wallet" ? <WalletSection /> : null}
         {currentSection === "notifications" ? <NotificationsPage /> : null}
         {currentSection === "reviews" ? <ReviewsModule /> : null}
       </div>
@@ -290,6 +298,799 @@ export default function AccountPage() {
     );
   }
 
+  function WalletSection() {
+    const [wallet, setWallet] = useState<WalletInfo | null>(null);
+    const [loadingWallet, setLoadingWallet] = useState(true);
+    const [transactions, setTransactions] = useState<WalletTransaction[]>([]);
+    const [totalTxns, setTotalTxns] = useState(0);
+    const [loadingTxns, setLoadingTxns] = useState(false);
+    const [txnFilter, setTxnFilter] = useState("");
+    const [currentPage, setCurrentPage] = useState(1);
+    const LIMIT = 10;
+
+    // PIN state
+    const [pinMode, setPinMode] = useState<"idle" | "create" | "change" | "reset">("idle");
+    const [pin, setPin] = useState("");
+    const [confirmPin, setConfirmPin] = useState("");
+    const [oldPin, setOldPin] = useState("");
+    const [otp, setOtp] = useState("");
+    const [pinSubmitting, setPinSubmitting] = useState(false);
+    const [pinErrors, setPinErrors] = useState<Record<string, string>>({});
+
+    // Top-up state
+    const [topupAmount, setTopupAmount] = useState<string>("");
+    const [topupMethod, setTopupMethod] = useState<"MOCK" | "VNPAY">("MOCK");
+    const [topupSubmitting, setTopupSubmitting] = useState(false);
+    const [topupError, setTopupError] = useState("");
+
+    const fetchWallet = useCallback(async () => {
+      try {
+        setLoadingWallet(true);
+        const data = await walletApi.getWallet();
+        setWallet(data);
+      } catch (err: any) {
+        showToast(err?.message || "Không thể tải thông tin ví.", "danger");
+      } finally {
+        setLoadingWallet(false);
+      }
+    }, [showToast]);
+
+    const fetchTransactions = useCallback(async (page: number, typeFilter: string) => {
+      try {
+        setLoadingTxns(true);
+        const offset = (page - 1) * LIMIT;
+        const res = await walletApi.getTransactions(LIMIT, offset, typeFilter || undefined);
+        setTransactions(res.items);
+        setTotalTxns(res.total);
+      } catch (err: any) {
+        showToast(err?.message || "Không thể tải lịch sử giao dịch.", "danger");
+      } finally {
+        setLoadingTxns(false);
+      }
+    }, [showToast]);
+
+    // Initial load
+    useEffect(() => {
+      fetchWallet();
+    }, [fetchWallet]);
+
+    useEffect(() => {
+      fetchTransactions(currentPage, txnFilter);
+    }, [fetchTransactions, currentPage, txnFilter]);
+
+    // Handle VNPay callback query parameters
+    useEffect(() => {
+      const topupStatus = searchParams?.get("topup_status");
+      const txnCode = searchParams?.get("txn_code");
+      if (topupStatus) {
+        if (topupStatus === "success") {
+          showToast(
+            txnCode
+              ? `Nạp tiền qua VNPay thành công! (Mã GD: ${txnCode})`
+              : "Nạp tiền qua VNPay thành công!",
+            "success"
+          );
+          fetchWallet();
+          fetchTransactions(1, txnFilter);
+          setCurrentPage(1);
+        } else {
+          showToast("Nạp tiền qua VNPay thất bại.", "danger");
+        }
+        router.replace("/account/wallet");
+      }
+    }, [searchParams, fetchWallet, fetchTransactions, txnFilter, router, showToast]);
+
+    const resetPinForm = () => {
+      setPin("");
+      setConfirmPin("");
+      setOldPin("");
+      setOtp("");
+      setPinErrors({});
+      setPinMode("idle");
+    };
+
+    // PIN handlers
+    const handleCreatePin = async () => {
+      const errs: Record<string, string> = {};
+      if (!/^\d{6}$/.test(pin)) {
+        errs.pin = "Mã PIN phải gồm đúng 6 chữ số.";
+      }
+      if (pin !== confirmPin) {
+        errs.confirmPin = "Mã PIN xác nhận không khớp.";
+      }
+      if (Object.keys(errs).length > 0) {
+        setPinErrors(errs);
+        return;
+      }
+      setPinErrors({});
+      setPinSubmitting(true);
+      try {
+        const updated = await walletApi.createPin(pin);
+        setWallet(updated);
+        showToast("Tạo mã PIN thành công!", "success");
+        resetPinForm();
+      } catch (err: any) {
+        showToast(err?.message || "Tạo mã PIN thất bại.", "danger");
+      } finally {
+        setPinSubmitting(false);
+      }
+    };
+
+    const handleChangePin = async () => {
+      const errs: Record<string, string> = {};
+      if (!/^\d{6}$/.test(oldPin)) {
+        errs.oldPin = "Mã PIN hiện tại phải gồm đúng 6 chữ số.";
+      }
+      if (!/^\d{6}$/.test(pin)) {
+        errs.pin = "Mã PIN mới phải gồm đúng 6 chữ số.";
+      }
+      if (pin !== confirmPin) {
+        errs.confirmPin = "Mã PIN xác nhận không khớp.";
+      }
+      if (Object.keys(errs).length > 0) {
+        setPinErrors(errs);
+        return;
+      }
+      setPinErrors({});
+      setPinSubmitting(true);
+      try {
+        const updated = await walletApi.changePin(oldPin, pin);
+        setWallet(updated);
+        showToast("Đổi mã PIN thành công!", "success");
+        resetPinForm();
+      } catch (err: any) {
+        showToast(err?.message || "Đổi mã PIN thất bại.", "danger");
+      } finally {
+        setPinSubmitting(false);
+      }
+    };
+
+    const handleForgotPin = async () => {
+      setPinSubmitting(true);
+      try {
+        const res = await walletApi.forgotPin();
+        showToast(res.message || "Mã OTP đã được gửi đến email của bạn.", "success");
+        setPinMode("reset");
+        setPinErrors({});
+      } catch (err: any) {
+        showToast(err?.message || "Không thể gửi mã OTP khôi phục PIN.", "danger");
+      } finally {
+        setPinSubmitting(false);
+      }
+    };
+
+    const handleResetPin = async () => {
+      const errs: Record<string, string> = {};
+      if (!/^\d{6}$/.test(otp.trim())) {
+        errs.otp = "Mã OTP phải gồm đúng 6 chữ số.";
+      }
+      if (!/^\d{6}$/.test(pin)) {
+        errs.pin = "Mã PIN mới phải gồm đúng 6 chữ số.";
+      }
+      if (confirmPin && pin !== confirmPin) {
+        errs.confirmPin = "Mã PIN xác nhận không khớp.";
+      }
+      if (Object.keys(errs).length > 0) {
+        setPinErrors(errs);
+        return;
+      }
+      setPinErrors({});
+      setPinSubmitting(true);
+      try {
+        const updated = await walletApi.resetPin(otp.trim(), pin);
+        setWallet(updated);
+        showToast("Đặt lại mã PIN thành công!", "success");
+        resetPinForm();
+      } catch (err: any) {
+        showToast(err?.message || "Đặt lại mã PIN thất bại.", "danger");
+      } finally {
+        setPinSubmitting(false);
+      }
+    };
+
+    // Top-up handler
+    const handleTopup = async () => {
+      const amount = Number(topupAmount);
+      if (!amount || isNaN(amount) || amount < 10000 || amount > 10000000) {
+        setTopupError("Số tiền nạp tối thiểu là 10.000đ và tối đa là 10.000.000đ.");
+        return;
+      }
+      setTopupError("");
+      setTopupSubmitting(true);
+      try {
+        const res = await walletApi.topup(amount, topupMethod);
+        if (res.payment_url) {
+          window.location.href = res.payment_url;
+          return;
+        }
+        showToast(`Nạp thành công ${formatVnd(amount)} vào ví!`, "success");
+        setTopupAmount("");
+        fetchWallet();
+        fetchTransactions(1, txnFilter);
+        setCurrentPage(1);
+      } catch (err: any) {
+        showToast(err?.message || "Nạp tiền thất bại.", "danger");
+      } finally {
+        setTopupSubmitting(false);
+      }
+    };
+
+    const presetAmounts = [50000, 100000, 200000, 500000, 1000000, 2000000];
+    const totalPages = Math.ceil(totalTxns / LIMIT);
+
+    const renderTxnTypeBadge = (type: string) => {
+      if (type === "TOPUP") {
+        return <Badge tone="purple">Nạp tiền</Badge>;
+      }
+      if (type === "ORDER_PAYMENT" || type === "PAYMENT") {
+        return <Badge tone="info">Thanh toán</Badge>;
+      }
+      if (type === "REFUND_ORDER" || type === "REFUND") {
+        return <Badge tone="warning">Hoàn tiền</Badge>;
+      }
+      return <Badge tone="neutral">{type}</Badge>;
+    };
+
+    const renderTxnStatusBadge = (t: WalletTransaction) => {
+      if (t.reference_type === "VNPAY_PENDING") {
+        return <Badge tone="warning">Đang chờ</Badge>;
+      }
+      if (t.reference_type === "VNPAY_FAILED") {
+        return <Badge tone="danger">Thất bại</Badge>;
+      }
+      return <Badge tone="success">Thành công</Badge>;
+    };
+
+    return (
+      <Section title="Ví tiền">
+        <div className="grid gap-6 lg:grid-cols-2">
+          {/* BALANCE & TOPUP COLUMN */}
+          <div className="space-y-6">
+            {/* Balance Card */}
+            <Panel className="rounded-2xl border border-line shadow-sm p-6 bg-white relative overflow-hidden">
+              <div className="absolute top-0 right-0 p-8 opacity-5">
+                <WalletIcon className="h-32 w-32" />
+              </div>
+              <div className="relative z-10">
+                <div className="flex items-center justify-between gap-4 mb-3">
+                  <div className="flex items-center gap-2.5">
+                    <div className="h-10 w-10 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-600">
+                      <WalletIcon className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-ink text-base">Số dư ví</h3>
+                      <p className="text-xs text-muted">Ví điện tử cá nhân</p>
+                    </div>
+                  </div>
+                  <Button
+                    variant="secondary"
+                    className="h-8 px-2.5 text-xs rounded-lg border-line text-muted hover:text-ink gap-1.5"
+                    onClick={() => {
+                      fetchWallet();
+                      fetchTransactions(currentPage, txnFilter);
+                    }}
+                    disabled={loadingWallet}
+                    title="Làm mới số dư"
+                  >
+                    <RefreshCw className={cn("h-3.5 w-3.5", loadingWallet && "animate-spin")} />
+                    <span>Làm mới</span>
+                  </Button>
+                </div>
+
+                <div className="mt-4 mb-5">
+                  <span className="text-xs font-semibold text-muted uppercase tracking-wider block">Số dư khả dụng</span>
+                  <div className="text-3xl font-black text-emerald-600 mt-1">
+                    {loadingWallet ? "..." : formatVnd(wallet?.balance ?? 0)}
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-3 pt-4 border-t border-line">
+                  <div className="flex items-center gap-1.5 text-xs font-medium text-muted">
+                    <span>Trạng thái ví:</span>
+                    <Badge tone={wallet?.status === "ACTIVE" ? "success" : "danger"}>
+                      {wallet?.status === "ACTIVE" ? "Hoạt động" : (wallet?.status || "Hoạt động")}
+                    </Badge>
+                  </div>
+                  <div className="flex items-center gap-1.5 text-xs font-medium text-muted">
+                    <span>Bảo mật PIN:</span>
+                    <Badge tone={wallet?.has_pin ? "success" : "warning"}>
+                      {wallet?.has_pin ? "Đã thiết lập" : "Chưa có"}
+                    </Badge>
+                  </div>
+                </div>
+              </div>
+            </Panel>
+
+            {/* Top-up Card */}
+            <Panel className="rounded-2xl border border-line shadow-sm p-6 bg-white">
+              <div className="flex items-center gap-2 mb-4">
+                <Plus className="h-5 w-5 text-primary" />
+                <h3 className="font-bold text-ink text-base">Nạp tiền vào ví</h3>
+              </div>
+
+              <div className="space-y-4">
+                <Field
+                  label="Số tiền nạp (VND)"
+                  hint={topupError ? <span className="text-coral text-xs font-semibold">{topupError}</span> : <span className="text-muted text-xs">Tối thiểu 10.000đ - Tối đa 10.000.000đ</span>}
+                >
+                  <Input
+                    type="number"
+                    min={10000}
+                    max={10000000}
+                    step={10000}
+                    value={topupAmount}
+                    onChange={(e) => {
+                      setTopupAmount(e.target.value);
+                      setTopupError("");
+                    }}
+                    placeholder="Nhập số tiền muốn nạp..."
+                    className={cn(
+                      "bg-canvas/50 border-line focus:bg-white focus:border-primary/50 focus:ring-4 focus:ring-primary/10 transition-all rounded-xl text-base font-semibold",
+                      topupError && "border-coral focus:border-coral focus:ring-coral/10"
+                    )}
+                  />
+                </Field>
+
+                {/* Preset quick amounts */}
+                <div>
+                  <label className="text-xs font-semibold text-muted block mb-2">Chọn nhanh mệnh giá:</label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {presetAmounts.map((amt) => (
+                      <button
+                        key={amt}
+                        type="button"
+                        onClick={() => {
+                          setTopupAmount(String(amt));
+                          setTopupError("");
+                        }}
+                        className={cn(
+                          "py-2 px-3 text-xs font-bold rounded-xl border transition-all text-center",
+                          Number(topupAmount) === amt
+                            ? "border-primary bg-primary/10 text-primary shadow-sm"
+                            : "border-line bg-canvas/30 hover:bg-canvas hover:border-slate-300 text-ink"
+                        )}
+                      >
+                        {formatVnd(amt)}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <Field label="Phương thức nạp">
+                  <Select
+                    value={topupMethod}
+                    onChange={(e) => setTopupMethod(e.target.value as "MOCK" | "VNPAY")}
+                    className="bg-canvas/50 border-line focus:bg-white rounded-xl h-11 text-sm font-semibold text-ink"
+                  >
+                    <option value="MOCK">Giả lập (Nạp ngay lập tức)</option>
+                    <option value="VNPAY">Cổng thanh toán VNPay (ATM / QR / Visa)</option>
+                  </Select>
+                </Field>
+
+                <Button
+                  disabled={topupSubmitting || !topupAmount || Number(topupAmount) < 10000}
+                  onClick={handleTopup}
+                  className="w-full h-11 bg-primary hover:bg-primary/90 text-white rounded-xl font-bold shadow-sm gap-2"
+                >
+                  {topupSubmitting ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <span>Đang xử lý nạp tiền...</span>
+                    </>
+                  ) : (
+                    <>
+                      <CreditCard className="h-4 w-4" />
+                      <span>Nạp tiền ngay</span>
+                    </>
+                  )}
+                </Button>
+              </div>
+            </Panel>
+          </div>
+
+          {/* PIN MANAGEMENT COLUMN */}
+          <div>
+            <Panel className="rounded-2xl border border-line shadow-sm p-6 bg-white h-fit">
+              <div className="flex items-center gap-2 mb-2">
+                <KeyRound className="h-5 w-5 text-primary" />
+                <h3 className="font-bold text-ink text-base">Quản lý mã PIN ví</h3>
+              </div>
+              <p className="text-sm text-muted font-medium mb-5">
+                Mã PIN gồm 6 chữ số được sử dụng để xác thực an toàn khi bạn thanh toán đơn hàng bằng số dư ví.
+              </p>
+
+              {/* Mode: IDLE */}
+              {pinMode === "idle" && (
+                <div className="space-y-4">
+                  {!wallet?.has_pin ? (
+                    <div className="rounded-xl border border-amber-200 bg-amber-50/70 p-4 space-y-3">
+                      <div className="flex items-start gap-2.5">
+                        <AlertCircle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+                        <div>
+                          <p className="text-sm font-bold text-amber-900">Chưa thiết lập mã PIN</p>
+                          <p className="text-xs text-amber-700 mt-0.5">
+                            Bạn cần tạo mã PIN 6 số trước khi có thể sử dụng ví để thanh toán đơn hàng.
+                          </p>
+                        </div>
+                      </div>
+                      <Button
+                        onClick={() => {
+                          setPinMode("create");
+                          setPinErrors({});
+                        }}
+                        className="w-full sm:w-auto h-10 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-bold text-xs shadow-sm"
+                      >
+                        Tạo mã PIN ngay
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      <div className="rounded-xl border border-emerald-200 bg-emerald-50/70 p-4">
+                        <div className="flex items-start gap-2.5">
+                          <Check className="h-5 w-5 text-emerald-600 shrink-0 mt-0.5" />
+                          <div>
+                            <p className="text-sm font-bold text-emerald-900">Mã PIN đã được thiết lập</p>
+                            <p className="text-xs text-emerald-700 mt-0.5">
+                              Ví của bạn đã được bảo vệ bằng mã PIN. Không chia sẻ mã PIN cho bất kỳ ai.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-wrap gap-3 pt-2">
+                        <Button
+                          variant="secondary"
+                          onClick={() => {
+                            setPinMode("change");
+                            setPinErrors({});
+                          }}
+                          className="rounded-xl font-bold border-line text-ink hover:bg-line/30 h-10 text-xs"
+                        >
+                          Đổi mã PIN
+                        </Button>
+                        <Button
+                          variant="secondary"
+                          onClick={handleForgotPin}
+                          disabled={pinSubmitting}
+                          className="rounded-xl font-bold border-line text-coral hover:bg-coral/5 h-10 text-xs"
+                        >
+                          {pinSubmitting ? "Đang gửi OTP..." : "Quên mã PIN?"}
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Mode: CREATE */}
+              {pinMode === "create" && (
+                <div className="space-y-4 border-t border-line pt-4">
+                  <h4 className="font-bold text-sm text-ink">Tạo mã PIN mới</h4>
+                  <Field
+                    label="Mã PIN (6 chữ số)"
+                    hint={pinErrors.pin ? <span className="text-coral text-xs font-semibold">{pinErrors.pin}</span> : null}
+                  >
+                    <Input
+                      type="password"
+                      maxLength={6}
+                      inputMode="numeric"
+                      value={pin}
+                      onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))}
+                      placeholder="Nhập 6 số PIN..."
+                      className={cn("bg-canvas/50 border-line focus:bg-white rounded-xl", pinErrors.pin && "border-coral")}
+                    />
+                  </Field>
+                  <Field
+                    label="Xác nhận mã PIN"
+                    hint={pinErrors.confirmPin ? <span className="text-coral text-xs font-semibold">{pinErrors.confirmPin}</span> : null}
+                  >
+                    <Input
+                      type="password"
+                      maxLength={6}
+                      inputMode="numeric"
+                      value={confirmPin}
+                      onChange={(e) => setConfirmPin(e.target.value.replace(/\D/g, ""))}
+                      placeholder="Nhập lại 6 số PIN..."
+                      className={cn("bg-canvas/50 border-line focus:bg-white rounded-xl", pinErrors.confirmPin && "border-coral")}
+                    />
+                  </Field>
+                  <div className="flex items-center gap-3 pt-2">
+                    <Button
+                      disabled={pinSubmitting}
+                      onClick={handleCreatePin}
+                      className="h-10 bg-primary hover:bg-primary/90 text-white rounded-xl font-bold text-xs shadow-sm"
+                    >
+                      {pinSubmitting ? "Đang tạo..." : "Tạo PIN"}
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      onClick={resetPinForm}
+                      disabled={pinSubmitting}
+                      className="h-10 rounded-xl font-bold border-line text-ink hover:bg-line/30 text-xs"
+                    >
+                      Hủy
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {/* Mode: CHANGE */}
+              {pinMode === "change" && (
+                <div className="space-y-4 border-t border-line pt-4">
+                  <h4 className="font-bold text-sm text-ink">Đổi mã PIN</h4>
+                  <Field
+                    label="Mã PIN hiện tại"
+                    hint={pinErrors.oldPin ? <span className="text-coral text-xs font-semibold">{pinErrors.oldPin}</span> : null}
+                  >
+                    <Input
+                      type="password"
+                      maxLength={6}
+                      inputMode="numeric"
+                      value={oldPin}
+                      onChange={(e) => setOldPin(e.target.value.replace(/\D/g, ""))}
+                      placeholder="Nhập 6 số PIN cũ..."
+                      className={cn("bg-canvas/50 border-line focus:bg-white rounded-xl", pinErrors.oldPin && "border-coral")}
+                    />
+                  </Field>
+                  <Field
+                    label="Mã PIN mới"
+                    hint={pinErrors.pin ? <span className="text-coral text-xs font-semibold">{pinErrors.pin}</span> : null}
+                  >
+                    <Input
+                      type="password"
+                      maxLength={6}
+                      inputMode="numeric"
+                      value={pin}
+                      onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))}
+                      placeholder="Nhập 6 số PIN mới..."
+                      className={cn("bg-canvas/50 border-line focus:bg-white rounded-xl", pinErrors.pin && "border-coral")}
+                    />
+                  </Field>
+                  <Field
+                    label="Xác nhận mã PIN mới"
+                    hint={pinErrors.confirmPin ? <span className="text-coral text-xs font-semibold">{pinErrors.confirmPin}</span> : null}
+                  >
+                    <Input
+                      type="password"
+                      maxLength={6}
+                      inputMode="numeric"
+                      value={confirmPin}
+                      onChange={(e) => setConfirmPin(e.target.value.replace(/\D/g, ""))}
+                      placeholder="Nhập lại 6 số PIN mới..."
+                      className={cn("bg-canvas/50 border-line focus:bg-white rounded-xl", pinErrors.confirmPin && "border-coral")}
+                    />
+                  </Field>
+                  <div className="flex items-center gap-3 pt-2">
+                    <Button
+                      disabled={pinSubmitting}
+                      onClick={handleChangePin}
+                      className="h-10 bg-primary hover:bg-primary/90 text-white rounded-xl font-bold text-xs shadow-sm"
+                    >
+                      {pinSubmitting ? "Đang đổi..." : "Đổi PIN"}
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      onClick={resetPinForm}
+                      disabled={pinSubmitting}
+                      className="h-10 rounded-xl font-bold border-line text-ink hover:bg-line/30 text-xs"
+                    >
+                      Hủy
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {/* Mode: RESET */}
+              {pinMode === "reset" && (
+                <div className="space-y-4 border-t border-line pt-4">
+                  <h4 className="font-bold text-sm text-ink">Khôi phục mã PIN qua OTP</h4>
+                  <p className="text-xs text-muted">
+                    Mã xác thực OTP gồm 6 chữ số đã được gửi đến email tài khoản của bạn.
+                  </p>
+                  <Field
+                    label="Mã xác thực OTP (6 chữ số)"
+                    hint={pinErrors.otp ? <span className="text-coral text-xs font-semibold">{pinErrors.otp}</span> : null}
+                  >
+                    <Input
+                      type="text"
+                      maxLength={6}
+                      value={otp}
+                      onChange={(e) => setOtp(e.target.value.replace(/\D/g, ""))}
+                      placeholder="Nhập 6 số OTP từ email..."
+                      className={cn("bg-canvas/50 border-line focus:bg-white rounded-xl font-mono text-center tracking-widest text-base", pinErrors.otp && "border-coral")}
+                    />
+                  </Field>
+                  <Field
+                    label="Mã PIN mới"
+                    hint={pinErrors.pin ? <span className="text-coral text-xs font-semibold">{pinErrors.pin}</span> : null}
+                  >
+                    <Input
+                      type="password"
+                      maxLength={6}
+                      inputMode="numeric"
+                      value={pin}
+                      onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))}
+                      placeholder="Nhập 6 số PIN mới..."
+                      className={cn("bg-canvas/50 border-line focus:bg-white rounded-xl", pinErrors.pin && "border-coral")}
+                    />
+                  </Field>
+                  <Field
+                    label="Xác nhận mã PIN mới"
+                    hint={pinErrors.confirmPin ? <span className="text-coral text-xs font-semibold">{pinErrors.confirmPin}</span> : null}
+                  >
+                    <Input
+                      type="password"
+                      maxLength={6}
+                      inputMode="numeric"
+                      value={confirmPin}
+                      onChange={(e) => setConfirmPin(e.target.value.replace(/\D/g, ""))}
+                      placeholder="Nhập lại 6 số PIN mới..."
+                      className={cn("bg-canvas/50 border-line focus:bg-white rounded-xl", pinErrors.confirmPin && "border-coral")}
+                    />
+                  </Field>
+                  <div className="flex flex-wrap items-center gap-3 pt-2">
+                    <Button
+                      disabled={pinSubmitting}
+                      onClick={handleResetPin}
+                      className="h-10 bg-primary hover:bg-primary/90 text-white rounded-xl font-bold text-xs shadow-sm"
+                    >
+                      {pinSubmitting ? "Đang đặt lại..." : "Đặt lại PIN"}
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      onClick={handleForgotPin}
+                      disabled={pinSubmitting}
+                      className="h-10 rounded-xl font-bold border-line text-muted hover:text-ink text-xs"
+                    >
+                      Gửi lại OTP
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      onClick={resetPinForm}
+                      disabled={pinSubmitting}
+                      className="h-10 rounded-xl font-bold border-line text-ink hover:bg-line/30 text-xs"
+                    >
+                      Hủy
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </Panel>
+          </div>
+        </div>
+
+        {/* TRANSACTION HISTORY SECTION */}
+        <div className="mt-8">
+          <Panel className="rounded-2xl border border-line shadow-sm p-6 bg-white overflow-hidden">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-line pb-4 mb-4">
+              <div>
+                <h3 className="font-bold text-ink text-base">Lịch sử giao dịch ví</h3>
+                <p className="text-xs text-muted mt-0.5">Biến động số dư nạp tiền, thanh toán và hoàn tiền</p>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <Select
+                  value={txnFilter}
+                  onChange={(e) => {
+                    setTxnFilter(e.target.value);
+                    setCurrentPage(1);
+                  }}
+                  className="w-48 bg-canvas/50 border-line focus:bg-white rounded-xl h-10 text-xs font-semibold text-ink"
+                >
+                  <option value="">Tất cả giao dịch</option>
+                  <option value="TOPUP">Nạp tiền</option>
+                  <option value="ORDER_PAYMENT">Thanh toán đơn hàng</option>
+                  <option value="REFUND_ORDER">Hoàn tiền</option>
+                </Select>
+              </div>
+            </div>
+
+            {loadingTxns ? (
+              <div className="py-12 text-center">
+                <Loader2 className="mx-auto h-6 w-6 animate-spin text-primary mb-2" />
+                <p className="text-xs font-medium text-muted">Đang tải lịch sử giao dịch...</p>
+              </div>
+            ) : transactions.length === 0 ? (
+              <EmptyState
+                title="Chưa có giao dịch nào"
+                description={txnFilter ? "Không tìm thấy giao dịch với bộ lọc đã chọn." : "Chưa có biến động số dư nào trong ví của bạn."}
+              />
+            ) : (
+              <div>
+                <DataTable
+                  columns={["Mã GD", "Loại", "Trạng thái", "Số tiền", "Số dư sau", "Nội dung", "Thời gian"]}
+                  aligns={["left", "left", "left", "right", "right", "left", "right"]}
+                  rows={transactions.map((t) => {
+                    const amt = Number(t.amount);
+                    const isPending = t.reference_type === "VNPAY_PENDING";
+                    const isFailed = t.reference_type === "VNPAY_FAILED";
+                    const isPositive = amt >= 0;
+
+                    return [
+                      <span key="code" className="font-mono text-xs font-bold text-slate-700">
+                        {t.transaction_code}
+                      </span>,
+                      <span key="type">{renderTxnTypeBadge(t.transaction_type)}</span>,
+                      <span key="status">{renderTxnStatusBadge(t)}</span>,
+                      <span
+                        key="amt"
+                        className={cn(
+                          "font-bold text-sm whitespace-nowrap",
+                          isPending
+                            ? "text-slate-600 font-semibold"
+                            : isFailed
+                            ? "text-slate-400 line-through font-normal"
+                            : isPositive
+                            ? "text-emerald-600"
+                            : "text-rose-600"
+                        )}
+                      >
+                        {isPending
+                          ? formatVnd(amt)
+                          : isFailed
+                          ? formatVnd(amt)
+                          : isPositive
+                          ? `+${formatVnd(amt)}`
+                          : `-${formatVnd(Math.abs(amt))}`}
+                      </span>,
+                      <span key="bal" className="font-medium text-xs text-ink whitespace-nowrap">
+                        {isPending || isFailed ? (
+                          <span className="text-slate-400 font-normal">—</span>
+                        ) : (
+                          formatVnd(t.balance_after)
+                        )}
+                      </span>,
+                      <span
+                        key="desc"
+                        className="text-xs text-muted max-w-[280px] line-clamp-1 block"
+                        title={t.description}
+                      >
+                        {t.description}
+                      </span>,
+                      <span key="date" className="text-xs text-muted whitespace-nowrap">
+                        {formatDate(t.created_at)}
+                      </span>,
+                    ];
+                  })}
+                />
+
+                {/* Pagination */}
+                {totalPages > 1 && (
+                  <div className="flex items-center justify-between border-t border-line px-2 pt-4 mt-4">
+                    <span className="text-xs text-muted font-medium">
+                      Hiển thị {(currentPage - 1) * LIMIT + 1} - {Math.min(currentPage * LIMIT, totalTxns)} trên tổng số {totalTxns} giao dịch
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="secondary"
+                        disabled={currentPage <= 1}
+                        onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                        className="h-8 px-3 rounded-xl border-line hover:bg-line/30 text-ink text-xs font-bold disabled:opacity-50"
+                      >
+                        Trước
+                      </Button>
+                      <span className="text-xs font-bold text-ink px-2">
+                        {currentPage} / {totalPages}
+                      </span>
+                      <Button
+                        variant="secondary"
+                        disabled={currentPage >= totalPages}
+                        onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                        className="h-8 px-3 rounded-xl border-line hover:bg-line/30 text-ink text-xs font-bold disabled:opacity-50"
+                      >
+                        Sau
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </Panel>
+        </div>
+      </Section>
+    );
+  }
+
 
   function CustomerOrderCard({ order, shopName, actionNode }: { order: Order; shopName: string; actionNode: React.ReactNode }) {
     const [isExpanded, setIsExpanded] = useState(false);
@@ -428,6 +1229,8 @@ export default function AccountPage() {
     const [status, setStatus] = useState("");
     const [currentPage, setCurrentPage] = useState(1);
     const [visibleCount, setVisibleCount] = useState(5);
+    const [returnModalOrderCode, setReturnModalOrderCode] = useState<string | null>(null);
+    const [disputeModalOrderCode, setDisputeModalOrderCode] = useState<string | null>(null);
     const ITEMS_PER_PAGE = 20;
     
     useEffect(() => {
@@ -447,9 +1250,6 @@ export default function AccountPage() {
 
     const findPaymentForOrder = (orderCode: string) =>
       store.state.payments.find((payment) => payment.orderCodes.includes(orderCode));
-
-    const canContinuePayment = (order: Order) =>
-      order.orderStatus !== "CANCELLED" && (order.paymentStatus === "PENDING" || order.paymentStatus === "FAILED");
 
     const observer = useRef<IntersectionObserver | null>(null);
     const lastElementRef = useCallback((node: HTMLDivElement | null) => {
@@ -509,7 +1309,11 @@ export default function AccountPage() {
       const showPayment = canContinuePayment(order);
       const showCancel = canCustomerCancel(order);
       const showReceipt = canCustomerConfirmReceipt(order);
-      if (!showPayment && !showCancel && !showReceipt) return <span className="text-muted font-medium text-sm">Theo dõi</span>;
+      const showReturn = canCustomerReturn(order);
+      const showDispute = canCustomerDispute(order);
+
+      if (!showPayment && !showCancel && !showReceipt && !showReturn && !showDispute)
+        return <span className="text-muted font-medium text-sm">Theo dõi</span>;
 
       return (
         <div className="flex items-center gap-2 whitespace-nowrap">
@@ -518,6 +1322,25 @@ export default function AccountPage() {
             <Button className="text-xs h-8 px-3 rounded-lg font-bold shadow-sm bg-emerald-600 text-white hover:bg-emerald-700 gap-1.5" onClick={() => goToPaymentForOrder(order)}>
               <CreditCard className="h-3.5 w-3.5" aria-hidden="true" />
               Thanh toán
+            </Button>
+          ) : null}
+          {showReturn ? (
+            <Button
+              variant="secondary"
+              className="text-xs h-8 px-3 rounded-lg font-bold border-coral/30 text-coral bg-coral/5 hover:bg-coral/10"
+              onClick={() => setReturnModalOrderCode(order.orderCode)}
+            >
+              <RotateCcw className="h-3.5 w-3.5 mr-1" />
+              Trả hàng / Hoàn tiền
+            </Button>
+          ) : null}
+          {showDispute ? (
+            <Button
+              className="text-xs h-8 px-3 rounded-lg font-bold bg-coral text-white hover:bg-coral/90 shadow-sm"
+              onClick={() => setDisputeModalOrderCode(order.orderCode)}
+            >
+              <Headset className="h-3.5 w-3.5 mr-1" />
+              Khiếu nại lên Sàn
             </Button>
           ) : null}
           {showReceipt ? <Button variant="secondary" className="text-xs h-8 px-3 rounded-lg font-bold border-emerald-300 text-emerald-700 bg-emerald-50 hover:bg-emerald-100" onClick={() => store.confirmCustomerReceipt(order.orderCode).then((res) => { if (res.ok) showToast("Đã xác nhận nhận hàng.", "success"); else showToast(res.message || "Lỗi xác nhận", "danger"); })}>Đã nhận hàng</Button> : null}
@@ -617,6 +1440,18 @@ export default function AccountPage() {
             </div>
           )}
         </div>
+        <ReturnRequestModal
+          isOpen={Boolean(returnModalOrderCode)}
+          onClose={() => setReturnModalOrderCode(null)}
+          orderCode={returnModalOrderCode || ""}
+          onSuccess={() => store.fetchCustomerOrders(status as OrderStatus | "", true)}
+        />
+        <DisputeModal
+          isOpen={Boolean(disputeModalOrderCode)}
+          onClose={() => setDisputeModalOrderCode(null)}
+          orderCode={disputeModalOrderCode || ""}
+          onSuccess={() => store.fetchCustomerOrders(status as OrderStatus | "", true)}
+        />
       </Section>
     );
   }
@@ -630,6 +1465,8 @@ export default function AccountPage() {
     const [submittingReview, setSubmittingReview] = useState(false);
     const [images, setImages] = useState<string[]>([]);
     const [uploadingImage, setUploadingImage] = useState(false);
+    const [showReturnModal, setShowReturnModal] = useState(false);
+    const [showDisputeModal, setShowDisputeModal] = useState(false);
     
     useEffect(() => {
       const handleKeyDown = (e: KeyboardEvent) => {
@@ -660,9 +1497,6 @@ export default function AccountPage() {
 
     const findPaymentForOrder = (orderCode: string) =>
       store.state.payments.find((payment) => payment.orderCodes.includes(orderCode));
-
-    const canContinuePayment = (order: Order) =>
-      order.orderStatus !== "CANCELLED" && (order.paymentStatus === "PENDING" || order.paymentStatus === "FAILED");
 
     const goToPaymentForOrder = async (order: Order) => {
       const payment = findPaymentForOrder(order.orderCode);
@@ -791,6 +1625,228 @@ export default function AccountPage() {
               <OrderProgressStepper order={order} />
             </div>
           </Panel>
+
+          {/* DELIVERED BANNER */}
+          {audience === "customer" && order.orderStatus === "DELIVERED" && !order.returnRequest && (
+            <div className="rounded-2xl border-2 border-emerald-500/30 bg-emerald-50 p-4 sm:p-5 shadow-sm text-emerald-950 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="flex items-start gap-3.5">
+                <div className="h-11 w-11 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 mt-0.5 shadow-sm">
+                  <Truck className="h-6 w-6" />
+                </div>
+                <div>
+                  <h4 className="font-black text-base sm:text-lg text-emerald-950">Đơn hàng đã được giao tới bạn</h4>
+                  <p className="text-xs sm:text-sm text-emerald-800 mt-0.5 leading-relaxed font-medium">
+                    Vui lòng kiểm tra sản phẩm. Đơn sẽ tự động hoàn tất sau 7 ngày nếu không có khiếu nại.
+                  </p>
+                  {order.autoCompleteAt && (
+                    <div className="inline-flex items-center gap-1.5 mt-1.5 px-2.5 py-1 rounded-lg bg-emerald-100/80 border border-emerald-200 text-xs font-bold text-emerald-900">
+                      <span>Tự động hoàn tất vào:</span>
+                      <span className="font-black">{formatDate(order.autoCompleteAt)}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+              <div className="flex items-center gap-2.5 self-end sm:self-center shrink-0">
+                <Button
+                  variant="secondary"
+                  className="text-xs h-10 px-4 font-bold border-coral/30 text-coral bg-white hover:bg-coral/5 shadow-sm rounded-xl"
+                  onClick={() => setShowReturnModal(true)}
+                >
+                  <RotateCcw className="h-4 w-4 mr-1.5" />
+                  Yêu cầu Trả hàng / Hoàn tiền
+                </Button>
+                <Button
+                  className="text-xs h-10 px-4 font-bold bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm rounded-xl"
+                  onClick={() => store.confirmCustomerReceipt(order.orderCode).then((res) => { if (res.ok) showToast("Đã xác nhận nhận hàng.", "success"); else showToast(res.message || "Lỗi xác nhận", "danger"); })}
+                >
+                  <Check className="h-4 w-4 mr-1.5" />
+                  Đã nhận được hàng
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* RETURN REQUEST SHOPEE PICK-UP CARD */}
+          {order.returnRequest && (
+            <Panel className="rounded-2xl border border-line shadow-sm p-5 sm:p-6 bg-white overflow-hidden">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-line pb-4 mb-4">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-amber-500/10 text-amber-600 font-bold">
+                    <RotateCcw className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h3 className="font-bold text-ink text-base">Yêu cầu Trả hàng / Hoàn tiền</h3>
+                      <span className="text-xs font-mono text-muted bg-canvas px-2 py-0.5 rounded border border-line">
+                        #{order.returnRequest.returnCode}
+                      </span>
+                    </div>
+                    <p className="text-xs text-muted mt-0.5">
+                      Ngày yêu cầu: <span className="font-semibold text-ink">{formatDate(order.returnRequest.createdAt)}</span>
+                    </p>
+                  </div>
+                </div>
+                <StatusBadge
+                  status={order.returnRequest.returnStatus}
+                  label={returnStatusLabel[order.returnRequest.returnStatus] || order.returnRequest.returnStatus}
+                />
+              </div>
+
+              <div className="space-y-3 text-sm">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-xs sm:text-sm">
+                  <span className="text-muted">Lý do hoàn hàng:</span>
+                  <span className="font-bold text-ink">{order.returnRequest.reason}</span>
+                </div>
+                <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-1 text-xs sm:text-sm">
+                  <span className="text-muted shrink-0">Mô tả chi tiết:</span>
+                  <span className="font-medium text-ink max-w-md sm:text-right">{order.returnRequest.description}</span>
+                </div>
+
+                {order.returnRequest.evidenceImages && order.returnRequest.evidenceImages.length > 0 && (
+                  <div className="pt-2">
+                    <p className="text-xs font-semibold text-muted mb-2">Ảnh minh chứng:</p>
+                    <div className="flex flex-wrap gap-2">
+                      {order.returnRequest.evidenceImages.map((img, idx) => (
+                        <a key={idx} href={img} target="_blank" rel="noreferrer" className="block rounded-lg overflow-hidden border border-line hover:opacity-90">
+                          <img src={img} alt={`Evidence ${idx + 1}`} className="h-16 w-16 object-cover" />
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* 1. SELLER_APPROVED hoặc RETURNING: Shopee Pick-up Card */}
+                {(order.returnRequest.returnStatus === "SELLER_APPROVED" || order.returnRequest.returnStatus === "RETURNING") && (
+                  <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50/70 p-4 space-y-3">
+                    <div className="flex items-center gap-2 text-emerald-900 font-bold text-sm">
+                      <Truck className="h-4 w-4 text-emerald-600" />
+                      <span>Vận đơn thu gom sàn (Shopee Pick-up tận nơi)</span>
+                    </div>
+                    <div className="grid gap-2 text-xs sm:text-sm">
+                      <div className="flex justify-between items-center py-1 border-b border-emerald-100">
+                        <span className="text-emerald-800">Đơn vị vận chuyển thu gom:</span>
+                        <span className="font-bold text-emerald-950">{order.returnRequest.returnShippingProvider || "Shopee Xpress Pick-up"}</span>
+                      </div>
+                      <div className="flex justify-between items-center py-1 border-b border-emerald-100">
+                        <span className="text-emerald-800">Mã vận đơn hoàn:</span>
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono font-bold text-emerald-950">{order.returnRequest.returnTrackingCode || "RET-PENDING"}</span>
+                          {order.returnRequest.returnTrackingCode && (
+                            <button
+                              type="button"
+                              onClick={() => handleCopy(order.returnRequest!.returnTrackingCode!, "mã vận đơn hoàn")}
+                              className="p-1 text-emerald-700 hover:text-emerald-900"
+                              title="Sao chép mã"
+                            >
+                              <Copy className="h-3.5 w-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex justify-between items-start py-1 border-b border-emerald-100">
+                        <span className="text-emerald-800 shrink-0">Địa chỉ lấy hàng hoàn:</span>
+                        <span className="font-medium text-emerald-950 text-right max-w-xs">
+                          {order.returnRequest.pickupAddress || `${order.shipment.detailAddress}, ${order.shipment.ward}, ${order.shipment.district}, ${order.shipment.province}`}
+                        </span>
+                      </div>
+                      {order.returnRequest.returnAddress && (
+                        <div className="flex justify-between items-start py-1 border-b border-emerald-100">
+                          <span className="text-emerald-800 shrink-0">Địa chỉ Shop nhận lại:</span>
+                          <span className="font-medium text-emerald-950 text-right max-w-xs">
+                            {order.returnRequest.returnAddress}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                    <p className="text-xs text-emerald-800 italic bg-white/70 p-2.5 rounded-lg border border-emerald-200">
+                      Shipper sàn sẽ liên hệ tới số điện thoại <strong>{order.shipment.receiverPhone}</strong> để tới thu gom kiện hàng hoàn. Vui lòng đóng gói hàng cẩn thận và ghi rõ mã vận đơn hoàn <strong>{order.returnRequest.returnTrackingCode}</strong> bên ngoài kiện hàng.
+                    </p>
+                  </div>
+                )}
+
+                {/* 2. SELLER_REJECTED: Shop reject reason + Tag Hoàn hàng thất bại + Dispute button */}
+                {order.returnRequest.returnStatus === "SELLER_REJECTED" && (
+                  <div className="mt-4 rounded-xl border border-coral/30 bg-coral/5 p-4 space-y-3">
+                    <div className="flex items-center gap-2 text-coral font-bold text-sm">
+                      <AlertCircle className="h-4 w-4 text-coral" />
+                      <span>Hoàn hàng thất bại (Shop từ chối)</span>
+                    </div>
+                    <div className="text-xs sm:text-sm">
+                      <span className="font-semibold text-ink">Lý do từ chối từ Shop: </span>
+                      <span className="text-muted font-medium">{order.returnRequest.sellerRejectReason || "Shop không chấp nhận lý do hoàn hàng."}</span>
+                    </div>
+                    <p className="text-xs text-muted">
+                      Nếu bạn không đồng ý với quyết định từ chối của Người bán, bạn có thể yêu cầu Ban quản trị Sàn can thiệp đối soát và bảo vệ quyền lợi.
+                    </p>
+                    {audience === "customer" && (
+                      <div className="pt-1">
+                        <Button
+                          className="bg-coral hover:bg-coral/90 text-white font-bold text-xs h-9 px-4 rounded-xl shadow-sm gap-1.5"
+                          onClick={() => setShowDisputeModal(true)}
+                        >
+                          <Headset className="h-3.5 w-3.5" />
+                          Yêu cầu Sàn can thiệp (Khiếu nại)
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* 3. DISPUTED: Supporter handling dispute */}
+                {order.returnRequest.returnStatus === "DISPUTED" && (
+                  <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50/80 p-4 space-y-2">
+                    <div className="flex items-center gap-2 text-amber-900 font-bold text-sm">
+                      <Headset className="h-4 w-4 text-amber-600" />
+                      <span>Đang khiếu nại lên Sàn (Supporter đang xử lý)</span>
+                    </div>
+                    <div className="text-xs sm:text-sm">
+                      <span className="font-semibold text-amber-950">Lý do khiếu nại của bạn: </span>
+                      <span className="text-amber-900">{order.returnRequest.disputeReason}</span>
+                    </div>
+                    <p className="text-xs text-amber-800">
+                      Hồ sơ khiếu nại đang được Supporter tiếp nhận xử lý. Sàn sẽ kiểm tra bằng chứng của cả hai bên và đưa ra phán quyết trong thời gian sớm nhất.
+                    </p>
+                  </div>
+                )}
+
+                {/* 4. SUPPORT_APPROVED / COMPLETED / orderStatus === "RETURNED" */}
+                {(order.returnRequest.returnStatus === "SUPPORT_APPROVED" || order.returnRequest.returnStatus === "COMPLETED" || order.orderStatus === "RETURNED") && (
+                  <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50/80 p-4 space-y-2">
+                    <div className="flex items-center gap-2 text-emerald-900 font-bold text-sm">
+                      <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                      <span>Hoàn tiền thành công vào Ví</span>
+                    </div>
+                    <p className="text-xs sm:text-sm text-emerald-800">
+                      Yêu cầu hoàn tiền đã được xử lý hoàn tất. Số tiền <strong className="text-emerald-950">{formatVnd(order.totalAmount)}</strong> đã được hoàn lại thành công vào Ví tiền của bạn.
+                    </p>
+                    {order.returnRequest.supporterNote && (
+                      <p className="text-xs text-emerald-700 bg-white/70 p-2 rounded-lg border border-emerald-200">
+                        <strong>Ghi chú từ Supporter:</strong> {order.returnRequest.supporterNote}
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {/* 5. SUPPORT_REJECTED */}
+                {order.returnRequest.returnStatus === "SUPPORT_REJECTED" && (
+                  <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-2">
+                    <div className="flex items-center gap-2 text-slate-800 font-bold text-sm">
+                      <AlertCircle className="h-4 w-4 text-slate-600" />
+                      <span>Sàn bác bỏ khiếu nại</span>
+                    </div>
+                    <p className="text-xs sm:text-sm text-slate-600">
+                      Sau khi xem xét hồ sơ và đối soát bằng chứng từ hai bên, Supporter đã bác bỏ khiếu nại. Đơn hàng được xác nhận hoàn tất.
+                    </p>
+                    {order.returnRequest.supporterNote && (
+                      <p className="text-xs text-slate-700 bg-white p-2 rounded-lg border border-slate-200">
+                        <strong>Ghi chú từ Supporter:</strong> {order.returnRequest.supporterNote}
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+            </Panel>
+          )}
 
           <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
             {/* LEFT MAIN COLUMN */}
@@ -940,12 +1996,13 @@ export default function AccountPage() {
                   </div>
                   {(() => {
                     const payment = findPaymentForOrder(order.orderCode);
-                    const paymentTime = payment?.paidAt
-                      ? formatDate(payment.paidAt)
-                      : payment?.createdAt
-                      ? formatDate(payment.createdAt)
-                      : order.paymentStatus === "PAID"
-                      ? formatDate(order.createdAt)
+                    const isPaid = order.paymentStatus === "PAID" || payment?.paymentStatus === "PAID";
+                    const paymentTime = isPaid
+                      ? payment?.paidAt
+                        ? formatDate(payment.paidAt)
+                        : payment?.createdAt
+                        ? formatDate(payment.createdAt)
+                        : formatDate(order.createdAt)
                       : null;
                     return paymentTime ? (
                       <div className="flex items-center justify-between text-muted">
@@ -976,7 +2033,7 @@ export default function AccountPage() {
                 </div>
 
                 {/* CUSTOMER ACTION CENTER */}
-                {audience === "customer" && (canContinuePayment(order) || canCustomerCancel(order) || canCustomerConfirmReceipt(order)) ? (
+                {audience === "customer" && (canContinuePayment(order) || canCustomerCancel(order) || canCustomerConfirmReceipt(order) || canCustomerReturn(order) || canCustomerDispute(order)) ? (
                   <div className="mt-5 grid gap-2 border-t border-line pt-5">
                     {canContinuePayment(order) ? (
                       <Button className="w-full bg-primary hover:bg-primary/90 text-white font-bold h-11 rounded-xl shadow-sm" onClick={() => goToPaymentForOrder(order)}>
@@ -985,9 +2042,21 @@ export default function AccountPage() {
                       </Button>
                     ) : null}
                     {canCustomerConfirmReceipt(order) ? (
-                      <Button variant="secondary" className="w-full border-primary/30 text-primary bg-primary/5 hover:bg-primary/10 font-bold h-11 rounded-xl shadow-sm" onClick={() => store.confirmCustomerReceipt(order.orderCode).then((res) => { if (res.ok) showToast("Đã xác nhận nhận hàng.", "success"); else showToast(res.message || "Lỗi xác nhận", "danger"); })}>
+                      <Button variant="secondary" className="w-full border-emerald-300 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 font-bold h-11 rounded-xl shadow-sm" onClick={() => store.confirmCustomerReceipt(order.orderCode).then((res) => { if (res.ok) showToast("Đã xác nhận nhận hàng.", "success"); else showToast(res.message || "Lỗi xác nhận", "danger"); })}>
                         <Check className="h-4 w-4" />
-                        Đã nhận hàng
+                        Đã nhận được hàng
+                      </Button>
+                    ) : null}
+                    {canCustomerReturn(order) ? (
+                      <Button variant="secondary" className="w-full border-coral/30 text-coral bg-coral/5 hover:bg-coral/10 font-bold h-11 rounded-xl shadow-sm" onClick={() => setShowReturnModal(true)}>
+                        <RotateCcw className="h-4 w-4" />
+                        Yêu cầu Trả hàng / Hoàn tiền
+                      </Button>
+                    ) : null}
+                    {canCustomerDispute(order) ? (
+                      <Button className="w-full bg-coral hover:bg-coral/90 text-white font-bold h-11 rounded-xl shadow-sm transition-colors" onClick={() => setShowDisputeModal(true)}>
+                        <Headset className="h-4 w-4" />
+                        Yêu cầu Sàn can thiệp (Khiếu nại)
                       </Button>
                     ) : null}
                     {canCustomerCancel(order) ? (
@@ -1159,6 +2228,19 @@ export default function AccountPage() {
             </div>
           </div>
         )}
+        {/* Return & Dispute Modals */}
+        <ReturnRequestModal
+          isOpen={showReturnModal}
+          onClose={() => setShowReturnModal(false)}
+          orderCode={order.orderCode}
+          onSuccess={() => store.fetchCustomerOrderDetail(order.orderCode)}
+        />
+        <DisputeModal
+          isOpen={showDisputeModal}
+          onClose={() => setShowDisputeModal(false)}
+          orderCode={order.orderCode}
+          onSuccess={() => store.fetchCustomerOrderDetail(order.orderCode)}
+        />
       </Section>
     );
   }
@@ -1753,5 +2835,335 @@ function AddressBook({ store, showToast }: { store: any, showToast: any }) {
         </Panel>
       </div>
     </Section>
+  );
+}
+
+function ReturnRequestModal({
+  isOpen,
+  onClose,
+  orderCode,
+  onSuccess,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  orderCode: string;
+  onSuccess?: () => void;
+}) {
+  const store = useMarketplaceStore();
+  const { showToast } = store;
+  const RETURN_REASONS = [
+    "Sản phẩm bị lỗi / vỡ",
+    "Giao sai sản phẩm / thiếu hàng",
+    "Hàng giả / hàng nhái",
+    "Sản phẩm khác xa mô tả",
+    "Khác",
+  ];
+
+  const [reason, setReason] = useState(RETURN_REASONS[0]);
+  const [description, setDescription] = useState("");
+  const [evidenceImages, setEvidenceImages] = useState<string[]>([]);
+  const [imageUrlInput, setImageUrlInput] = useState("");
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (isOpen) {
+      setReason(RETURN_REASONS[0]);
+      setDescription("");
+      setEvidenceImages([]);
+      setImageUrlInput("");
+      setSubmitting(false);
+    }
+  }, [isOpen]);
+
+  if (!isOpen) return null;
+
+  const handleAddImageUrl = () => {
+    const trimmed = imageUrlInput.trim();
+    if (!trimmed) return;
+    if (evidenceImages.length >= 5) {
+      showToast("Tối đa 5 ảnh minh chứng.", "info");
+      return;
+    }
+    setEvidenceImages((prev) => [...prev, trimmed]);
+    setImageUrlInput("");
+  };
+
+  const handleRemoveImage = (index: number) => {
+    setEvidenceImages((prev) => prev.filter((_, idx) => idx !== index));
+  };
+
+  const handleSubmit = async () => {
+    if (!description.trim()) {
+      showToast("Vui lòng nhập mô tả chi tiết lý do trả hàng.", "danger");
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const result = await store.requestOrderReturn(orderCode, {
+        reason,
+        description: description.trim(),
+        evidence_images: evidenceImages.length > 0 ? evidenceImages : undefined,
+      });
+      if (result.ok) {
+        showToast("Đã gửi yêu cầu trả hàng / hoàn tiền thành công!", "success");
+        onSuccess?.();
+        onClose();
+      } else {
+        showToast(result.message || "Lỗi khi gửi yêu cầu trả hàng.", "danger");
+      }
+    } catch (err: any) {
+      showToast(err?.message || "Lỗi gửi yêu cầu trả hàng.", "danger");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="return-modal-title"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 animate-fade-in"
+      onClick={(e) => {
+        if (e.target === e.currentTarget && !submitting) {
+          onClose();
+        }
+      }}
+    >
+      <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between border-b border-line pb-3">
+          <div className="flex items-center gap-2">
+            <RotateCcw className="h-5 w-5 text-primary" />
+            <h3 id="return-modal-title" className="text-lg font-bold text-ink">
+              Yêu cầu Trả hàng / Hoàn tiền
+            </h3>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={submitting}
+            className="p-1 rounded-lg text-muted hover:text-ink hover:bg-slate-100"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <p className="text-xs text-muted">
+          Đơn hàng: <span className="font-mono font-bold text-ink">{orderCode}</span>. Vui lòng chọn lý do và cung cấp thông tin minh chứng để Shop và Sàn hỗ trợ xử lý nhanh nhất.
+        </p>
+
+        <Field label="Lý do trả hàng">
+          <Select
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            className="bg-canvas/50 border-line focus:bg-white rounded-xl h-11 text-sm font-semibold text-ink"
+          >
+            {RETURN_REASONS.map((r) => (
+              <option key={r} value={r}>
+                {r}
+              </option>
+            ))}
+          </Select>
+        </Field>
+
+        <Field label="Mô tả chi tiết vấn đề">
+          <Textarea
+            placeholder="Mô tả chi tiết tình trạng sản phẩm, lỗi gặp phải hoặc lý do bạn muốn trả hàng..."
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            className="min-h-[100px] text-xs sm:text-sm"
+          />
+        </Field>
+
+        <div>
+          <label className="text-xs font-bold text-slate-700 block mb-2">
+            Ảnh minh chứng (Tối đa 5 ảnh)
+          </label>
+          <div className="flex flex-wrap gap-2 mb-3">
+            {evidenceImages.map((img, i) => (
+              <div key={i} className="relative h-16 w-16 rounded-lg border border-line overflow-hidden group">
+                <img src={img} alt={`Evidence ${i + 1}`} className="h-full w-full object-cover" />
+                <button
+                  type="button"
+                  onClick={() => handleRemoveImage(i)}
+                  className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-white hover:bg-red-600 shadow"
+                  title="Xóa ảnh"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+            ))}
+
+            {evidenceImages.length < 5 && (
+              <div className="relative h-16 w-16 border border-dashed border-slate-300 rounded-lg flex flex-col items-center justify-center text-slate-400 hover:border-primary hover:text-primary transition-colors bg-slate-50 cursor-pointer group" title="Tải ảnh lên">
+                {uploadingImage ? <Loader2 className="h-5 w-5 animate-spin" /> : <Upload className="h-5 w-5" />}
+                <span className="text-[9px] mt-0.5 font-medium">Tải ảnh</span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                  disabled={uploadingImage}
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    setUploadingImage(true);
+                    try {
+                      const url = await uploadImage(file);
+                      if (url) setEvidenceImages((prev) => [...prev, url]);
+                    } catch (err: any) {
+                      showToast(err.message || "Lỗi tải ảnh minh chứng", "danger");
+                    } finally {
+                      setUploadingImage(false);
+                      e.target.value = "";
+                    }
+                  }}
+                />
+              </div>
+            )}
+          </div>
+
+          {evidenceImages.length < 5 && (
+            <div className="flex gap-2">
+              <Input
+                placeholder="Hoặc dán URL hình ảnh minh chứng..."
+                value={imageUrlInput}
+                onChange={(e) => setImageUrlInput(e.target.value)}
+                className="text-xs h-9 bg-canvas/50"
+              />
+              <Button
+                variant="secondary"
+                className="text-xs h-9 px-3 shrink-0 font-bold"
+                onClick={handleAddImageUrl}
+              >
+                Thêm URL
+              </Button>
+            </div>
+          )}
+        </div>
+
+        <div className="flex items-center justify-end gap-2 border-t border-line pt-4">
+          <Button variant="secondary" disabled={submitting} onClick={onClose}>
+            Hủy
+          </Button>
+          <Button
+            className="bg-primary hover:bg-primary/90 text-white font-bold"
+            disabled={submitting || !description.trim()}
+            onClick={handleSubmit}
+          >
+            {submitting ? "Đang gửi..." : "Gửi yêu cầu"}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DisputeModal({
+  isOpen,
+  onClose,
+  orderCode,
+  onSuccess,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  orderCode: string;
+  onSuccess?: () => void;
+}) {
+  const store = useMarketplaceStore();
+  const { showToast } = store;
+  const [disputeReason, setDisputeReason] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (isOpen) {
+      setDisputeReason("");
+      setSubmitting(false);
+    }
+  }, [isOpen]);
+
+  if (!isOpen) return null;
+
+  const handleSubmit = async () => {
+    if (!disputeReason.trim()) {
+      showToast("Vui lòng nhập lý do khiếu nại gửi Supporter.", "danger");
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const result = await store.disputeOrderReturn(orderCode, {
+        dispute_reason: disputeReason.trim(),
+      });
+      if (result.ok) {
+        showToast("Đã gửi khiếu nại lên Sàn thành công. Supporter sẽ hỗ trợ xử lý!", "success");
+        onSuccess?.();
+        onClose();
+      } else {
+        showToast(result.message || "Lỗi khi gửi khiếu nại.", "danger");
+      }
+    } catch (err: any) {
+      showToast(err?.message || "Lỗi gửi khiếu nại.", "danger");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="dispute-modal-title"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 animate-fade-in"
+      onClick={(e) => {
+        if (e.target === e.currentTarget && !submitting) {
+          onClose();
+        }
+      }}
+    >
+      <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl space-y-4">
+        <div className="flex items-center justify-between border-b border-line pb-3">
+          <div className="flex items-center gap-2">
+            <Headset className="h-5 w-5 text-coral" />
+            <h3 id="dispute-modal-title" className="text-lg font-bold text-ink">
+              Yêu cầu Sàn can thiệp (Khiếu nại)
+            </h3>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={submitting}
+            className="p-1 rounded-lg text-muted hover:text-ink hover:bg-slate-100"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <p className="text-xs text-muted">
+          Đơn hàng: <span className="font-mono font-bold text-ink">{orderCode}</span>. Nếu Shop từ chối trả hàng không hợp lý, Supporter sàn sẽ đối soát bằng chứng giữa hai bên và đưa ra phán quyết bảo vệ quyền lợi người mua.
+        </p>
+
+        <Field label="Lý do khiếu nại gửi Supporter">
+          <Textarea
+            placeholder="Nêu rõ lý do bạn không đồng ý với quyết định từ chối của Shop và yêu cầu bồi hoàn..."
+            value={disputeReason}
+            onChange={(e) => setDisputeReason(e.target.value)}
+            className="min-h-[120px] text-xs sm:text-sm"
+          />
+        </Field>
+
+        <div className="flex items-center justify-end gap-2 border-t border-line pt-4">
+          <Button variant="secondary" disabled={submitting} onClick={onClose}>
+            Hủy
+          </Button>
+          <Button
+            className="bg-coral hover:bg-coral/90 text-white font-bold"
+            disabled={submitting || !disputeReason.trim()}
+            onClick={handleSubmit}
+          >
+            {submitting ? "Đang gửi khiếu nại..." : "Gửi khiếu nại"}
+          </Button>
+        </div>
+      </div>
+    </div>
   );
 }

@@ -4,6 +4,8 @@ from typing import Any, List, Optional
 
 from pydantic import BaseModel, Field
 
+from schemas.order.order_return_schema import OrderReturnResponse
+
 
 class ShippingAddressPayload(BaseModel):
     receiver_name: str
@@ -121,6 +123,17 @@ class ShipmentResponse(BaseModel):
         from_attributes = True
 
 
+class OrderStatusLogResponse(BaseModel):
+    id: int
+    old_status: Optional[str] = None
+    new_status: str
+    note: Optional[str] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
 class OrderResponse(BaseModel):
     public_id: str
     order_code: str
@@ -137,6 +150,9 @@ class OrderResponse(BaseModel):
     seller_confirm_expires_at: datetime
     completed_at: Optional[datetime]
     cancelled_at: Optional[datetime]
+    delivered_at: Optional[datetime] = None
+    auto_complete_at: Optional[datetime] = None
+    return_tag: Optional[str] = None
     created_at: datetime
     print_count: int
 
@@ -144,6 +160,8 @@ class OrderResponse(BaseModel):
     seller: Optional[ShopInfo] = None
     items: List[OrderItemResponse] = []
     shipment: Optional[ShipmentResponse] = None
+    return_request: Optional[OrderReturnResponse] = None
+    status_logs: List[OrderStatusLogResponse] = []
 
     class Config:
         from_attributes = True

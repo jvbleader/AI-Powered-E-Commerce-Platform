@@ -1,5 +1,11 @@
-import { Order, OrderItem } from "@/types/models";
+import { Order, OrderReturn } from "@/types/models";
 import { apiFetch } from "@/services/api";
+import type {
+  BackendOrderResponse,
+  BackendOrderListResponse,
+  BackendOrderReturnResponse,
+  BackendDisputeListResponse
+} from "@/store/slices/types";
 
 export interface ShippingAddressPayload {
   receiver_name: string;
@@ -39,6 +45,25 @@ export interface OrderListResponse {
   total: number;
 }
 
+export interface RequestOrderReturnPayload {
+  reason: string;
+  description: string;
+  evidence_images?: string[];
+}
+
+export interface DisputeOrderReturnPayload {
+  dispute_reason: string;
+}
+
+export interface RejectReturnPayload {
+  reject_reason: string;
+}
+
+export interface ResolveDisputePayload {
+  decision: string;
+  note: string;
+}
+
 export const orderApi = {
   checkoutCart: (data: CheckoutCartRequest) =>
     apiFetch<Order[]>("/orders/checkout-cart", {
@@ -68,4 +93,68 @@ export const orderApi = {
       method: "POST",
       body: JSON.stringify(data),
     }),
+
+  requestOrderReturn: (orderCode: string, data: RequestOrderReturnPayload) =>
+    apiFetch<BackendOrderReturnResponse>(`/orders/${orderCode}/return/request`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  disputeOrderReturn: (orderCode: string, data: DisputeOrderReturnPayload) =>
+    apiFetch<BackendOrderReturnResponse>(`/orders/${orderCode}/return/dispute`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  getOrderReturn: (orderCode: string) =>
+    apiFetch<BackendOrderReturnResponse>(`/orders/${orderCode}/return`),
+
+  // Seller Order actions
+  markOrderDelivered: (orderId: string) =>
+    apiFetch<BackendOrderResponse>(`/seller/orders/${orderId}/delivered`, {
+      method: "POST",
+    }),
+
+  approveSellerReturn: (orderId: string) =>
+    apiFetch<BackendOrderReturnResponse>(`/seller/orders/${orderId}/return/approve`, {
+      method: "POST",
+    }),
+
+  rejectSellerReturn: (orderId: string, data: RejectReturnPayload) =>
+    apiFetch<BackendOrderReturnResponse>(`/seller/orders/${orderId}/return/reject`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  confirmReceivedReturn: (orderId: string) =>
+    apiFetch<BackendOrderReturnResponse>(`/seller/orders/${orderId}/return/confirm-received`, {
+      method: "POST",
+    }),
+
+  // Dispute / Moderation actions
+  fetchDisputes: (statusFilter?: string, skip: number = 0, limit: number = 50) => {
+    const params = new URLSearchParams();
+    if (statusFilter) params.append("status", statusFilter);
+    params.append("skip", String(skip));
+    params.append("limit", String(limit));
+    return apiFetch<BackendDisputeListResponse>(`/api/moderation/disputes?${params.toString()}`);
+  },
+
+  fetchDisputeDetail: (disputeId: string) =>
+    apiFetch<BackendOrderReturnResponse>(`/api/moderation/disputes/${disputeId}`),
+
+  resolveDispute: (disputeId: string, data: ResolveDisputePayload) =>
+    apiFetch<BackendOrderReturnResponse>(`/api/moderation/disputes/${disputeId}/resolve`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+};
+
+export const disputeApi = {
+  getDisputes: (statusFilter?: string, skip: number = 0, limit: number = 50) =>
+    orderApi.fetchDisputes(statusFilter, skip, limit),
+  getDisputeDetail: (disputeId: string) =>
+    orderApi.fetchDisputeDetail(disputeId),
+  resolveDispute: (disputeId: string, decision: string, note: string) =>
+    orderApi.resolveDispute(disputeId, { decision, note }),
 };

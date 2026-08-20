@@ -1,3 +1,4 @@
+import secrets
 from decimal import Decimal
 from typing import Optional
 from fastapi import HTTPException, status
@@ -8,13 +9,16 @@ from repositories.order.order_repository import (
     get_order_by_public_id_and_seller,
     confirm_order,
     update_order_status_to_shipping,
+    update_order_status_to_delivered,
 )
 from repositories.seller.seller_profile_repository import get_seller_profile_by_user_id
 from schemas.seller.seller_order_schema import OrderListResponse, OrderResponse
 from schemas.seller.seller_application_schema import SellerDashboardSummaryResponse
+from schemas.order.order_return_schema import OrderReturnResponse, ReturnRejectRequest
 from models.user import User
 from models.order import Order
 from models.order import OrderItem
+from models.order import OrderReturn
 from models.catalog import Product
 from models.seller import SellerStatistics
 from models.base import utc_now
@@ -24,6 +28,7 @@ from models.inventory import InventoryTransaction
 import repositories.inventory.inventory_repository as inventory_repository
 import repositories.order.order_repository as order_repository
 from services.engagement.notification_service import send_notification
+from services.wallet.wallet_service import credit_wallet_for_refund
 
 
 async def _get_active_seller_profile(user: User, db: AsyncSession):
@@ -130,6 +135,38 @@ async def update_order_to_shipping(
     )
     
     return OrderResponse.model_validate(shipped_order)
+
+
+async def update_order_to_delivered(
+    user: User, order_id: str, db: AsyncSession
+) -> OrderResponse:
+    seller_profile = await _get_active_seller_profile(user, db)
+
+    order = await get_order_by_public_id_and_seller(db, order_id, seller_profile.id)
+    if not order:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Order not found"
+        )
+
+    if order.order_status != "SHIPPING":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Chỉ có thể chuyển sang đã giao hàng khi đơn đang giao (SHIPPING)",
+        )
+
+    delivered_order = await update_order_status_to_delivered(db, order)
+
+    # Notify buyer
+    await send_notification(
+        db=db,
+        user_id=order.user_id,
+        type="order",
+        title="Đơn hàng đã được giao",
+        content=f"Đơn hàng {order.order_code} đã được giao tới bạn. Vui lòng kiểm tra và xác nhận nhận hàng trong vòng 7 ngày.",
+        action_url=f"/account/orders/{order.order_code}",
+    )
+
+    return OrderResponse.model_validate(delivered_order)
 
 
 async def cancel_seller_order(
@@ -349,3 +386,217 @@ async def increment_print_count(
     order.print_count += 1
     # db.commit() will be called in router
     return OrderResponse.model_validate(order)
+
+
+async def approve_order_return(
+    user: User, order_id: str, db: AsyncSession
+) -> OrderReturn:
+    seller_profile = await _get_active_seller_profile(user, db)
+
+    order = await get_order_by_public_id_and_seller(db, order_id, seller_profile.id)
+    if not order:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Order not found"
+        )
+
+    return_req = await order_repository.get_order_return_by_order_id(db, order.id)
+    if not return_req:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Không tìm thấy yêu cầu trả hàng cho đơn này",
+        )
+
+    if return_req.return_status != "REQUESTED":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Không thể duyệt yêu cầu trả hàng ở trạng thái {return_req.return_status}",
+        )
+
+    digits = "".join(secrets.choice("0123456789") for _ in range(8))
+    tracking_code = f"RET-SPX-{digits}"
+    return_req.return_tracking_code = tracking_code
+    return_req.return_shipping_provider = "SPX Express (Thu gom trả hàng sàn)"
+
+    if order.shipment:
+        return_req.pickup_address = (
+            f"{order.shipment.receiver_name} ({order.shipment.receiver_phone}), "
+            f"{order.shipment.detail_address}, {order.shipment.ward}, "
+            f"{order.shipment.district}, {order.shipment.province}"
+        )
+    return_req.return_address = (
+        getattr(seller_profile, "pickup_address", None) or f"Kho Shop {seller_profile.shop_name}"
+    )
+    return_req.return_status = "SELLER_APPROVED"
+    return_req.seller_responded_at = utc_now()
+
+    await order_repository.add_order_status_log(
+        db,
+        OrderStatusLog(
+            order_id=order.id,
+            old_status=order.order_status,
+            new_status=order.order_status,
+            note=f"Shop đã chấp thuận yêu cầu trả hàng. Mã vận đơn thu gom: {tracking_code}",
+        ),
+    )
+
+    await send_notification(
+        db=db,
+        user_id=order.user_id,
+        type="order",
+        title="Yêu cầu trả hàng được chấp thuận",
+        content=f"Shop đã chấp thuận yêu cầu trả hàng cho đơn {order.order_code}. Mã vận đơn hoàn: {tracking_code}.",
+        action_url=f"/account/orders/{order.order_code}",
+    )
+
+    return return_req
+
+
+async def reject_order_return(
+    user: User, order_id: str, data: ReturnRejectRequest, db: AsyncSession
+) -> OrderReturn:
+    seller_profile = await _get_active_seller_profile(user, db)
+
+    order = await get_order_by_public_id_and_seller(db, order_id, seller_profile.id)
+    if not order:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Order not found"
+        )
+
+    return_req = await order_repository.get_order_return_by_order_id(db, order.id)
+    if not return_req:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Không tìm thấy yêu cầu trả hàng cho đơn này",
+        )
+
+    if return_req.return_status != "REQUESTED":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Không thể từ chối yêu cầu trả hàng ở trạng thái {return_req.return_status}",
+        )
+
+    return_req.return_status = "SELLER_REJECTED"
+    return_req.seller_reject_reason = data.reject_reason
+    return_req.seller_responded_at = utc_now()
+    order.return_tag = "RETURN_FAILED_SELLER_REJECTED"
+
+    await order_repository.add_order_status_log(
+        db,
+        OrderStatusLog(
+            order_id=order.id,
+            old_status=order.order_status,
+            new_status=order.order_status,
+            note=f"Shop từ chối yêu cầu trả hàng: {data.reject_reason}",
+        ),
+    )
+
+    await send_notification(
+        db=db,
+        user_id=order.user_id,
+        type="order",
+        title="Yêu cầu trả hàng bị từ chối",
+        content=f"Shop đã từ chối yêu cầu trả hàng cho đơn {order.order_code}. Lý do: {data.reject_reason}.",
+        action_url=f"/account/orders/{order.order_code}",
+    )
+
+    return return_req
+
+
+async def confirm_received_return(
+    user: User, order_id: str, db: AsyncSession
+) -> OrderReturn:
+    seller_profile = await _get_active_seller_profile(user, db)
+
+    order = await get_order_by_public_id_and_seller(db, order_id, seller_profile.id)
+    if not order:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Order not found"
+        )
+
+    return_req = await order_repository.get_order_return_by_order_id(db, order.id)
+    if not return_req:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Không tìm thấy yêu cầu trả hàng cho đơn này",
+        )
+
+    if return_req.return_status not in ("SELLER_APPROVED", "RETURNING", "SUPPORT_APPROVED"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Không thể xác nhận nhận hàng hoàn khi yêu cầu ở trạng thái {return_req.return_status}",
+        )
+
+    return_req.return_status = "COMPLETED"
+    return_req.resolved_at = utc_now()
+
+    old_order_status = order.order_status
+    order.order_status = "RETURNED"
+    order.payment_status = "REFUNDED"
+    order.return_tag = "RETURN_SUCCESS"
+
+    # Refund wallet
+    await credit_wallet_for_refund(
+        user_id=order.user_id,
+        amount=order.total_amount,
+        order=order,
+        db=db,
+    )
+
+    # Restock inventory
+    for item in order.items:
+        if not item.variant_id:
+            continue
+        inv = await inventory_repository.get_inventory_for_update(db, item.variant_id)
+        if inv:
+            qty_before = inv.quantity
+            inv.quantity += item.quantity
+            qty_after = inv.quantity
+
+            await inventory_repository.add_inventory_transaction(
+                db,
+                InventoryTransaction(
+                    variant_id=inv.variant_id,
+                    transaction_type="CANCEL_RELEASE",
+                    quantity_change=item.quantity,
+                    quantity_before=qty_before,
+                    quantity_after=qty_after,
+                    reference_type="ORDER",
+                    reference_id=order.id,
+                    note=f"Hoàn tồn kho do đơn {order.order_code} trả hàng thành công",
+                ),
+            )
+        if item.product_id:
+            prod = await db.get(Product, item.product_id)
+            if prod and prod.sold_count >= item.quantity:
+                prod.sold_count -= item.quantity
+
+    # Deduct seller statistics
+    seller_stats_res = await db.execute(
+        select(SellerStatistics).where(SellerStatistics.seller_id == order.seller_id)
+    )
+    stats = seller_stats_res.scalar_one_or_none()
+    if stats:
+        stats.total_sold = max(0, stats.total_sold - sum(i.quantity for i in order.items))
+        stats.total_revenue = max(Decimal("0.00"), stats.total_revenue - Decimal(str(order.total_amount)))
+
+    await order_repository.add_order_status_log(
+        db,
+        OrderStatusLog(
+            order_id=order.id,
+            old_status=old_order_status,
+            new_status="RETURNED",
+            note="Shop đã nhận lại hàng hoàn. Đã hoàn tiền về ví cho người mua.",
+        ),
+    )
+
+    await send_notification(
+        db=db,
+        user_id=order.user_id,
+        type="wallet",
+        title="Hoàn tiền trả hàng thành công",
+        content=f"Shop đã nhận lại hàng và hoàn tiền {order.total_amount:,.0f}đ vào ví cho đơn hàng {order.order_code}.",
+        action_url="/account/wallet",
+    )
+
+    return return_req
+

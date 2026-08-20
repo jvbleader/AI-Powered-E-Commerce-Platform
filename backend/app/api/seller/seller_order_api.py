@@ -1,18 +1,25 @@
 from typing import Annotated, Optional
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 from core.database import DBSession
 from dependencies.auth import CurrentUser
 from models.user import User
 from schemas.seller.seller_order_schema import OrderListResponse, OrderResponse
 from schemas.order.order_schema import CancelOrderRequest
+from schemas.order.order_return_schema import OrderReturnResponse, ReturnRejectRequest
 from services.seller.seller_order_service import (
     get_seller_orders,
     get_seller_order_detail,
     confirm_seller_order,
     update_order_to_shipping,
+    update_order_to_delivered,
     cancel_seller_order,
+    increment_print_count,
+    approve_order_return,
+    reject_order_return,
+    confirm_received_return,
 )
+from services.search.search_helpers import update_products_in_es
 
 router = APIRouter(prefix="/seller/orders", tags=["Seller Orders"])
 
@@ -77,8 +84,22 @@ async def update_order_to_shipping_api(
         raise
     return result
 
-from fastapi import APIRouter, Depends, Query, BackgroundTasks
-from services.search.search_helpers import update_products_in_es
+
+@router.post("/{order_id}/delivered", response_model=OrderResponse)
+async def update_order_to_delivered_api(
+    order_id: str,
+    user: CurrentUser,
+    db: DBSession,
+) -> OrderResponse:
+    result = None
+    try:
+        result = await update_order_to_delivered(user, order_id, db)
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        raise
+    return result
+
 
 @router.post("/{order_id}/cancel", response_model=OrderResponse)
 async def cancel_order_api(
@@ -104,8 +125,6 @@ async def cancel_order_api(
     return result
 
 
-import services.seller.seller_order_service as seller_order_service
-
 @router.post("/{order_id}/increment-print-count", response_model=OrderResponse)
 async def increment_print_count_api(
     order_id: str,
@@ -114,10 +133,69 @@ async def increment_print_count_api(
 ) -> OrderResponse:
     result = None
     try:
-        result = await seller_order_service.increment_print_count(user, order_id, db)
+        result = await increment_print_count(user, order_id, db)
         await db.commit()
     except Exception:
         await db.rollback()
         raise
     return result
+
+
+@router.post("/{order_id}/return/approve", response_model=OrderReturnResponse)
+async def approve_order_return_api(
+    order_id: str,
+    user: CurrentUser,
+    db: DBSession,
+) -> OrderReturnResponse:
+    result = None
+    try:
+        result = await approve_order_return(user, order_id, db)
+        await db.commit()
+        await db.refresh(result)
+    except Exception:
+        await db.rollback()
+        raise
+    return result
+
+
+@router.post("/{order_id}/return/reject", response_model=OrderReturnResponse)
+async def reject_order_return_api(
+    order_id: str,
+    data: ReturnRejectRequest,
+    user: CurrentUser,
+    db: DBSession,
+) -> OrderReturnResponse:
+    result = None
+    try:
+        result = await reject_order_return(user, order_id, data, db)
+        await db.commit()
+        await db.refresh(result)
+    except Exception:
+        await db.rollback()
+        raise
+    return result
+
+
+@router.post("/{order_id}/return/confirm-received", response_model=OrderReturnResponse)
+async def confirm_received_return_api(
+    order_id: str,
+    user: CurrentUser,
+    db: DBSession,
+    background_tasks: BackgroundTasks,
+) -> OrderReturnResponse:
+    result = None
+    try:
+        result = await confirm_received_return(user, order_id, db)
+        await db.commit()
+        await db.refresh(result)
+
+        if getattr(result, "order", None) and result.order.items:
+            product_ids = {item.product_id for item in result.order.items if item.product_id}
+            if product_ids:
+                background_tasks.add_task(update_products_in_es, list(product_ids))
+    except Exception:
+        await db.rollback()
+        raise
+    return result
+
 

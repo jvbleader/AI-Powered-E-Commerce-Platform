@@ -10,7 +10,7 @@ export function Badge({
   className
 }: {
   children: ReactNode;
-  tone?: "success" | "warning" | "danger" | "neutral" | "info";
+  tone?: "success" | "warning" | "danger" | "neutral" | "info" | "purple" | "indigo";
   className?: string;
 }) {
   return (
@@ -22,6 +22,8 @@ export function Badge({
         tone === "danger" && "border-rose-200 bg-rose-50 text-rose-800",
         tone === "neutral" && "border-slate-200 bg-slate-50 text-slate-600",
         tone === "info" && "border-blue-200 bg-blue-50 text-blue-800",
+        tone === "purple" && "border-purple-200 bg-purple-50 text-purple-700",
+        tone === "indigo" && "border-indigo-200 bg-indigo-50 text-indigo-700",
         className
       )}
     >

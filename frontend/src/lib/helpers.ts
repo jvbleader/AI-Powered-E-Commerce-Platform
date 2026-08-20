@@ -4,6 +4,8 @@ import type {
   Category,
   Order,
   OrderItem,
+  OrderReturn,
+  OrderReturnStatus,
   Payment,
   PaymentMethod,
   PaymentStatus,
@@ -121,9 +123,22 @@ export const orderStatusLabel: Record<Order["orderStatus"], string> = {
   PLACED: "Đã đặt hàng",
   READY_TO_SHIP: "Sẵn sàng giao",
   SHIPPING: "Đang giao",
+  DELIVERED: "Đã giao hàng",
   COMPLETED: "Hoàn thành",
   DELIVERY_FAILED: "Giao thất bại",
+  RETURNED: "Đã trả hàng/hoàn tiền",
   CANCELLED: "Đã hủy"
+};
+
+export const returnStatusLabel: Record<OrderReturnStatus, string> = {
+  REQUESTED: "Chờ Shop duyệt",
+  SELLER_APPROVED: "Shop đồng ý trả hàng",
+  RETURNING: "Đang trả hàng",
+  COMPLETED: "Trả hàng thành công",
+  SELLER_REJECTED: "Shop từ chối trả hàng",
+  DISPUTED: "Đang khiếu nại lên Sàn",
+  SUPPORT_APPROVED: "Sàn chấp thuận hoàn tiền",
+  SUPPORT_REJECTED: "Sàn bác bỏ khiếu nại"
 };
 
 export const paymentStatusLabel: Record<PaymentStatus, string> = {
@@ -139,10 +154,9 @@ export const paymentStatusLabel: Record<PaymentStatus, string> = {
 
 export const paymentMethodLabel: Record<PaymentMethod, string> = {
   MOCK: "Thanh toán giả lập",
-  BANK_TRANSFER: "Chuyển khoản ngân hàng",
-  MOMO: "Ví MoMo",
-  CREDIT_CARD: "Thẻ tín dụng",
   VNPAY: "VNPay",
+  WALLET: "Ví tiền",
+  COD: "Thanh toán khi nhận hàng (COD)"
 };
 
 export const resolveOrderPaymentMethod = (
@@ -362,7 +376,7 @@ export const createPaymentFromOrders = (
   paymentCode: code,
   userId,
   paymentMethod: method,
-  paymentGateway: method === "MOCK" ? "MOCK_GATEWAY" : method === "VNPAY" ? "VNPAY" : method,
+  paymentGateway: method === "MOCK" ? "MOCK_GATEWAY" : method === "VNPAY" ? "VNPAY" : method === "WALLET" ? "WALLET" : method,
   paymentStatus: "PENDING",
   amount: orders.reduce((sum, order) => sum + order.totalAmount, 0),
   expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
@@ -370,20 +384,65 @@ export const createPaymentFromOrders = (
   createdAt: new Date().toISOString()
 });
 
+export const canContinuePayment = (order: Order) =>
+  order.orderStatus !== "CANCELLED" &&
+  (order.paymentStatus === "PENDING" || order.paymentStatus === "FAILED") &&
+  order.preferredPaymentMethod !== "COD";
+
 export const canCustomerCancel = (order: Order) => order.orderStatus === "PLACED" || order.orderStatus === "READY_TO_SHIP";
 
 export const canSellerCancel = (order: Order) => order.orderStatus === "PLACED" && !order.sellerConfirmed;
 
-export const canCustomerConfirmReceipt = (order: Order) => order.orderStatus === "SHIPPING";
+export const canCustomerConfirmReceipt = (order: Order) => order.orderStatus === "DELIVERED";
+
+export const canCustomerReturn = (order: Order) => order.orderStatus === "DELIVERED" && !order.returnRequest;
+
+export const canCustomerDispute = (order: Order) => order.returnRequest?.returnStatus === "SELLER_REJECTED";
 
 export const canSellerConfirm = (order: Order) => order.orderStatus === "PLACED" && !order.sellerConfirmed;
 
 export const canSellerShip = (order: Order) => order.orderStatus === "READY_TO_SHIP";
 
+export const canSellerDeliver = (order: Order) => order.orderStatus === "SHIPPING";
+
+export const canSellerApproveReturn = (order: Order) => order.returnRequest?.returnStatus === "REQUESTED";
+
+export const canSellerRejectReturn = (order: Order) => order.returnRequest?.returnStatus === "REQUESTED";
+
+export const canSellerConfirmReturn = (order: Order) =>
+  order.returnRequest?.returnStatus === "SELLER_APPROVED" || order.returnRequest?.returnStatus === "RETURNING";
+
 export const statusTone = (status: string) => {
-  if (["ACTIVE", "APPROVED", "PAID", "COMPLETED"].includes(status)) return "success";
-  if (["PENDING", "PLACED", "READY_TO_SHIP", "SHIPPING", "PARTIAL_REFUND_PENDING", "REFUND_PENDING"].includes(status)) return "warning";
-  if (["FAILED", "REJECTED", "SUSPENDED", "LOCKED", "OUT_OF_STOCK", "DELIVERY_FAILED", "CANCELLED"].includes(status)) return "danger";
-  if (["HIDDEN", "CLOSED", "DELETED", "REFUNDED", "PARTIALLY_REFUNDED"].includes(status)) return "neutral";
+  if (["ACTIVE", "APPROVED", "PAID", "COMPLETED", "DELIVERED", "SUPPORT_APPROVED"].includes(status)) return "success";
+  if (
+    [
+      "PENDING",
+      "PLACED",
+      "READY_TO_SHIP",
+      "SHIPPING",
+      "PARTIAL_REFUND_PENDING",
+      "REFUND_PENDING",
+      "REQUESTED",
+      "SELLER_APPROVED",
+      "RETURNING",
+      "DISPUTED"
+    ].includes(status)
+  )
+    return "warning";
+  if (
+    [
+      "FAILED",
+      "REJECTED",
+      "SUSPENDED",
+      "LOCKED",
+      "OUT_OF_STOCK",
+      "DELIVERY_FAILED",
+      "CANCELLED",
+      "SELLER_REJECTED",
+      "SUPPORT_REJECTED"
+    ].includes(status)
+  )
+    return "danger";
+  if (["HIDDEN", "CLOSED", "DELETED", "REFUNDED", "PARTIALLY_REFUNDED", "RETURNED"].includes(status)) return "neutral";
   return "neutral";
 };

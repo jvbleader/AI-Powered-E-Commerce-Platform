@@ -39,6 +39,8 @@ class Settings(BaseSettings):
     VNPAY_API_URL: str = "https://sandbox.vnpayment.vn/merchant_webapi/api/transaction"
     VNPAY_RETURN_URL: str = "http://localhost:8000/payments/vnpay/return?redirect=true"
     VNPAY_IPN_URL: str = "http://localhost:8000/payments/vnpay/ipn"
+    VNPAY_WALLET_RETURN_URL: str = "http://localhost:8000/wallet/topup/vnpay/return?redirect=true"
+    VNPAY_WALLET_IPN_URL: str = "http://localhost:8000/wallet/topup/vnpay/ipn"
     VNPAY_VERSION: str = "2.1.0"
     VNPAY_CURR_CODE: str = "VND"
     VNPAY_LOCALE: str = "vn"
@@ -46,6 +48,9 @@ class Settings(BaseSettings):
     VNPAY_HASH_ALGORITHM: str = "SHA512"
     VNPAY_TIMEOUT_MINUTES: int = 15
     FRONTEND_URL: str = "http://localhost:3000"
+
+    # SMTP (optional)
+    SMTP_USERNAME: Optional[str] = None
 
     @field_validator("COOKIE_SECURE", mode="before")
     @classmethod
