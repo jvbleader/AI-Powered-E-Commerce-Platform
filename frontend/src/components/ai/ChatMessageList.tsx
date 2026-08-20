@@ -2,19 +2,21 @@
 
 import { memo } from "react";
 import { Sparkles } from "lucide-react";
-import { AIChatMessage } from "@/services/aiChatService";
+import { AIChatMessage, AICitationItem } from "@/services/aiChatService";
 import { ChatMessageItem } from "./ChatMessageItem";
 
 function ChatMessageListInner({
   messages,
   isStreaming,
   currentStatus,
-  onRetry
+  onRetry,
+  onOpenCitation,
 }: {
   messages: AIChatMessage[];
   isStreaming?: boolean;
   currentStatus?: string | null;
   onRetry?: () => void;
+  onOpenCitation?: (citation: AICitationItem) => void;
 }) {
   return (
     <div className="space-y-4">
@@ -24,6 +26,7 @@ function ChatMessageListInner({
           message={msg}
           isStreaming={isStreaming && idx === messages.length - 1 && msg.role === "assistant"}
           onRetry={idx === messages.length - 1 ? onRetry : undefined}
+          onOpenCitation={onOpenCitation}
         />
       ))}
 

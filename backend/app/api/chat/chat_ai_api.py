@@ -86,12 +86,17 @@ async def stream_chat_message_endpoint(
         async def generate_and_save():
             full_text = ""
             collected_products: List[Dict[str, Any]] = []
+            collected_citations: List[Dict[str, Any]] = []
+            collected_order_context: Optional[Any] = None
             has_error = False
             error_message = ""
             try:
                 async with AsyncSessionLocal() as stream_db:
                     async for chunk in stream_chat_message(
-                        request.message, history=history_dicts, db=stream_db
+                        request.message,
+                        history=history_dicts,
+                        db=stream_db,
+                        current_user_id=user_id,
                     ):
                         if chunk.startswith("data: "):
                             try:
@@ -102,6 +107,10 @@ async def stream_chat_message_endpoint(
                                     full_text += payload.get("content", "")
                                 elif evt_type == "products":
                                     collected_products = payload.get("items", [])
+                                elif evt_type == "citations":
+                                    collected_citations = payload.get("citations") if "citations" in payload else payload.get("items", [])
+                                elif evt_type == "order_context":
+                                    collected_order_context = payload.get("order") if "order" in payload else payload.get("data")
                                 elif evt_type == "error":
                                     has_error = True
                                     error_message = payload.get("message", "")
@@ -126,8 +135,16 @@ async def stream_chat_message_endpoint(
                         if has_error or not save_text:
                             save_text = "Xin lỗi bạn, đã xảy ra sự cố trong quá trình xử lý phản hồi. Bạn vui lòng nhấn thử lại nhé!"
                             metadata_info = {"is_error": True, "error_detail": error_message}
-                        elif collected_products:
-                            metadata_info = {"products": collected_products}
+                        else:
+                            meta_dict: Dict[str, Any] = {}
+                            if collected_products:
+                                meta_dict["products"] = collected_products
+                            if collected_citations:
+                                meta_dict["citations"] = collected_citations
+                            if collected_order_context is not None:
+                                meta_dict["order_context"] = collected_order_context
+                            if meta_dict:
+                                metadata_info = meta_dict
 
                         async with AsyncSessionLocal() as save_db:
                             await chat_repository.add_chat_message(
@@ -290,7 +307,10 @@ async def chat_with_ai(
 ):
     try:
         history_dicts = request.history if request.history else []
-        response = await send_chat_message(request.message, history_dicts, db=db)
+        user_id = current_user.id if current_user else None
+        response = await send_chat_message(
+            request.message, history_dicts, db=db, current_user_id=user_id
+        )
         return response
     except httpx.HTTPStatusError as e:
         logger.error(f"AI Service API error: {e.response.text}")
@@ -313,7 +333,10 @@ async def stream_chat_with_ai(
     db: AsyncSession = Depends(get_db),
 ):
     history_dicts = request.history if request.history else []
+    user_id = current_user.id if current_user else None
     return StreamingResponse(
-        stream_chat_message(request.message, history_dicts, db=db),
+        stream_chat_message(
+            request.message, history_dicts, db=db, current_user_id=user_id
+        ),
         media_type="text/event-stream",
     )

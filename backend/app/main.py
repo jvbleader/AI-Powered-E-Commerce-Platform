@@ -39,22 +39,34 @@ logging.basicConfig(
 
 from contextlib import asynccontextmanager
 from core.scheduler import start_scheduler, stop_scheduler
-from core.elasticsearch import close_es_client
+from core.elasticsearch import get_es_client, close_es_client
+from search.indices_kb import setup_kb_index
 import services.search.search_service as search_svc
 from services.search.search_helpers import (
     fetch_all_active_products_for_indexing,
     fetch_all_approved_shops_for_indexing,
 )
-from core.database import AsyncSessionLocal
+from core.database import AsyncSessionLocal, engine
+from models.base import Base
+import models
 from services.common.websocket_manager import manager
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     start_scheduler()
+    # Auto-create missing database tables (e.g. knowledge_base_articles)
+    try:
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+    except Exception as e:
+        logging.getLogger(__name__).warning("Database schema check warning: %s", e)
+
     # Initialize Elasticsearch (product listing falls back to MySQL if ES is down at request time)
     try:
         await search_svc.create_products_index()
+        es = get_es_client()
+        await setup_kb_index(es)
         async with AsyncSessionLocal() as db:
             products = await fetch_all_active_products_for_indexing(db)
             await search_svc.bulk_index_products(products)
@@ -108,12 +120,24 @@ from api.search.search_api import router as search_router
 from api.common.upload_api import router as upload_router
 from api.shipping.shipping_api import router as shipping_router
 from api.wallet.wallet_api import router as wallet_router
+from api.admin.knowledge_base_api import router as admin_kb_router
+from api.v1.policy_api import router as policy_router
+
+from fastapi.staticfiles import StaticFiles
+
+UPLOAD_DIR = BACKEND_DIR / "uploads"
+UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=str(UPLOAD_DIR)), name="uploads")
 
 app.include_router(auth_router)
 app.include_router(seller_router)
 app.include_router(seller_product_router)
 app.include_router(seller_order_router)
 app.include_router(admin_router)
+app.include_router(admin_kb_router)
+app.include_router(admin_kb_router, prefix="/api/v1")
+app.include_router(policy_router)
+app.include_router(policy_router, prefix="/api/v1")
 app.include_router(product_router)
 app.include_router(category_router)
 app.include_router(cart_router)

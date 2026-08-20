@@ -2,8 +2,10 @@
 
 import { memo, useMemo } from "react";
 import { Bot, User, AlertTriangle, RotateCcw } from "lucide-react";
-import { AIChatMessage } from "@/services/aiChatService";
+import { AIChatMessage, AICitationItem } from "@/services/aiChatService";
 import { ProductCardInChat } from "./ProductCardInChat";
+import { PolicyCitationBadge } from "./PolicyCitationBadge";
+import { OrderQuickActionCard } from "./OrderQuickActionCard";
 import { cn } from "@/lib/utils";
 import { formatDate } from "@/lib/helpers";
 
@@ -20,21 +22,30 @@ function ChatMessageItemInner({
   message,
   isStreaming,
   onRetry,
+  onOpenCitation,
 }: {
   message: AIChatMessage;
   isStreaming?: boolean;
   onRetry?: () => void;
+  onOpenCitation?: (citation: AICitationItem) => void;
 }) {
   const isAssistant = message.role === "assistant";
   const hasContent = Boolean(message.content && message.content.trim().length > 0);
   const hasProducts = Boolean(message.products && message.products.length > 0);
+  const hasCitations = Boolean(message.citations && message.citations.length > 0);
+  const hasOrderContext = Boolean(message.orderContext);
+
   const html = useMemo(
     () => (isAssistant && hasContent && !message.isError ? formatMarkdown(message.content) : ""),
     [isAssistant, hasContent, message.isError, message.content]
   );
 
   // If assistant response has no text yet (streaming or background pending), show thinking state
-  const shouldRenderTextBubble = hasContent || !isAssistant || !hasProducts || Boolean(message.isError);
+  const shouldRenderTextBubble =
+    hasContent ||
+    !isAssistant ||
+    (!hasProducts && !hasCitations && !hasOrderContext) ||
+    Boolean(message.isError);
 
   return (
     <div className={cn("flex gap-3", message.role === "user" ? "justify-end" : "justify-start")}>
@@ -98,7 +109,21 @@ function ChatMessageItemInner({
             {isStreaming && hasContent && (
               <span className="inline-block w-1.5 h-4 ml-1 align-middle bg-emerald-500 animate-pulse" />
             )}
+
+            {/* Policy Citations Badge List Inside Bubble */}
+            {isAssistant && hasCitations && (
+              <PolicyCitationBadge
+                citations={message.citations!}
+                onSelectCitation={onOpenCitation}
+                className="mt-2.5 pt-2 border-t border-slate-100"
+              />
+            )}
           </div>
+        )}
+
+        {/* Order Quick Action Card */}
+        {isAssistant && hasOrderContext && (
+          <OrderQuickActionCard order={message.orderContext!} />
         )}
 
         {/* Embedded Interactive Product Cards */}

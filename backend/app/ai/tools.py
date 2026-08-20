@@ -29,7 +29,9 @@ from models.seller import SellerProfile
 import repositories.catalog.product_repository as product_repository
 
 
-def get_agent_tools(db: AsyncSession) -> List[Any]:
+def get_agent_tools(
+    db: AsyncSession, current_user_id: Optional[int] = None
+) -> List[Any]:
     """
     Returns a list of LangChain tools bound to the active async database session.
     """
@@ -351,4 +353,170 @@ def get_agent_tools(db: AsyncSession) -> List[Any]:
         except Exception as e:
             return json.dumps({"error": str(e)}, ensure_ascii=False)
 
-    return [search_catalog, get_product_details, check_inventory, recommend_similar_products]
+    @tool
+    async def lookup_policy_and_support(
+        query: str,
+        category: Optional[str] = None,
+    ) -> str:
+        """Tra cứu quy định, chính sách bán hàng, đổi trả, hoàn tiền, bảo hành, phí ship, phương thức thanh toán, khiếu nại của sàn TMĐT Shepoo.
+
+        Bắt buộc gọi công cụ này khi khách hàng hỏi về:
+        - Quy định đổi trả hàng, hoàn tiền, điều kiện trả hàng.
+        - Chính sách bảo hành, thời hạn và quy trình yêu cầu bảo hành.
+        - Chi phí vận chuyển, biểu phí giao hàng, thời gian giao nhận, chính sách freeship.
+        - Phương thức thanh toán hỗ trợ (COD, VNPay, thẻ tín dụng, ví điện tử).
+        - Quy trình giải quyết tranh chấp, khiếu nại đơn hàng hoặc báo cáo vi phạm.
+
+        - `query`: Nội dung câu hỏi hoặc từ khóa cần tra cứu chính sách (ví dụ: 'thời hạn đổi trả hàng', 'điều kiện hoàn tiền', 'phí ship đơn hàng').
+        - `category`: Danh mục chính sách tùy chọn ('RETURN_REFUND', 'WARRANTY', 'SHIPPING', 'PAYMENT', 'DISPUTE', 'GENERAL').
+        """
+        try:
+            from services.knowledge_base.kb_search_service import search_knowledge_base
+
+            res = await search_knowledge_base(
+                query=query,
+                category=category,
+                limit=4,
+            )
+            return json.dumps(res, ensure_ascii=False)
+        except Exception as e:
+            return json.dumps(
+                {"chunks": [], "citations": [], "error": str(e)},
+                ensure_ascii=False,
+            )
+
+    @tool
+    async def get_user_order_context(
+        order_code: Optional[str] = None,
+    ) -> str:
+        """Tra cứu thông tin đơn hàng của khách hàng hiện tại trên sàn TMĐT Shepoo để kiểm tra trạng thái đơn, chi tiết sản phẩm và điều kiện đổi trả.
+
+        Sử dụng khi khách hàng hỏi về:
+        - Tiến độ xử lý, trạng thái hoặc thời gian giao nhận của đơn hàng.
+        - Danh sách các đơn hàng gần đây của khách hàng.
+        - Kiểm tra xem đơn hàng đã giao có còn trong thời hạn 7 ngày đổi trả hay không.
+        - Xử lý các khiếu nại, sự cố liên quan đến đơn hàng đã đặt.
+
+        - `order_code`: Mã đơn hàng cần tra cứu (ví dụ: 'ORD123456', UUID public_id hoặc ID số). Nếu không cung cấp, công cụ sẽ lấy 3 đơn hàng gần đây nhất của khách hàng.
+        """
+        if current_user_id is None:
+            return json.dumps(
+                {
+                    "error": "user_not_logged_in",
+                    "message": "Khách hàng chưa đăng nhập. Vui lòng hướng dẫn khách hàng đăng nhập tài khoản để tra cứu chi tiết đơn hàng.",
+                },
+                ensure_ascii=False,
+            )
+
+        try:
+            from datetime import datetime, timezone
+            from models.order import Order
+
+            filters = [Order.user_id == current_user_id]
+            if hasattr(Order, "status"):
+                filters.append(getattr(Order, "status") != "DELETED")
+            elif hasattr(Order, "order_status"):
+                filters.append(getattr(Order, "order_status") != "DELETED")
+
+            if order_code and str(order_code).strip():
+                code_str = str(order_code).strip()
+                code_filters = [
+                    Order.order_code == code_str,
+                    Order.public_id == code_str,
+                ]
+                if code_str.isdigit():
+                    code_filters.append(Order.id == int(code_str))
+                filters.append(or_(*code_filters))
+                stmt = (
+                    select(Order)
+                    .options(
+                        selectinload(Order.items),
+                        selectinload(Order.return_request),
+                    )
+                    .where(*filters)
+                )
+            else:
+                stmt = (
+                    select(Order)
+                    .options(
+                        selectinload(Order.items),
+                        selectinload(Order.return_request),
+                    )
+                    .where(*filters)
+                    .order_by(desc(Order.created_at))
+                    .limit(3)
+                )
+
+            res = await db.execute(stmt)
+            orders = list(res.scalars().unique().all())
+
+            now = datetime.now(timezone.utc)
+            orders_data = []
+            for o in orders:
+                days_since_delivery: Optional[int] = None
+                if o.delivered_at:
+                    deliv = o.delivered_at
+                    if deliv.tzinfo is None:
+                        deliv = deliv.replace(tzinfo=timezone.utc)
+                    diff = now - deliv
+                    days_since_delivery = max(0, diff.days)
+
+                status_val = getattr(o, "order_status", None) or getattr(o, "status", "")
+
+                ret_req = getattr(o, "return_request", None)
+                has_return_request = ret_req is not None
+                return_status = getattr(ret_req, "return_status", None) if ret_req else None
+                return_code = getattr(ret_req, "return_code", None) if ret_req else None
+
+                # An order is only eligible for a NEW return request if:
+                # 1. Status is DELIVERED
+                # 2. Delivered within 7 days
+                # 3. No existing return request was already created
+                # 4. Status is not already RETURNED
+                is_returnable = bool(
+                    status_val == "DELIVERED"
+                    and days_since_delivery is not None
+                    and days_since_delivery <= 7
+                    and not has_return_request
+                    and status_val != "RETURNED"
+                )
+
+                items_data = []
+                for item in (o.items or []):
+                    items_data.append(
+                        {
+                            "item_name": getattr(item, "product_name_snapshot", "") or getattr(item, "name", ""),
+                            "variant_name": getattr(item, "variant_name_snapshot", ""),
+                            "quantity": getattr(item, "quantity", 1),
+                            "unit_price": float(getattr(item, "unit_price", 0.0) or 0.0),
+                        }
+                    )
+
+                orders_data.append(
+                    {
+                        "order_code": o.order_code or o.public_id or str(o.id),
+                        "status": status_val,
+                        "total_amount": float(o.total_amount) if o.total_amount is not None else 0.0,
+                        "created_at": o.created_at.isoformat() if o.created_at else None,
+                        "delivered_at": o.delivered_at.isoformat() if o.delivered_at else None,
+                        "days_since_delivery": days_since_delivery,
+                        "is_returnable": is_returnable,
+                        "has_return_request": has_return_request,
+                        "return_status": return_status,
+                        "return_code": return_code,
+                        "items": items_data,
+                    }
+                )
+
+            return json.dumps({"orders": orders_data}, ensure_ascii=False)
+        except Exception as e:
+            return json.dumps({"error": str(e), "orders": []}, ensure_ascii=False)
+
+    return [
+        search_catalog,
+        get_product_details,
+        check_inventory,
+        recommend_similar_products,
+        lookup_policy_and_support,
+        get_user_order_context,
+    ]

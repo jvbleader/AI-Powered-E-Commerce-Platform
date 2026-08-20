@@ -6,6 +6,8 @@ import { STORAGE_KEYS } from "@/constants/storage-keys";
 import {
   AIChatMessage,
   AIProductItem,
+  AICitationItem,
+  AIOrderContext,
   AIChatSessionSummary,
   getOrCreateSessionId,
   fetchChatHistory,
@@ -18,19 +20,7 @@ import {
 
 export function useAIChatStream() {
   const sessionUserId = useMarketplaceStore((s) => s.state.sessionUserId);
-  const [sessionId, setSessionId] = useState<string>(() => {
-    if (typeof window !== "undefined") {
-      const activeKey = sessionUserId
-        ? `${STORAGE_KEYS.AI_SESSION}_${sessionUserId}`
-        : STORAGE_KEYS.AI_SESSION;
-      return (
-        sessionStorage.getItem("chat_active_ai_session_id") ||
-        localStorage.getItem(activeKey) ||
-        ""
-      );
-    }
-    return "";
-  });
+  const [sessionId, setSessionId] = useState<string>("");
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -62,8 +52,6 @@ export function useAIChatStream() {
   const messagesRef = useRef<AIChatMessage[]>(messages);
   messagesRef.current = messages;
 
-  const hasAutoSelectedInitialSession = useRef(false);
-
   const loadSessions = useCallback(async (silent = false) => {
     if (!sessionUserId) {
       if (!silent) setIsLoadingSessions(false);
@@ -85,22 +73,10 @@ export function useAIChatStream() {
     }
   }, [sessionUserId]);
 
-  // Initial load of sessions (only auto-select most recent on initial mount)
+  // Initial load of sessions list for sidebar
   useEffect(() => {
     if (!sessionUserId) return;
-    loadSessions().then((sessions) => {
-      if (!hasAutoSelectedInitialSession.current && sessions && sessions.length > 0) {
-        hasAutoSelectedInitialSession.current = true;
-        setSessionId((prev) => {
-          if (!prev) {
-            const firstId = sessions[0].sessionId;
-            if (sessionUserId) setSessionIdLocal(sessionUserId, firstId);
-            return firstId;
-          }
-          return prev;
-        });
-      }
-    });
+    loadSessions();
   }, [loadSessions, sessionUserId]);
 
   const isInternalSessionChange = useRef(false);
@@ -332,6 +308,22 @@ export function useAIChatStream() {
           setMessages((prev) =>
             prev.map((msg) =>
               msg.id === assistantMsgId ? { ...msg, products } : msg
+            )
+          );
+        },
+        onCitations: (citations: AICitationItem[]) => {
+          flushChunks();
+          setMessages((prev) =>
+            prev.map((msg) =>
+              msg.id === assistantMsgId ? { ...msg, citations } : msg
+            )
+          );
+        },
+        onOrderContext: (order: AIOrderContext) => {
+          flushChunks();
+          setMessages((prev) =>
+            prev.map((msg) =>
+              msg.id === assistantMsgId ? { ...msg, orderContext: order } : msg
             )
           );
         },

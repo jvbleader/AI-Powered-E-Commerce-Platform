@@ -20,6 +20,8 @@ import { SellerSessionSidebar } from "./SellerSessionSidebar";
 import { SellerMessageList } from "./SellerMessageList";
 import { AiComposerInput } from "./AiComposerInput";
 import { SellerComposerInput } from "./SellerComposerInput";
+import { PolicyArticleModal } from "./PolicyArticleModal";
+import type { AICitationItem } from "@/services/aiChatService";
 import type { SellerSessionSummary } from "@/types/chat";
 
 type PendingShopInfo = {
@@ -50,6 +52,7 @@ export function ChatWidget() {
   const [deferCreate, setDeferCreate] = useState(false);
   const [pendingShopInfo, setPendingShopInfo] = useState<PendingShopInfo | null>(null);
   const [showScrollDown, setShowScrollDown] = useState(false);
+  const [selectedCitation, setSelectedCitation] = useState<AICitationItem | null>(null);
 
   // AI Chat
   const {
@@ -323,6 +326,10 @@ export function ChatWidget() {
           shopInfo: detail.shopInfo,
           fromProductPage: Boolean(detail?.fromProductPage),
         });
+      } else {
+        setActiveTab('AI');
+        setActiveShopId(null);
+        clearAiChat();
       }
       if (detail?.productDraft) {
         setProductDraft(detail.productDraft);
@@ -514,12 +521,18 @@ export function ChatWidget() {
 
   const handleTabChange = useCallback((tab: "AI" | "SELLER") => {
     setActiveTab(tab);
-  }, []);
+    if (tab === "AI") {
+      setActiveShopId(null);
+      clearAiChat();
+      scrollToLatestRef.current(true);
+    }
+  }, [clearAiChat]);
 
   const handleSelectAi = useCallback(() => {
     setActiveShopId(null);
+    clearAiChat();
     scrollToLatestRef.current(true);
-  }, []);
+  }, [clearAiChat]);
 
   const handleSelectAiSession = useCallback((sessionId: string) => {
     setActiveShopId(null);
@@ -537,7 +550,13 @@ export function ChatWidget() {
     await deleteAiSession(sessionId);
   }, [deleteAiSession]);
 
-  const handleOpenWidget = () => setIsOpen(true);
+  const handleOpenWidget = () => {
+    setIsOpen(true);
+    setActiveTab("AI");
+    setActiveShopId(null);
+    clearAiChat();
+    scrollToLatestRef.current(true);
+  };
 
   const handleCloseWidget = () => {
     if (activeShopId && deferCreate) {
@@ -692,6 +711,7 @@ export function ChatWidget() {
                       isStreaming={isStreaming}
                       currentStatus={currentStatus}
                       onRetry={retryAiMessage}
+                      onOpenCitation={setSelectedCitation}
                     />
                     <div ref={messagesEndRef} className="h-px shrink-0" aria-hidden />
                   </ChatScrollArea>
@@ -913,6 +933,13 @@ export function ChatWidget() {
           </div>
         </div>
       )}
+
+      {/* Policy Article Full View / Excerpt Modal */}
+      <PolicyArticleModal
+        citation={selectedCitation}
+        isOpen={Boolean(selectedCitation)}
+        onClose={() => setSelectedCitation(null)}
+      />
     </>
   );
 }

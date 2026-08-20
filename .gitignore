@@ -52,10 +52,7 @@ redis_data/
 
 *.demo.*
 
-/docs/other
-/docs/project_document
-/docs/artifacts
-/docs/superpowers
+docs
 
 # Understand Anything
 .ua/

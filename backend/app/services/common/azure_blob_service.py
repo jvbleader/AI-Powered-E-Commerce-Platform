@@ -3,7 +3,10 @@ import mimetypes
 from fastapi import UploadFile, HTTPException
 from azure.storage.blob.aio import BlobServiceClient
 from azure.core.exceptions import ResourceExistsError, ResourceNotFoundError
-from app.core.config import settings
+try:
+    from core.config import settings
+except ImportError:
+    from app.core.config import settings
 import logging
 
 logger = logging.getLogger(__name__)
@@ -141,6 +144,43 @@ class AzureBlobService:
         except Exception as e:
             logger.error(f"Failed to upload document to Azure: {e}")
             raise HTTPException(status_code=500, detail="Failed to upload file.")
+
+    async def upload_bytes(
+        self,
+        content: bytes,
+        blob_name: str,
+        content_type: str = "application/pdf",
+    ) -> str:
+        """Uploads raw bytes to Azure Blob Storage and returns the public blob URL."""
+        container_client = await self.get_container_client()
+        blob_client = container_client.get_blob_client(blob_name)
+        try:
+            from azure.storage.blob import ContentSettings
+
+            content_settings = ContentSettings(
+                content_type=content_type,
+                content_disposition="inline",
+            )
+            await blob_client.upload_blob(content, overwrite=True, content_settings=content_settings)
+            return blob_client.url
+        except Exception as e:
+            logger.error(f"Failed to upload bytes to Azure: {e}")
+            raise HTTPException(status_code=500, detail="Failed to upload file to Azure.")
+
+    async def delete_blob_by_url(self, blob_url: str) -> bool:
+        """Deletes a blob by its public URL."""
+        try:
+            if not hasattr(self, "blob_service_client"):
+                return False
+            container_client = await self.get_container_client()
+            if self.container_name in blob_url:
+                blob_name = blob_url.split(f"{self.container_name}/")[-1]
+                blob_client = container_client.get_blob_client(blob_name)
+                await blob_client.delete_blob()
+                return True
+        except Exception as e:
+            logger.warning(f"Failed to delete blob from Azure: {e}")
+        return False
 
 
 azure_blob_service = AzureBlobService()

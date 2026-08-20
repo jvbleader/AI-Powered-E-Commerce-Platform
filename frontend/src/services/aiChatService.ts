@@ -17,6 +17,43 @@ export interface AIProductItem {
   primary_variant_id?: string;
 }
 
+export interface AICitationItem {
+  article_id: string;
+  article_public_id?: string;
+  title: string;
+  section_title?: string;
+  slug?: string;
+  category?: string;
+  page_number?: number;
+  file_url?: string;
+  excerpt?: string;
+}
+
+export interface AIOrderItem {
+  item_id?: number | string;
+  item_name?: string;
+  product_name?: string;
+  variant_name?: string;
+  quantity?: number;
+  unit_price?: number;
+}
+
+export interface AIOrderContext {
+  order_code: string;
+  public_id?: string;
+  status: string;
+  total_amount?: number;
+  created_at?: string;
+  delivered_at?: string;
+  days_since_delivery?: number | null;
+  is_returnable?: boolean;
+  has_return_request?: boolean;
+  return_status?: string | null;
+  return_code?: string | null;
+  items?: AIOrderItem[];
+  items_summary?: string;
+}
+
 export interface AIChatMessage {
   id?: string;
   role: "user" | "assistant" | "system";
@@ -26,9 +63,13 @@ export interface AIChatMessage {
     tools_called?: string[];
     is_error?: boolean;
     error_detail?: string;
+    citations?: AICitationItem[];
+    order_context?: AIOrderContext | AIOrderContext[];
   };
   isError?: boolean;
   products?: AIProductItem[];
+  citations?: AICitationItem[];
+  orderContext?: AIOrderContext;
   createdAt?: string;
 }
 
@@ -43,6 +84,8 @@ export type SSEEventPayload =
   | { type: "status"; content: string }
   | { type: "text"; content: string }
   | { type: "products"; items: AIProductItem[] }
+  | { type: "citations"; citations: AICitationItem[] }
+  | { type: "order_context"; order: AIOrderContext | AIOrderContext[] }
   | { type: "end" }
   | { type: "error"; message: string };
 
@@ -115,18 +158,32 @@ export async function fetchChatHistory(sessionId: string): Promise<AIChatMessage
       `/ai/chat/history?session_id=${encodeURIComponent(sessionId)}`
     );
     const rawMessages = data?.messages ?? [];
-    return rawMessages.map((m: any) => ({
-      id: String(m.id || ""),
-      role: m.role,
-      content: m.content,
-      createdAt: m.createdAt || m.created_at,
-      metadata: m.metadata || m.metadata_info,
-      isError: Boolean((m.metadata && m.metadata.is_error) || (m.metadata_info && m.metadata_info.is_error)),
-      products:
-        m.products && m.products.length > 0
-          ? m.products
-          : (m.metadata as any)?.products || (m.metadata_info as any)?.products || []
-    }));
+    return rawMessages.map((m: any) => {
+      const meta = m.metadata || m.metadata_info || {};
+      const rawOrder = m.orderContext || m.order_context || meta.order_context || meta.orderContext;
+      const orderContext = Array.isArray(rawOrder) ? rawOrder[0] : rawOrder;
+      const citations =
+        m.citations && m.citations.length > 0
+          ? m.citations
+          : meta.citations && meta.citations.length > 0
+          ? meta.citations
+          : undefined;
+
+      return {
+        id: String(m.id || ""),
+        role: m.role,
+        content: m.content,
+        createdAt: m.createdAt || m.created_at,
+        metadata: meta,
+        isError: Boolean(meta.is_error),
+        products:
+          m.products && m.products.length > 0
+            ? m.products
+            : meta.products || [],
+        citations: citations,
+        orderContext: orderContext || undefined,
+      };
+    });
   } catch (err: unknown) {
     if (err instanceof ApiError && err.status === 404) {
       return [];
@@ -151,8 +208,6 @@ export async function deleteChatSession(sessionId: string): Promise<boolean> {
   }
 }
 
-
-
 /**
  * Stream chat message via SSE.
  * Endpoint: POST /ai/chat/message
@@ -165,10 +220,24 @@ export async function sendStreamChatMessage(params: {
   onStatus?: (status: string) => void;
   onTextChunk?: (chunk: string) => void;
   onProducts?: (products: AIProductItem[]) => void;
+  onCitations?: (citations: AICitationItem[]) => void;
+  onOrderContext?: (order: AIOrderContext) => void;
   onError?: (err: Error) => void;
   onEnd?: () => void;
 }): Promise<void> {
-  const { message, sessionId, history, signal, onStatus, onTextChunk, onProducts, onError, onEnd } = params;
+  const {
+    message,
+    sessionId,
+    history,
+    signal,
+    onStatus,
+    onTextChunk,
+    onProducts,
+    onCitations,
+    onOrderContext,
+    onError,
+    onEnd,
+  } = params;
 
   try {
     const response = await fetch(`${getApiBaseUrl()}/ai/chat/message`, {
@@ -180,7 +249,6 @@ export async function sendStreamChatMessage(params: {
       body: JSON.stringify({ message, session_id: sessionId, history }),
       signal
     });
-
 
     if (!response.ok) {
       throw new Error(`API error: ${response.status} ${response.statusText}`);
@@ -220,6 +288,14 @@ export async function sendStreamChatMessage(params: {
             onTextChunk?.(payload.content);
           } else if (payload.type === "products") {
             onProducts?.(payload.items);
+          } else if (payload.type === "citations") {
+            onCitations?.(payload.citations);
+          } else if (payload.type === "order_context") {
+            const rawOrder = payload.order;
+            const orderData = Array.isArray(rawOrder) ? rawOrder[0] : rawOrder;
+            if (orderData) {
+              onOrderContext?.(orderData);
+            }
           } else if (payload.type === "end") {
             onEnd?.();
             return;
