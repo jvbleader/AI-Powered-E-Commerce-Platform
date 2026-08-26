@@ -24,7 +24,6 @@ if TYPE_CHECKING:
     from models.moderation import ViolationReport
     from models.order import Order, OrderCancellation
     from models.payment import Payment
-    from models.promotion import CouponUsage
     from models.seller import SellerProfile
     from models.wallet import Wallet
     from .user_address import UserAddress
@@ -116,7 +115,6 @@ class User(Base):
     )
     orders: Mapped[list["Order"]] = relationship(back_populates="user")
     payments: Mapped[list["Payment"]] = relationship(back_populates="user")
-    coupon_usages: Mapped[list["CouponUsage"]] = relationship(back_populates="user")
     product_reviews: Mapped[list["ProductReview"]] = relationship(back_populates="user")
     violation_reports: Mapped[list["ViolationReport"]] = relationship(
         back_populates="reporter",

@@ -118,7 +118,9 @@ async def resolve_category_slug(
     return None
 
 
-def _format_product_item(p: Any) -> Dict[str, Any]:
+def _format_product_item(
+    p: Any, min_price: Optional[float] = None, max_price: Optional[float] = None
+) -> Dict[str, Any]:
     """
     Extracts unified product metadata required by both LLM context and frontend cards.
     """
@@ -173,12 +175,20 @@ def _format_product_item(p: Any) -> Dict[str, Any]:
         else str(getattr(p, "public_id", getattr(p, "id", "")))
     )
 
+    effective_price = min_sale_p if min_sale_p is not None else min_p
+    is_within_budget = True
+    if max_price is not None and effective_price > max_price:
+        is_within_budget = False
+    if min_price is not None and effective_price < min_price:
+        is_within_budget = False
+
     return {
         "id": getattr(p, "public_id", str(getattr(p, "id", ""))),
         "db_id": getattr(p, "id", None),
         "name": getattr(p, "name", ""),
         "price": min_p,
         "sale_price": min_sale_p,
+        "is_within_budget": is_within_budget,
         "stock": total_stock,
         "average_rating": float(getattr(p, "average_rating", 0) or 0),
         "review_count": getattr(p, "review_count", 0) or 0,
@@ -230,7 +240,7 @@ async def execute_multi_tier_catalog_search(
             return {
                 "match_type": "exact",
                 "search_summary": f"Tìm thấy {len(listing.items)} sản phẩm phù hợp chính xác.",
-                "items": [_format_product_item(p) for p in listing.items],
+                "items": [_format_product_item(p, min_price=min_price, max_price=max_price) for p in listing.items],
             }
     except Exception as err:
         logger.warning(f"Error during Tier 1 exact catalog search: {err}")
@@ -256,7 +266,7 @@ async def execute_multi_tier_catalog_search(
                 return {
                     "match_type": "relaxed",
                     "search_summary": "Không có sản phẩm chính xác trong khoảng giá yêu cầu. Đã nới lỏng mức giá để tìm sản phẩm phù hợp nhất.",
-                    "items": [_format_product_item(p) for p in listing.items],
+                    "items": [_format_product_item(p, min_price=min_price, max_price=max_price) for p in listing.items],
                 }
         except Exception as err:
             logger.warning(f"Error during Tier 2a price relaxation: {err}")
@@ -276,7 +286,7 @@ async def execute_multi_tier_catalog_search(
                 return {
                     "match_type": "relaxed",
                     "search_summary": f"Không tìm thấy sản phẩm chính xác cho '{clean_query}'. Đã gợi ý các sản phẩm hàng đầu trong danh mục liên quan.",
-                    "items": [_format_product_item(p) for p in listing.items],
+                    "items": [_format_product_item(p, min_price=min_price, max_price=max_price) for p in listing.items],
                 }
         except Exception as err:
             logger.warning(f"Error during Tier 2b keyword relaxation: {err}")
@@ -292,10 +302,15 @@ async def execute_multi_tier_catalog_search(
                     db, keywords=tokens[:3], limit=limit, page=1
                 )
                 if suggestions and suggestions.items:
+                    formatted = [_format_product_item(p, min_price=min_price, max_price=max_price) for p in suggestions.items]
+                    has_within_budget = any(it.get("is_within_budget", True) for it in formatted)
+                    summary = "Gợi ý các sản phẩm có đặc tính hoặc phong cách tương tự."
+                    if max_price is not None and not has_within_budget:
+                        summary = f"Chưa có sản phẩm đúng tầm giá dưới {max_price:,.0f}đ. Dưới đây là các gợi ý phong cách tương tự để tham khảo."
                     return {
                         "match_type": "semantic",
-                        "search_summary": "Gợi ý các sản phẩm có đặc tính hoặc phong cách tương tự.",
-                        "items": [_format_product_item(p) for p in suggestions.items],
+                        "search_summary": summary,
+                        "items": formatted,
                     }
         except Exception as err:
             logger.warning(f"Error during Tier 3 semantic suggestions: {err}")
@@ -305,10 +320,15 @@ async def execute_multi_tier_catalog_search(
     # ----------------------------------------------------
     try:
         all_recs = await product_repository.get_recommended_products(db, limit=limit)
+        formatted = [_format_product_item(p, min_price=min_price, max_price=max_price) for p in all_recs[:limit]]
+        has_within_budget = any(it.get("is_within_budget", True) for it in formatted)
+        summary = "Hiện chưa có sản phẩm khớp trực tiếp với yêu cầu trên sàn. Dưới đây là các sản phẩm nổi bật được yêu thích nhất."
+        if max_price is not None and not has_within_budget:
+            summary = f"Không có sản phẩm trong mức giá dưới {max_price:,.0f}đ. Dưới đây là các sản phẩm nổi bật để tham khảo."
         return {
             "match_type": "category_popular" if category_slug else "none",
-            "search_summary": "Hiện chưa có sản phẩm khớp trực tiếp với yêu cầu trên sàn. Dưới đây là các sản phẩm nổi bật được yêu thích nhất.",
-            "items": [_format_product_item(p) for p in all_recs[:limit]],
+            "search_summary": summary,
+            "items": formatted,
         }
     except Exception as err:
         logger.error(f"Error during Tier 4 fallback recommendations: {err}")

@@ -29,6 +29,11 @@ async def get_or_create_session(
     session: ChatSession | None = None
     if session_id:
         session = await get_session_by_id(session_id, db)
+        if session:
+            if session.user_id is not None and user_id is not None and session.user_id != user_id:
+                raise PermissionError("Access denied: session belongs to another user")
+            if session.user_id is not None and user_id is None:
+                raise PermissionError("Access denied: session belongs to a registered user")
 
     if session is None and session_token:
         result = await db.execute(
@@ -38,6 +43,11 @@ async def get_or_create_session(
             .order_by(ChatSession.created_at.desc())
         )
         session = result.scalars().first()
+        if session:
+            if session.user_id is not None and user_id is not None and session.user_id != user_id:
+                raise PermissionError("Access denied: session belongs to another user")
+            if session.user_id is not None and user_id is None:
+                raise PermissionError("Access denied: session belongs to a registered user")
 
     if session is None and user_id is not None and not session_id and not session_token:
         user_sessions = await list_user_sessions(user_id=user_id, limit=1, db=db)

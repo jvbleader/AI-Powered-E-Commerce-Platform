@@ -13,7 +13,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from models.knowledge_base.knowledge_base_article import KnowledgeBaseArticle
 from repositories.knowledge_base import kb_repository
 from schemas.knowledge_base.kb_schema import ArticleCreateRequest, ArticleUpdateRequest
-from services.knowledge_base.chunking_service import chunk_pdf_document, extract_pdf_pages
+from services.knowledge_base.chunking_service import (
+    chunk_pdf_document,
+    extract_pdf_pages,
+    parse_pages_from_extracted_text,
+)
 from services.knowledge_base.kb_indexing_service import (
     delete_article_chunks,
     index_article_chunks,
@@ -104,15 +108,15 @@ async def process_and_create_pdf_document(
     clean_slug = generate_slug(raw_slug)
     unique_slug = await ensure_unique_slug(db, clean_slug)
 
-    # 1. Save file to storage (Azure Blob if available, else local disk)
-    saved_name, file_url, file_size = await save_pdf_to_storage(file_bytes, file_name, unique_slug)
-
-    # 2. Extract PDF text per page
+    # 1. Extract PDF text per page (validates readability before storage)
     pages = extract_pdf_pages(file_bytes)
     page_count = max(1, len(pages))
     extracted_text = "\n\n".join(
         [f"[Trang {p['page_number']}]\n{p['text']}" for p in pages if p.get("text")]
     )
+
+    # 2. Save file to storage (Azure Blob if available, else local disk)
+    saved_name, file_url, file_size = await save_pdf_to_storage(file_bytes, file_name, unique_slug)
 
     # 3. Save to database
     article = await kb_repository.create_article(
@@ -183,7 +187,10 @@ async def create_article(
 
     if article.is_published:
         try:
-            pages = [{"page_number": 1, "text": article.extracted_text or article.summary or article.title}]
+            pages = parse_pages_from_extracted_text(article.extracted_text)
+            if not pages:
+                pages = [{"page_number": 1, "text": article.summary or article.title}]
+
             chunks = chunk_pdf_document(
                 article_id=article.id,
                 article_public_id=article.public_id,
@@ -257,7 +264,10 @@ async def update_article(
     try:
         await delete_article_chunks(updated_article.id, es=es)
         if updated_article.is_published:
-            pages = [{"page_number": 1, "text": updated_article.extracted_text or updated_article.summary or updated_article.title}]
+            pages = parse_pages_from_extracted_text(updated_article.extracted_text)
+            if not pages:
+                pages = [{"page_number": 1, "text": updated_article.summary or updated_article.title}]
+
             chunks = chunk_pdf_document(
                 article_id=updated_article.id,
                 article_public_id=updated_article.public_id,

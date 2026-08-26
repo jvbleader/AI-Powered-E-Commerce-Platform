@@ -1,7 +1,9 @@
+import { Suspense } from "react";
 import type { Metadata } from "next";
 import "@/styles/globals.css";
 import { MarketplaceStoreProvider } from "@/store/use-marketplace-store";
 import { GlobalToast } from "@/components/global-toast";
+import { PageviewTracker } from "@/components/analytics/pageview-tracker";
 
 export const metadata: Metadata = {
   title: { default: "Shepoo Marketplace", template: "%s | Shepoo" },
@@ -51,6 +53,9 @@ export default function RootLayout({
       </head>
       <body>
         <MarketplaceStoreProvider>
+          <Suspense fallback={null}>
+            <PageviewTracker />
+          </Suspense>
           {children}
           <GlobalToast />
         </MarketplaceStoreProvider>

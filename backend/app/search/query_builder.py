@@ -22,16 +22,31 @@ class QueryBuilder:
         self._knn = None
 
     def add_knn(
-        self, field: str, query_vector: list[float], k: int = 100, num_candidates: int = 100, boost: float = 1.0
+        self,
+        field: str,
+        query_vector: list[float],
+        k: int = 100,
+        num_candidates: int = 100,
+        boost: float = 1.0,
+        filter_dsl: dict | list | None = None,
     ) -> "QueryBuilder":
         if query_vector:
-            self._knn = {
+            knn_dict: dict[str, Any] = {
                 "field": field,
                 "query_vector": query_vector,
                 "k": k,
                 "num_candidates": num_candidates,
                 "boost": boost,
             }
+            if filter_dsl:
+                if isinstance(filter_dsl, list):
+                    if len(filter_dsl) == 1:
+                        knn_dict["filter"] = filter_dsl[0]
+                    elif len(filter_dsl) > 1:
+                        knn_dict["filter"] = {"bool": {"filter": filter_dsl}}
+                elif isinstance(filter_dsl, dict):
+                    knn_dict["filter"] = filter_dsl
+            self._knn = knn_dict
         return self
 
     def add_multi_match(

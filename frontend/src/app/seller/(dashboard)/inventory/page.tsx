@@ -104,16 +104,29 @@ function InventoryContent() {
   const shop = store.getCurrentShop();
   const searchParams = useSearchParams();
   const productIdParam = searchParams.get("product_id");
+  const filterParam = searchParams.get("filter") || searchParams.get("stock");
 
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedProductId, setSelectedProductId] = useState<string>(productIdParam || "ALL");
-  const [stockFilter, setStockFilter] = useState<"ALL" | "LOW" | "OUT">("ALL");
+  const [stockFilter, setStockFilter] = useState<"ALL" | "LOW" | "OUT">(() => {
+    if (filterParam === "LOW" || filterParam === "low_stock") return "LOW";
+    if (filterParam === "OUT" || filterParam === "out_of_stock") return "OUT";
+    return "ALL";
+  });
 
   useEffect(() => {
     if (productIdParam) {
       setSelectedProductId(productIdParam);
     }
   }, [productIdParam]);
+
+  useEffect(() => {
+    if (filterParam === "LOW" || filterParam === "low_stock") {
+      setStockFilter("LOW");
+    } else if (filterParam === "OUT" || filterParam === "out_of_stock") {
+      setStockFilter("OUT");
+    }
+  }, [filterParam]);
 
   useEffect(() => {
     if (shop) {

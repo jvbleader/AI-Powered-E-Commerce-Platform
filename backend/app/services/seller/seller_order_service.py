@@ -541,6 +541,8 @@ async def confirm_received_return(
         order=order,
         db=db,
     )
+    from services.platform.platform_finance_service import record_order_refund
+    await record_order_refund(db, order, order.total_amount, "Shop xác nhận nhận hàng hoàn")
 
     # Restock inventory
     for item in order.items:

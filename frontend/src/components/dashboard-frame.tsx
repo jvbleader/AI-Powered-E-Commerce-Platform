@@ -5,7 +5,6 @@ import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   Box,
-  ChartNoAxesCombined,
   LayoutDashboard,
   LogOut,
   Package,
@@ -20,7 +19,9 @@ import {
   ClipboardCheck,
   Bot,
   UserPlus,
-  Scale
+  Scale,
+  Wallet,
+  Landmark
 } from "lucide-react";
 import { ChevronLeft, ChevronRight, Menu } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -88,19 +89,18 @@ export function DashboardFrame({
           ["/seller/products", "Sản phẩm", Package],
           ["/seller/inventory", "Tồn kho", Box],
           ["/seller/orders", "Đơn hàng", ShoppingBag],
+          ["/seller/finance", "Tài chính", Wallet],
           ["/seller/chat", "Tin nhắn", MessageSquare],
-          ["/seller/revenue", "Doanh thu", ChartNoAxesCombined],
           ["/seller/category-suggestions", "Đề xuất category", TicketPercent]
         ]
       : kind === "admin"
         ? [
             ["/admin", "Tổng quan", LayoutDashboard],
+            ["/admin/finance", "Tài chính sàn", Landmark],
             ["/admin/users", "Người dùng", Users],
             ["/admin/sellers", "Người bán", Store],
             ["/admin/categories", "Danh mục", PanelLeft],
             ["/admin/products", "Sản phẩm", Package],
-            ["/admin/statistics", "Thống kê", ChartNoAxesCombined],
-            ["/admin/disputes", "Khiếu nại hoàn hàng", Scale],
             ["/admin/violation-reports", "Báo cáo vi phạm", ShieldCheck],
             ["/admin/ai/knowledge", "Tri thức AI", Bot],
             ["/admin/role-management", "Tạo tài khoản", UserPlus]
@@ -108,7 +108,7 @@ export function DashboardFrame({
         : [
             ["/supporter", "Dashboard", LayoutDashboard],
             ["/supporter/conversations", "Conversations", MessageSquare],
-            ["/admin/disputes", "Khiếu nại hoàn hàng", Scale]
+            ["/supporter/disputes", "Khiếu nại hoàn hàng", Scale]
           ];
 
   const homeHref = roleHomePath(kind.toUpperCase() as any);

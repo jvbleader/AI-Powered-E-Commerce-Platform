@@ -118,3 +118,20 @@ async def unhide_seller_product(
     unhidden_product = await unhide_product(db, product)
     return ProductResponse.model_validate(unhidden_product)
 
+
+async def get_seller_product_detail(
+    user: User, product_id: str, db: AsyncSession
+) -> ProductResponse:
+    seller_profile = await _get_active_seller_profile(user, db)
+
+    product = await get_product_by_public_id_and_seller(
+        db, product_id, seller_profile.id
+    )
+    if not product:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Product not found"
+        )
+
+    return ProductResponse.model_validate(product)
+
+

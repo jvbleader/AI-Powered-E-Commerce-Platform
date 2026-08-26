@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 import re
@@ -30,16 +31,18 @@ NGUYÊN TẮC TƯ DUY & TƯ VẤN BẮT BUỘC:
    - Khi người dùng hỏi bằng mục đích, vấn đề, thời tiết/mùa, sự kiện hoặc hoàn cảnh sử dụng (ví dụ: 'chuẩn bị đi cắm trại', 'hay bị đau lưng khi làm việc', 'đồ mặc mùa đông', 'nấu lẩu tại nhà', 'quà tặng cho bé'):
    - Luôn tự suy luận: "Những loại sản phẩm/vật dụng vật lý cụ thể nào trên sàn TMĐT giải quyết tốt nhất bài toán này?"
    - Sử dụng tên các loại hàng hóa/mặt hàng cụ thể đó để làm từ khóa khi gọi `search_catalog`.
-2. Tự đánh giá & Tìm kiếm linh hoạt (Self-Reflection):
+2. Tự đánh giá & Tìm kiếm linh hoạt (Self-Reflection & Parameter Constraints):
+   - TUÂN THỦ NGÂN SÁCH: Khi người dùng đưa ra giới hạn ngân sách (ví dụ: 'dưới 200k', 'từ 500k đến 1 triệu', 'tầm 100k'), BẮT BUỘC truyền đúng `max_price` hoặc `min_price` tương ứng vào `search_catalog`. Tuyệt đối không tự ý tăng ngân sách hoặc bỏ qua `max_price`.
+   - THẬN TRỌNG VỚI DANH MỤC: Chỉ truyền tham số `category` khi người dùng nêu rõ hoặc khi loại sản phẩm chắc chắn 100% thuộc ngành hàng đó. Nếu không chắc chắn, hãy để `category=None` để tìm kiếm tự do theo `query`.
    - Nếu kết quả tìm kiếm lần 1 chưa đúng trọng tâm hoặc còn quá rộng, bạn có thể gọi `search_catalog` thêm lần nữa với từ khóa danh mục hoặc góc nhìn sản phẩm khác.
    - Khi tư vấn, hãy kết nối đặc tính của sản phẩm tìm được với hoàn cảnh sử dụng thực tế của khách hàng để giải thích tại sao món đồ đó phù hợp.
 3. Dữ liệu thực tế & Tính trung thực:
    - CHỈ tư vấn và trích dẫn các sản phẩm THỰC TẾ thu được từ việc gọi Tools (search_catalog, get_product_details, check_inventory, recommend_similar_products).
    - TUYỆT ĐỐI KHÔNG tự bịa ra sản phẩm, giá bán, phần trăm giảm giá hoặc số lượng tồn kho.
 4. Xử lý kết quả từ `search_catalog`:
-   - Nếu `match_type == 'exact'`: Tự tin tư vấn và giới thiệu các sản phẩm tìm thấy phù hợp nhất với nhu cầu của khách.
-   - Nếu `match_type == 'relaxed'` hoặc `match_type == 'semantic'`: Khéo léo giải thích là đã nới lỏng khoảng giá/bộ lọc để tìm mẫu tương tự tốt nhất cho khách.
-   - Nếu `match_type == 'none'` hoặc `match_type == 'category_popular'`: Lịch sự thông báo sàn chưa có mẫu chính xác đó và nhiệt tình giới thiệu các sản phẩm nổi bật/bán chạy cùng ngành hàng.
+   - Nếu `match_type == 'exact'`: Tự tin tư vấn và giới thiệu các sản phẩm tìm thấy phù hợp nhất với nhu cầu và ngân sách của khách.
+   - Nếu `match_type == 'relaxed'` hoặc `match_type == 'semantic'`: Khéo léo giải thích là đã nới lỏng khoảng giá/bộ lọc để tìm mẫu tương tự tốt nhất cho khách tham khảo.
+   - Nếu `match_type == 'none'` hoặc `match_type == 'category_popular'`: Lịch sự thông báo sàn chưa có mẫu chính xác trong khoảng giá/yêu cầu đó và nhiệt tình giới thiệu các sản phẩm nổi bật/bán chạy cùng ngành hàng để khách tham khảo.
 5. Quy định, Chính sách & Hỗ trợ khách hàng (Policy & Support RAG):
    - Khi khách hàng hỏi về quy định, chính sách, đổi trả, hoàn tiền, bảo hành, phí ship, phương thức thanh toán, khiếu nại hoặc tranh chấp: Bắt buộc gọi `lookup_policy_and_support`.
    - Khi khách hàng hỏi về một đơn hàng cụ thể hoặc sự cố đơn hàng (hàng hỏng, giao chậm, muốn trả hàng): Bắt buộc gọi `get_user_order_context` kết hợp `lookup_policy_and_support` để đối chiếu thực tế đơn hàng với quy định sàn.
@@ -58,6 +61,50 @@ def _clean_reasoning_tags(text: Any) -> str:
     return cleaned.strip()
 
 
+class StreamingReasoningFilter:
+    """Loại bỏ thẻ <think>...</think> khi stream token từ các reasoning models."""
+
+    def __init__(self):
+        self.in_think = False
+        self.buffer = ""
+
+    def process_chunk(self, chunk_text: str) -> str:
+        if not chunk_text:
+            return ""
+        self.buffer += chunk_text
+
+        output = ""
+        while self.buffer:
+            if not self.in_think:
+                if "<think>" in self.buffer:
+                    prefix, _, rest = self.buffer.partition("<think>")
+                    output += prefix
+                    self.buffer = rest
+                    self.in_think = True
+                elif "<" in self.buffer and not any(tag in self.buffer for tag in ["<think>", "</think>"]):
+                    # Giữ lại buffer nếu nghi ngờ bắt đầu thẻ <think>
+                    break
+                else:
+                    output += self.buffer
+                    self.buffer = ""
+            else:
+                if "</think>" in self.buffer:
+                    _, _, rest = self.buffer.partition("</think>")
+                    self.buffer = rest
+                    self.in_think = False
+                else:
+                    self.buffer = ""
+                    break
+        return output
+
+    def flush(self) -> str:
+        if not self.in_think and self.buffer:
+            res = self.buffer
+            self.buffer = ""
+            return res
+        return ""
+
+
 def get_llm(streaming: bool = False):
     if ai_settings.IS_AZURE:
         return AzureChatOpenAI(
@@ -65,7 +112,7 @@ def get_llm(streaming: bool = False):
             azure_deployment=ai_settings.MODEL,
             api_key=ai_settings.API_KEY,
             api_version=ai_settings.API_VERSION,
-            temperature=0.2,
+            temperature=0.0,
             streaming=streaming,
             max_retries=2,
         )
@@ -73,7 +120,7 @@ def get_llm(streaming: bool = False):
         openai_api_base=ai_settings.BASE_URL,
         openai_api_key=ai_settings.API_KEY,
         model_name=ai_settings.MODEL,
-        temperature=0.2,
+        temperature=0.0,
         streaming=streaming,
         max_retries=2,
     )
@@ -103,70 +150,97 @@ def prepare_messages(
     return messages
 
 
+def _is_same_product(p1: Dict[str, Any], p2: Dict[str, Any]) -> bool:
+    """Check if two product dictionaries refer to the exact same product."""
+    if not isinstance(p1, dict) or not isinstance(p2, dict):
+        return False
+
+    # 1. Match by primary ID (UUID or numeric ID string)
+    id1 = str(p1.get("id") or "").strip()
+    id2 = str(p2.get("id") or "").strip()
+    if id1 and id2 and id1 == id2:
+        return True
+
+    # 2. Match by db_id
+    db_id1 = p1.get("db_id")
+    db_id2 = p2.get("db_id")
+    if db_id1 is not None and db_id2 is not None and str(db_id1) == str(db_id2):
+        return True
+
+    # 3. Cross match: id vs db_id
+    if db_id1 is not None and id2 and str(db_id1) == id2:
+        return True
+    if db_id2 is not None and id1 and str(db_id2) == id1:
+        return True
+
+    # 4. Match by slug (unique per product)
+    slug1 = (p1.get("slug") or "").strip().lower()
+    slug2 = (p2.get("slug") or "").strip().lower()
+    if slug1 and slug2 and slug1 == slug2:
+        return True
+
+    # 5. Match by exact product name (case-insensitive)
+    name1 = (p1.get("name") or "").strip().lower()
+    name2 = (p2.get("name") or "").strip().lower()
+    if name1 and name2 and name1 == name2:
+        return True
+
+    return False
+
+
 def _filter_products_mentioned_in_reply(
-    reply_text: str, collected_products: List[Dict[str, Any]]
+    reply: str, collected_products: List[Dict[str, Any]]
 ) -> List[Dict[str, Any]]:
-    if not reply_text or not collected_products:
+    if not reply or not collected_products:
         return []
 
-    reply_lower = reply_text.lower()
-
-    # If the reply explicitly states that no matching products were found on the platform
-    no_product_phrases = [
-        "chưa tìm thấy sản phẩm",
-        "không tìm thấy sản phẩm",
-        "chưa có sản phẩm phù hợp",
-        "chưa có sản phẩm nào",
-        "chưa có mặt hàng",
-        "rất tiếc sàn chưa có",
-        "chưa có mẫu nào",
-    ]
-    if any(phrase in reply_lower for phrase in no_product_phrases) and not any(
-        kw in reply_lower for kw in ["dưới đây là", "gợi ý cho bạn", "tham khảo một số", "tham khảo các", "gửi bạn một số"]
-    ):
-        return []
-
+    reply_lower = reply.lower()
     matched = []
+
     for p in collected_products:
         name = (p.get("name") or "").strip().lower()
         if not name:
             continue
 
+        is_match = False
         # 1. Direct substring match of full name
         if name in reply_lower:
+            is_match = True
+        else:
+            # 2. Match by main title segment (before delimiters like -, |, /, [, ], (, ))
+            main_segment = re.split(r"[-–—|/,\(\)\[\]]", name)[0].strip()
+            if len(main_segment) >= 5 and main_segment in reply_lower:
+                is_match = True
+            else:
+                # 3. Match by the first 3-5 words of the product name
+                words = name.split()
+                if len(words) >= 2:
+                    first_n = " ".join(words[: min(len(words), 4)])
+                    if len(first_n) >= 5 and first_n in reply_lower:
+                        is_match = True
+                if not is_match:
+                    # 4. Check if a 3-word phrase from the product name is in reply
+                    for i in range(len(words) - 2):
+                        trigram = " ".join(words[i : i + 3])
+                        if len(trigram) >= 8 and trigram in reply_lower:
+                            is_match = True
+                            break
+                if not is_match:
+                    # 5. Check slug
+                    slug = (p.get("slug") or "").strip().lower()
+                    if slug and len(slug) >= 5 and slug in reply_lower:
+                        is_match = True
+
+        # 6. Match by prominent brand name if brand is in reply and product type matches
+        if not is_match and p.get("brand"):
+            brand_l = str(p["brand"]).strip().lower()
+            if len(brand_l) >= 3 and brand_l in reply_lower:
+                # If any significant word in product name (length >= 3) is in reply
+                if any(w in reply_lower for w in name.split() if len(w) >= 3):
+                    is_match = True
+
+        if is_match and not any(_is_same_product(m, p) for m in matched):
             matched.append(p)
-            continue
-
-        # 2. Match by main title segment (before delimiters like -, |, /)
-        main_segment = re.split(r"[-–—|/,]", name)[0].strip()
-        if len(main_segment) >= 6 and main_segment in reply_lower:
-            matched.append(p)
-            continue
-
-        # 3. Match by the first 3-5 words of the product name
-        words = name.split()
-        if len(words) >= 3:
-            first_n = " ".join(words[: min(len(words), 4)])
-            if len(first_n) >= 8 and first_n in reply_lower:
-                matched.append(p)
-                continue
-
-        # 4. Check if a 3-word phrase from the product name is in reply
-        found_phrase = False
-        for i in range(len(words) - 2):
-            trigram = " ".join(words[i : i + 3])
-            if len(trigram) >= 10 and trigram in reply_lower:
-                matched.append(p)
-                found_phrase = True
-                break
-        if found_phrase:
-            continue
-
-        # 5. Check slug / ID
-        slug = (p.get("slug") or "").strip().lower()
-        if slug and len(slug) >= 5 and slug in reply_lower:
-            matched.append(p)
-            continue
 
     return matched
 
@@ -213,13 +287,23 @@ def _extract_products_from_tool_output(
         elif isinstance(parsed, dict):
             if "items" in parsed and isinstance(parsed["items"], list):
                 items = parsed["items"]
-            elif "id" in parsed and "name" in parsed:
+            elif ("id" in parsed or "db_id" in parsed) and "name" in parsed:
                 items = [parsed]
 
         for raw_item in items:
-            if isinstance(raw_item, dict) and "id" in raw_item and "name" in raw_item:
+            if isinstance(raw_item, dict) and ("id" in raw_item or "db_id" in raw_item) and "name" in raw_item:
                 item = _normalize_extracted_product(raw_item)
-                if not any(p.get("id") == item["id"] for p in collected_products):
+                existing_idx = next(
+                    (idx for idx, p in enumerate(collected_products) if _is_same_product(p, item)),
+                    None,
+                )
+                if existing_idx is not None:
+                    # Merge info: keep richer details
+                    existing = collected_products[existing_idx]
+                    for key, val in item.items():
+                        if val is not None and (existing.get(key) is None or existing.get(key) == "" or (key == "variants" and val)):
+                            existing[key] = val
+                else:
                     collected_products.append(item)
     except Exception:
         pass
@@ -287,7 +371,37 @@ async def send_chat_message(
     collected_order_context: Optional[Any] = None
 
     for _ in range(5):
-        response = await llm_with_tools.ainvoke(messages)
+        response = None
+        for retry_attempt in range(3):
+            try:
+                response = await llm_with_tools.ainvoke(messages)
+                break
+            except Exception as err:
+                err_str = str(err).lower()
+                is_rate_limit = (
+                    "429" in err_str
+                    or "rate limit" in err_str
+                    or "quota" in err_str
+                    or "tpm" in err_str
+                    or "rpm" in err_str
+                    or "resource_exhausted" in err_str
+                )
+                if is_rate_limit and retry_attempt < 2:
+                    wait_seconds = 5.0 * (retry_attempt + 1)
+                    match = re.search(r"try again in (\d+(\.\d+)?)s", err_str)
+                    if match:
+                        try:
+                            wait_seconds = max(wait_seconds, float(match.group(1)) + 1.0)
+                        except Exception:
+                            pass
+                    logger.warning(f"Rate limit hit in send_chat_message, waiting {wait_seconds:.1f}s before retry {retry_attempt + 1}...")
+                    await asyncio.sleep(wait_seconds)
+                else:
+                    raise err
+
+        if response is None:
+            break
+
         messages.append(response)
 
         tool_calls = getattr(response, "tool_calls", None)
@@ -361,20 +475,78 @@ async def stream_chat_message(
     collected_products: List[Dict[str, Any]] = []
     collected_citations: List[Dict[str, Any]] = []
     collected_order_context: Optional[Any] = None
+    full_generated_text = ""
 
     for _ in range(5):
-        try:
-            response = await llm_with_tools.ainvoke(messages)
-        except Exception as err:
-            logger.error(f"Error calling LLM in stream_chat_message: {err}")
-            err_msg = f"Sự cố phản hồi dịch vụ AI: {str(err)}"
+        stream_success = False
+        last_exception = None
+        accumulated_chunk = None
+        current_turn_text = ""
+
+        for retry_attempt in range(3):
+            accumulated_chunk = None
+            tag_filter = StreamingReasoningFilter()
+            current_turn_text = ""
+            try:
+                async for chunk in llm_with_tools.astream(messages):
+                    accumulated_chunk = (
+                        chunk if accumulated_chunk is None else accumulated_chunk + chunk
+                    )
+
+                    # Nếu chunk chứa content text và chưa phát sinh tool call
+                    if chunk.content and not getattr(accumulated_chunk, "tool_calls", None):
+                        raw_text = str(chunk.content) if isinstance(chunk.content, str) else ""
+                        clean_chunk = tag_filter.process_chunk(raw_text)
+                        if clean_chunk:
+                            current_turn_text += clean_chunk
+                            yield f"data: {json.dumps({'type': 'text', 'content': clean_chunk, 'done': False}, ensure_ascii=False)}\n\n"
+
+                # Flush nốt phần buffer text còn lại nếu có
+                remaining_text = tag_filter.flush()
+                if remaining_text:
+                    current_turn_text += remaining_text
+                    yield f"data: {json.dumps({'type': 'text', 'content': remaining_text, 'done': False}, ensure_ascii=False)}\n\n"
+
+                stream_success = True
+                break
+            except Exception as err:
+                last_exception = err
+                err_str = str(err).lower()
+                is_rate_limit = (
+                    "429" in err_str
+                    or "rate limit" in err_str
+                    or "quota" in err_str
+                    or "tpm" in err_str
+                    or "rpm" in err_str
+                    or "resource_exhausted" in err_str
+                )
+
+                if is_rate_limit and retry_attempt < 2:
+                    wait_seconds = 5.0 * (retry_attempt + 1)
+                    match = re.search(r"try again in (\d+(\.\d+)?)s", err_str)
+                    if match:
+                        try:
+                            wait_seconds = min(max(float(match.group(1)) + 1.0, 2.0), 25.0)
+                        except Exception:
+                            pass
+                    logger.warning(
+                        f"[AI Rate Limit] Bị giới hạn hạn mức API (lần {retry_attempt + 1}/3). Đang tự động đợi {wait_seconds:.1f}s trước khi thử lại ngầm..."
+                    )
+                    await asyncio.sleep(wait_seconds)
+                else:
+                    logger.error(f"Error streaming from LLM in stream_chat_message: {err}")
+                    break
+
+        if not stream_success:
+            err_msg = f"Sự cố phản hồi dịch vụ AI: {str(last_exception)}"
             yield f"data: {json.dumps({'type': 'error', 'message': err_msg}, ensure_ascii=False)}\n\n"
             yield f"data: {json.dumps({'type': 'end', 'content': '', 'done': True}, ensure_ascii=False)}\n\n"
             return
 
-        tool_calls = getattr(response, "tool_calls", None)
+        tool_calls = getattr(accumulated_chunk, "tool_calls", None) if accumulated_chunk else None
+
         if tool_calls:
-            messages.append(response)
+            messages.append(accumulated_chunk)
 
             for tool_call in tool_calls:
                 tool_name = tool_call.get("name")
@@ -412,27 +584,9 @@ async def stream_chat_message(
                     ToolMessage(content=str(tool_output), tool_call_id=tool_call_id)
                 )
         else:
-            # Final text streaming from ainvoke response content (no extra LLM API call)
-            raw_content = response.content
-            if isinstance(raw_content, list):
-                final_text = "".join(
-                    [
-                        str(item.get("text", item)) if isinstance(item, dict) else str(item)
-                        for item in raw_content
-                    ]
-                )
-            else:
-                final_text = str(raw_content) if raw_content else ""
-
-            final_text = _clean_reasoning_tags(final_text)
-
-            if final_text:
-                chunk_size = 12
-                for i in range(0, len(final_text), chunk_size):
-                    sub_chunk = final_text[i:i + chunk_size]
-                    yield f"data: {json.dumps({'type': 'text', 'content': sub_chunk, 'done': False}, ensure_ascii=False)}\n\n"
-
-            filtered_products = _filter_products_mentioned_in_reply(final_text, collected_products)
+            # Không có tool call -> Đây là lượt sinh phản hồi văn bản cuối cùng
+            full_generated_text = current_turn_text
+            filtered_products = _filter_products_mentioned_in_reply(full_generated_text, collected_products)
             if filtered_products:
                 yield f"data: {json.dumps({'type': 'products', 'items': filtered_products}, ensure_ascii=False)}\n\n"
 
@@ -445,8 +599,8 @@ async def stream_chat_message(
             yield f"data: {json.dumps({'type': 'end', 'content': '', 'done': True}, ensure_ascii=False)}\n\n"
             return
 
-    last_content = _clean_reasoning_tags(messages[-1].content) if messages else ""
-    filtered_products = _filter_products_mentioned_in_reply(last_content, collected_products)
+    # Kết thúc vòng lặp tối đa 5 lượt gọi tool
+    filtered_products = _filter_products_mentioned_in_reply(full_generated_text, collected_products)
     if filtered_products:
         yield f"data: {json.dumps({'type': 'products', 'items': filtered_products}, ensure_ascii=False)}\n\n"
 

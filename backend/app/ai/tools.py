@@ -49,10 +49,10 @@ def get_agent_tools(
         """Tìm kiếm các sản phẩm đang hiển thị bán trên sàn TMĐT Shepoo.
 
         Sử dụng khi khách hàng hỏi về tìm kiếm, gợi ý sản phẩm, phong cách, tầm giá, hoặc nhu cầu mua sắm.
-        - `query`: Từ khóa loại sản phẩm cụ thể (ví dụ: 'áo khoác', 'ghế công thái học', 'nồi lẩu điện', 'tai nghe chống ồn'). Khi người dùng hỏi bằng mục đích/vấn đề/hoàn cảnh sử dụng, hãy phân tích và trích xuất thành tên loại sản phẩm/vật dụng cụ thể để tìm kiếm.
-        - `category`: Tên danh mục tiếng Việt (ví dụ: 'Thời trang nam', 'Điện tử', 'Gia dụng') hoặc category slug.
-        - `min_price`: Mức giá tối thiểu (VND).
-        - `max_price`: Mức giá tối đa (VND).
+        - `query`: Từ khóa loại sản phẩm cụ thể (ví dụ: 'áo khoác', 'ghế công thái học', 'nồi lẩu điện', 'tai nghe chống ồn', 'son môi'). Khi người dùng hỏi bằng mục đích/vấn đề/hoàn cảnh sử dụng, hãy phân tích và trích xuất thành tên loại sản phẩm/vật dụng cụ thể để tìm kiếm.
+        - `category`: Tên danh mục tiếng Việt (ví dụ: 'Mỹ phẩm & Chăm sóc sắc đẹp', 'Điện thoại & Phụ kiện', 'Thời trang nam') hoặc category slug. QUAN TRỌNG: Chỉ truyền khi người dùng nêu rõ danh mục hoặc khi chắc chắn loại sản phẩm đó thuộc ngành hàng này; nếu không chắc chắn hoặc phân vân, hãy để None để tìm kiếm tự do theo `query`.
+        - `min_price`: Mức giá tối thiểu (VND). BẮT BUỘC: Giữ nguyên mức giá người dùng yêu cầu, không tự ý nới lỏng hay thay đổi.
+        - `max_price`: Mức giá tối đa (VND). BẮT BUỘC: Giữ nguyên mức giá người dùng yêu cầu (ví dụ khách nói dưới 200k thì max_price=200000), không tự ý tăng giá hay bỏ max_price.
         - `brand`: Tên thương hiệu.
         - `sort_by`: Tiêu chí sắp xếp ('relevance', 'price_asc', 'price_desc', 'rating', 'best_selling').
         - `limit`: Số lượng sản phẩm muốn lấy (mặc định 5).
@@ -171,7 +171,8 @@ def get_agent_tools(
             primary_var_id = str(pub_id) if pub_id else (str(var_id) if var_id else str(p.id))
 
             data = {
-                "id": p.id,
+                "id": getattr(p, "public_id", str(p.id)),
+                "db_id": p.id,
                 "name": p.name,
                 "brand": p.brand or "",
                 "slug": p.slug or "",
@@ -198,16 +199,34 @@ def get_agent_tools(
             return json.dumps({"error": str(e)}, ensure_ascii=False)
 
     @tool
-    async def check_inventory(variant_id: int) -> str:
-        """Kiểm tra chính xác số lượng tồn kho khả dụng hiện tại của một phân loại sản phẩm. Sử dụng khi khách hỏi về số lượng còn hàng."""
+    async def check_inventory(variant_id: str) -> str:
+        """Kiểm tra chính xác số lượng tồn kho khả dụng hiện tại của một phân loại sản phẩm. Sử dụng khi khách hỏi về số lượng còn hàng. `variant_id` có thể là ID số, public_id chuỗi, hoặc SKU."""
         try:
+            var_str = str(variant_id).strip()
+            var_filters = [ProductVariant.status != "DELETED"]
+            if var_str.isdigit():
+                var_filters.append(
+                    or_(
+                        ProductVariant.id == int(var_str),
+                        ProductVariant.public_id == var_str,
+                        ProductVariant.sku == var_str,
+                    )
+                )
+            else:
+                var_filters.append(
+                    or_(
+                        ProductVariant.public_id == var_str,
+                        ProductVariant.sku == var_str,
+                    )
+                )
+
             stmt = (
                 select(ProductVariant)
                 .options(
                     selectinload(ProductVariant.product),
                     selectinload(ProductVariant.inventory),
                 )
-                .where(ProductVariant.id == variant_id, ProductVariant.status != "DELETED")
+                .where(*var_filters)
             )
             res = await db.execute(stmt)
             v = res.scalar_one_or_none()
@@ -222,9 +241,11 @@ def get_agent_tools(
             avail = max(0, qty - reserved)
 
             data = {
-                "variant_id": v.id,
+                "variant_id": getattr(v, "public_id", str(v.id)),
+                "db_variant_id": v.id,
                 "variant_name": v.variant_name or "",
-                "product_id": v.product_id,
+                "product_id": getattr(v.product, "public_id", str(v.product_id)) if getattr(v, "product", None) else str(v.product_id),
+                "db_product_id": v.product_id,
                 "product_name": v.product.name if getattr(v, "product", None) else "",
                 "quantity": qty,
                 "reserved_quantity": reserved,
@@ -236,16 +257,34 @@ def get_agent_tools(
             return json.dumps({"error": str(e)}, ensure_ascii=False)
 
     @tool
-    async def recommend_similar_products(product_id: int) -> str:
-        """Tìm các sản phẩm tương tự cùng danh mục hoặc cùng khoảng giá với sản phẩm cho trước."""
+    async def recommend_similar_products(product_id: str) -> str:
+        """Tìm các sản phẩm tương tự cùng danh mục hoặc cùng khoảng giá với sản phẩm cho trước. `product_id` có thể là ID số, public_id chuỗi, hoặc slug sản phẩm."""
         try:
+            prod_str = str(product_id).strip()
+            prod_filters = [Product.status != "DELETED"]
+            if prod_str.isdigit():
+                prod_filters.append(
+                    or_(
+                        Product.id == int(prod_str),
+                        Product.public_id == prod_str,
+                        Product.slug == prod_str,
+                    )
+                )
+            else:
+                prod_filters.append(
+                    or_(
+                        Product.public_id == prod_str,
+                        Product.slug == prod_str,
+                    )
+                )
+
             stmt = (
                 select(Product)
                 .options(
                     selectinload(Product.categories),
                     selectinload(Product.variants),
                 )
-                .where(Product.id == product_id, Product.status != "DELETED")
+                .where(*prod_filters)
             )
             res = await db.execute(stmt)
             p = res.scalar_one_or_none()
@@ -259,7 +298,7 @@ def get_agent_tools(
                     .join(SellerProfile, Product.seller_id == SellerProfile.id)
                     .where(
                         ProductCategory.category_id.in_(cat_ids),
-                        Product.id != product_id,
+                        Product.id != p.id,
                         Product.status.in_(["ACTIVE", "OUT_OF_STOCK"]),
                         SellerProfile.status == "APPROVED",
                     )
@@ -274,7 +313,8 @@ def get_agent_tools(
 
             if not rec_products:
                 all_recs = await product_repository.get_recommended_products(db, limit=6)
-                rec_products = [item for item in all_recs if item.id != product_id][:5]
+                p_db_id = p.id if p else (int(prod_str) if prod_str.isdigit() else -1)
+                rec_products = [item for item in all_recs if item.id != p_db_id][:5]
 
             result = []
             for item in rec_products:
@@ -332,7 +372,8 @@ def get_agent_tools(
 
                 result.append(
                     {
-                        "id": item.id,
+                        "id": getattr(item, "public_id", str(item.id)),
+                        "db_id": item.id,
                         "name": item.name,
                         "brand": item.brand or "",
                         "price": min_p,

@@ -1,8 +1,12 @@
+import asyncio
+import hashlib
 import json
 import logging
 import os
 from pathlib import Path
 from typing import List, Dict, Any
+
+from cachetools import TTLCache
 from langchain_openai import OpenAIEmbeddings, AzureOpenAIEmbeddings
 
 from ai.ai_config import ai_settings
@@ -120,8 +124,9 @@ async def generate_product_embedding(product_data: Dict[str, Any]) -> List[float
         logger.error(f"Error generating embedding for product {product_data.get('id')}: {e}")
         raise
 
-_query_memory_cache: Dict[str, List[float]] = {}
 QUERY_CACHE_TTL_SECONDS = 7 * 24 * 3600  # 7 days
+_query_memory_cache: TTLCache = TTLCache(maxsize=5_000, ttl=QUERY_CACHE_TTL_SECONDS)
+_inflight_embedding_tasks: Dict[str, "asyncio.Task"] = {}
 
 
 async def generate_query_embedding(query: str) -> List[float]:
@@ -133,12 +138,11 @@ async def generate_query_embedding(query: str) -> List[float]:
     if not normalized_query:
         return []
 
-    # 1. Check L1 Memory Cache (0ms)
+    # 1. Check L1 Memory Cache (0ms) — bounded + TTL, auto-evicts expired/oldest entries
     if normalized_query in _query_memory_cache:
         return _query_memory_cache[normalized_query]
 
     # 2. Check L2 Redis Cache
-    import hashlib
     redis_key = f"query_emb:{hashlib.sha256(normalized_query.encode('utf-8')).hexdigest()}"
     try:
         from core.redis import get_redis_client
@@ -151,25 +155,69 @@ async def generate_query_embedding(query: str) -> List[float]:
     except Exception as e:
         logger.debug("Redis query cache lookup skipped/failed: %s", e)
 
-    # 3. Cache Miss: Call AI Embedding API
+    # 3. Cache Miss: Call AI Embedding API (single-flight dedupes concurrent identical queries)
+    is_leader = normalized_query not in _inflight_embedding_tasks
     try:
-        model = get_embeddings_model()
-        vector = await model.aembed_query(query)
-        
-        # Save to L1 Memory Cache
-        _query_memory_cache[normalized_query] = vector
-        
-        # Save to L2 Redis Cache
-        try:
-            from core.redis import get_redis_client
-            redis_client = await get_redis_client()
-            await redis_client.setex(redis_key, QUERY_CACHE_TTL_SECONDS, json.dumps(vector))
-        except Exception as e:
-            logger.debug("Redis query cache write skipped/failed: %s", e)
-            
-        return vector
+        if is_leader:
+            model = get_embeddings_model()
+            task = asyncio.create_task(model.aembed_query(normalized_query))
+            _inflight_embedding_tasks[normalized_query] = task
+        else:
+            task = _inflight_embedding_tasks[normalized_query]
+
+        vector = await asyncio.shield(task)
     except Exception as e:
         logger.error(f"Error generating embedding for query '{query}': {e}")
         raise
+    finally:
+        if is_leader:
+            _inflight_embedding_tasks.pop(normalized_query, None)
+
+    # Save to L1 Memory Cache
+    _query_memory_cache[normalized_query] = vector
+
+    # Save to L2 Redis Cache
+    try:
+        from core.redis import get_redis_client
+        redis_client = await get_redis_client()
+        await redis_client.setex(redis_key, QUERY_CACHE_TTL_SECONDS, json.dumps(vector))
+    except Exception as e:
+        logger.debug("Redis query cache write skipped/failed: %s", e)
+
+    return vector
+
+
+async def generate_chunks_embeddings(
+    texts: List[str],
+    batch_size: int = 64,
+) -> List[List[float]]:
+    """
+    Generates embedding vectors for a list of document chunk texts in batches using aembed_documents.
+    Minimizes HTTP round-trips compared to sequential embedding calls.
+    """
+    if not texts:
+        return []
+
+    model = get_embeddings_model()
+    batch_size = max(1, batch_size)
+    all_vectors: List[List[float]] = []
+
+    for i in range(0, len(texts), batch_size):
+        batch = texts[i : i + batch_size]
+        try:
+            # aembed_documents sends multiple texts in a single HTTP payload
+            batch_vectors = await model.aembed_documents(batch)
+            all_vectors.extend(batch_vectors)
+        except Exception as e:
+            logger.error(
+                "Error generating batch embeddings for chunks %d to %d: %s",
+                i,
+                i + len(batch),
+                e,
+            )
+            raise
+
+    return all_vectors
+
 
 

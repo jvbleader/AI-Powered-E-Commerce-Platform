@@ -72,6 +72,11 @@ export interface OrderReturn {
   createdAt: string;
   updatedAt?: string;
   order?: Order;
+  user?: {
+    id?: string;
+    fullName?: string;
+    avatarUrl?: string;
+  };
 }
 
 export interface User {
@@ -203,6 +208,7 @@ export interface Product {
   reviewCount: number;
   soldCount: number;
   categoryIds: string[];
+  categories?: { id: string | number; name: string; slug?: string }[];
   imageUrls: string[];
   thumbnailUrl: string;
   createdAt: string;
@@ -277,9 +283,6 @@ export interface Order {
   sellerConfirmedAt?: string;
   subtotalAmount: number;
   shippingFee: number;
-  productDiscountAmount: number;
-  shippingDiscountAmount: number;
-  discountAmount?: number;
   totalAmount: number;
   finalAmount?: number;
   customerNote?: string;

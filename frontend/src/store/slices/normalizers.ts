@@ -83,6 +83,11 @@ export const normalizeBackendProduct = (
     reviewCount: backendProduct.review_count,
     soldCount: backendProduct.sold_count,
     categoryIds: backendProduct.categories ? backendProduct.categories.map((c) => c.id.toString()) : [],
+    categories: backendProduct.categories ? backendProduct.categories.map((c: any) => ({
+      id: String(c.id),
+      name: c.name,
+      slug: c.slug || ""
+    })) : [],
     imageUrls: backendProduct.images.map((img) => img.image_url),
     thumbnailUrl:
       backendProduct.images.find((img) => img.is_thumbnail)?.image_url ??
@@ -139,6 +144,13 @@ export const normalizeBackendOrderReturn = (backendReturn: BackendOrderReturnRes
   resolvedAt: backendReturn.resolved_at ?? backendReturn.resolvedAt ?? undefined,
   createdAt: backendReturn.created_at ?? backendReturn.createdAt,
   updatedAt: backendReturn.updated_at ?? backendReturn.updatedAt ?? undefined,
+  user: backendReturn.user
+    ? {
+        id: backendReturn.user.public_id,
+        fullName: backendReturn.user.full_name,
+        avatarUrl: backendReturn.user.avatar_url,
+      }
+    : undefined,
   order: backendReturn.order
     ? normalizeBackendOrder(
         backendReturn.order,
@@ -164,14 +176,21 @@ export const normalizeBackendOrder = (
     shopDbId: backendOrder.seller?.id,
     shopName,
     shopSlug,
+    receiverName: (backendOrder.shipment?.receiver_name && backendOrder.shipment.receiver_name.trim() !== "-")
+      ? backendOrder.shipment.receiver_name.trim()
+      : backendOrder.user?.full_name || undefined,
+    phone: (backendOrder.shipment?.receiver_phone && backendOrder.shipment.receiver_phone.trim() !== "-")
+      ? backendOrder.shipment.receiver_phone.trim()
+      : undefined,
+    shippingAddress: backendOrder.shipment
+      ? `${backendOrder.shipment.detail_address}, ${backendOrder.shipment.ward}, ${backendOrder.shipment.district}, ${backendOrder.shipment.province}`
+      : undefined,
     orderStatus: backendOrder.order_status,
   paymentStatus: backendOrder.payment_status,
   sellerConfirmed: backendOrder.seller_confirmed,
   sellerConfirmedAt: backendOrder.seller_confirmed_at ?? undefined,
   subtotalAmount: Number(backendOrder.subtotal_amount),
   shippingFee: Number(backendOrder.shipping_fee),
-  productDiscountAmount: Number(backendOrder.product_discount_amount),
-  shippingDiscountAmount: Number(backendOrder.shipping_discount_amount),
   totalAmount: Number(backendOrder.total_amount),
   customerNote: backendOrder.customer_note ?? undefined,
   preferredPaymentMethod: backendOrder.preferred_payment_method as PaymentMethod | undefined,

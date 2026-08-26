@@ -9,11 +9,15 @@ from elasticsearch.helpers import async_bulk
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ai.embeddings import generate_query_embedding
+from ai.embeddings import generate_chunks_embeddings
 from core.elasticsearch import get_es_client
 from models.knowledge_base.knowledge_base_article import KnowledgeBaseArticle
 from search.indices_kb import KB_INDEX_ALIAS
-from services.knowledge_base.chunking_service import chunk_pdf_document, extract_pdf_pages
+from services.knowledge_base.chunking_service import (
+    chunk_pdf_document,
+    extract_pdf_pages,
+    parse_pages_from_extracted_text,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -22,18 +26,31 @@ async def index_article_chunks(
     chunks: List[Dict[str, Any]],
     es: AsyncElasticsearch | None = None,
 ) -> None:
-    """Index a list of document chunks into Elasticsearch."""
+    """Index a list of document chunks into Elasticsearch using batch embedding."""
     if not chunks:
         return
 
     client = es or get_es_client()
-    actions: List[Dict[str, Any]] = []
 
+    # 1. Thu thập các chunk chưa có vector để batch embedding
+    missing_indices: List[int] = []
+    missing_texts: List[str] = []
+    for idx, chunk in enumerate(chunks):
+        if chunk.get("chunk_vector") is None:
+            missing_indices.append(idx)
+            missing_texts.append(chunk.get("chunk_text", ""))
+
+    # 2. Sinh embedding theo batch cho tất cả chunk còn thiếu
+    if missing_texts:
+        vectors = await generate_chunks_embeddings(missing_texts)
+        for idx, vector in zip(missing_indices, vectors):
+            chunks[idx]["chunk_vector"] = vector
+
+    # 3. Chuẩn bị actions cho Elasticsearch bulk indexing
+    actions: List[Dict[str, Any]] = []
     for chunk in chunks:
         chunk_text = chunk.get("chunk_text", "")
         vector = chunk.get("chunk_vector")
-        if vector is None:
-            vector = await generate_query_embedding(chunk_text)
 
         updated_at = chunk.get("updated_at")
         if updated_at is None:
@@ -109,10 +126,24 @@ async def reindex_all_articles(
         logger.info("No published knowledge base articles found to reindex.")
         return 0
 
+    # 1. Clean old chunks from Elasticsearch to prevent duplicate or zombie chunks
+    try:
+        await client.delete_by_query(
+            index=KB_INDEX_ALIAS,
+            query={"match_all": {}},
+            conflicts="proceed",
+        )
+        logger.info("Cleared all existing knowledge base chunks from '%s' before reindexing", KB_INDEX_ALIAS)
+    except Exception:
+        logger.warning("Could not clear index '%s' prior to reindexing; continuing with article-level indexing", KB_INDEX_ALIAS)
+
+    # 2. Re-extract pages and chunk each published article
     all_chunks: List[Dict[str, Any]] = []
     for article in articles:
-        # If extracted text or file exists
-        pages = [{"page_number": 1, "text": article.extracted_text or article.summary or article.title}]
+        pages = parse_pages_from_extracted_text(article.extracted_text)
+        if not pages:
+            pages = [{"page_number": 1, "text": article.summary or article.title}]
+
         chunks = chunk_pdf_document(
             article_id=article.id,
             article_public_id=article.public_id,

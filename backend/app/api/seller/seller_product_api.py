@@ -15,6 +15,7 @@ from schemas.seller.seller_product_schema import (
 from services.seller.seller_product_service import (
     create_seller_product,
     get_seller_products,
+    get_seller_product_detail,
     update_seller_product,
     delete_seller_product,
     hide_seller_product,
@@ -58,6 +59,16 @@ async def get_products_api(
         await db.rollback()
         raise
     return result
+
+
+@router.get("/{product_id}", response_model=ProductResponse)
+async def get_product_detail_api(
+    product_id: str,
+    user: CurrentUser,
+    db: DBSession,
+) -> ProductResponse:
+    return await get_seller_product_detail(user, product_id, db)
+
 
 
 @router.put("/{product_id}", response_model=ProductResponse)

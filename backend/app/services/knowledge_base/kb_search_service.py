@@ -90,13 +90,18 @@ async def search_knowledge_base(
             }
         ]
 
+        bool_query: Dict[str, Any] = {
+            "filter": filter_clauses,
+            "should": should_clauses,
+        }
+        # When embedding is unavailable (pure lexical fallback), require at least 1 keyword match in should
+        if not query_vector:
+            bool_query["minimum_should_match"] = 1
+
         search_body: Dict[str, Any] = {
             "size": max(1, limit),
             "query": {
-                "bool": {
-                    "filter": filter_clauses,
-                    "should": should_clauses,
-                }
+                "bool": bool_query,
             },
             "_source": [
                 "chunk_id",
@@ -137,7 +142,9 @@ async def search_knowledge_base(
         )
 
         # 5. Extract chunks and build deduplicated citations
-        hits = response.get("hits", {}).get("hits", [])
+        raw_hits = response.get("hits", {}).get("hits", [])
+        # Only retain hits with a positive relevance score
+        hits = [h for h in raw_hits if float(h.get("_score") or 0.0) > 0.0]
         chunks: List[Dict[str, Any]] = []
         citations: List[Dict[str, Any]] = []
         seen_citations = set()

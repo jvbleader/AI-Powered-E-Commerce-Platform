@@ -1,6 +1,6 @@
 from datetime import datetime
 from decimal import Decimal
-from typing import Any, List, Optional
+from typing import Any, List, Optional, Union
 
 from pydantic import BaseModel, Field
 
@@ -41,7 +41,7 @@ class CheckoutCartRequest(BaseModel):
 
 
 class CheckoutDirectItem(BaseModel):
-    variant_id: int = Field(description="ID của phân loại sản phẩm")
+    variant_id: Union[str, int] = Field(description="ID số hoặc public_id/SKU của phân loại sản phẩm")
     quantity: int = Field(gt=0, description="Số lượng mua")
 
 
@@ -141,8 +141,6 @@ class OrderResponse(BaseModel):
     payment_status: str
     subtotal_amount: Decimal
     shipping_fee: Decimal
-    product_discount_amount: Decimal
-    shipping_discount_amount: Decimal
     total_amount: Decimal
     customer_note: Optional[str]
     preferred_payment_method: Optional[str] = None

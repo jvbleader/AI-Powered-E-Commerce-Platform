@@ -1,6 +1,22 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  images: {
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: '**.blob.core.windows.net',
+      },
+      {
+        protocol: 'https',
+        hostname: 'images.unsplash.com',
+      },
+      {
+        protocol: 'https',
+        hostname: 'via.placeholder.com',
+      },
+    ],
+  },
   allowedDevOrigins: ['192.168.1.177', '192.168.1.*', 'localhost:3000', '127.0.0.1:3000', '192.168.0.*', '192.168.0.103*'],
   webpack: (config, { dev }) => {
     if (dev) {

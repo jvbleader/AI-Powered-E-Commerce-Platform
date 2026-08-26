@@ -16,6 +16,11 @@ from schemas.knowledge_base.kb_schema import (
     ReindexResponse,
 )
 from services.knowledge_base import kb_admin_service
+from utils.file_validator import (
+    MAX_PDF_SIZE_BYTES,
+    read_upload_file_bounded,
+    validate_pdf_magic_bytes,
+)
 
 router = APIRouter(prefix="/admin/knowledge-base", tags=["Admin Knowledge Base"])
 
@@ -66,11 +71,12 @@ async def upload_admin_pdf_api(
             detail="Vui lòng chỉ tải lên file có định dạng PDF (.pdf).",
         )
 
-    file_bytes = await file.read()
-    if not file_bytes:
+    file_bytes = await read_upload_file_bounded(file, max_bytes=MAX_PDF_SIZE_BYTES)
+
+    if not validate_pdf_magic_bytes(file_bytes):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="File PDF tải lên rỗng.",
+            detail="File tải lên không phải là định dạng PDF hợp lệ (thiếu chữ ký %PDF header).",
         )
 
     try:
@@ -87,6 +93,15 @@ async def upload_admin_pdf_api(
         await db.commit()
         await db.refresh(article)
         return ArticleResponse.model_validate(article)
+    except HTTPException:
+        await db.rollback()
+        raise
+    except ValueError as val_err:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(val_err),
+        )
     except Exception:
         await db.rollback()
         raise

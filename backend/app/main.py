@@ -21,7 +21,9 @@ from api.auth.auth_api import router as auth_router
 from api.seller.seller_api import router as seller_router
 from api.seller.seller_product_api import router as seller_product_router
 from api.seller.seller_order_api import router as seller_order_router
+from api.seller.seller_finance_api import router as seller_finance_router
 from api.admin.admin_api import router as admin_router
+from api.admin.admin_finance_api import router as admin_finance_router
 from api.catalog.product_api import router as product_router
 from middleware.auth_middleware import validate_auth_cookie_middleware
 
@@ -55,12 +57,32 @@ from services.common.websocket_manager import manager
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     start_scheduler()
-    # Auto-create missing database tables (e.g. knowledge_base_articles)
+    # Auto-create missing database tables & columns (e.g. platform_finance_summary fields)
     try:
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
+            from sqlalchemy import text
+            try:
+                await conn.execute(
+                    text(
+                        "ALTER TABLE platform_finance_summary "
+                        "ADD COLUMN total_shipping_fee_held DECIMAL(14, 2) NOT NULL DEFAULT 0.00 "
+                        "AFTER escrow_holding_balance"
+                    )
+                )
+            except Exception:
+                pass  # Column already exists
     except Exception as e:
         logging.getLogger(__name__).warning("Database schema check warning: %s", e)
+
+    # Initial auto-reconcile for platform finance summary
+    try:
+        from services.platform.platform_finance_service import reconcile_platform_finance
+        async with AsyncSessionLocal() as db:
+            await reconcile_platform_finance(db)
+            await db.commit()
+    except Exception as e:
+        logging.getLogger(__name__).warning("Finance reconciliation startup check warning: %s", e)
 
     # Initialize Elasticsearch (product listing falls back to MySQL if ES is down at request time)
     try:
@@ -122,6 +144,7 @@ from api.shipping.shipping_api import router as shipping_router
 from api.wallet.wallet_api import router as wallet_router
 from api.admin.knowledge_base_api import router as admin_kb_router
 from api.v1.policy_api import router as policy_router
+from api.analytics.traffic_api import router as analytics_router
 
 from fastapi.staticfiles import StaticFiles
 
@@ -133,11 +156,15 @@ app.include_router(auth_router)
 app.include_router(seller_router)
 app.include_router(seller_product_router)
 app.include_router(seller_order_router)
+app.include_router(seller_finance_router)
 app.include_router(admin_router)
+app.include_router(admin_finance_router)
 app.include_router(admin_kb_router)
 app.include_router(admin_kb_router, prefix="/api/v1")
 app.include_router(policy_router)
 app.include_router(policy_router, prefix="/api/v1")
+app.include_router(analytics_router)
+app.include_router(analytics_router, prefix="/api/v1")
 app.include_router(product_router)
 app.include_router(category_router)
 app.include_router(cart_router)

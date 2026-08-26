@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Section } from "@/components/ui/containers";
 import { cn } from "@/lib/utils";
@@ -39,13 +40,24 @@ import {
   ExternalLink 
 } from "lucide-react";
 
-export default function SellerOrdersPage() {
+function SellerOrdersContent() {
   const store = useMarketplaceStore();
   const shop = store.getCurrentShop();
   const { showToast } = store;
+  const searchParams = useSearchParams();
+  const statusParam = searchParams.get("status") || searchParams.get("tab") || "";
   
   // Filters
-  const [orderStatusFilter, setOrderStatusFilter] = useState(() => typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('seller_orders_orderStatus') || "" : "");
+  const [orderStatusFilter, setOrderStatusFilter] = useState(() => {
+    if (statusParam) return statusParam;
+    return typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('seller_orders_orderStatus') || "" : "";
+  });
+
+  useEffect(() => {
+    if (statusParam) {
+      setOrderStatusFilter(statusParam);
+    }
+  }, [statusParam]);
   const [paymentStatusFilter, setPaymentStatusFilter] = useState(() => typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('seller_orders_paymentStatus') || "" : "");
   const [noteFilter, setNoteFilter] = useState(() => typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('seller_orders_note') || "all" : "all");
   const [productFilters, setProductFilters] = useState<string[]>(() => {
@@ -141,8 +153,9 @@ export default function SellerOrdersPage() {
     if (shop) {
       const apiStatus = (orderStatusFilter.startsWith("RETURN_") ? "" : orderStatusFilter) as OrderStatus | "";
       store.fetchSellerOrders(apiStatus);
+      store.fetchSellerProducts();
     }
-  }, [shop, orderStatusFilter, store.fetchSellerOrders]);
+  }, [shop, orderStatusFilter, store.fetchSellerOrders, store.fetchSellerProducts]);
 
   if (!store.getCurrentUser()) {
     return <Unauthorized title="Cần đăng nhập" description="Bạn cần đăng nhập trước khi xem đơn hàng." />;
@@ -260,13 +273,18 @@ export default function SellerOrdersPage() {
 
 
 
-  const availableProducts = Array.from(new Map(
-    store.state.orders
-      .filter(o => o.sellerId === shop?.id)
-      .flatMap(o => o.items || [])
-      .filter(item => item.productId && item.productNameSnapshot)
-      .map(item => [item.productId!, item.productNameSnapshot!])
-  )).map(([value, label]) => ({ value, label }));
+  const availableProducts = Array.from(
+    new Map<string, { label: string; imageUrl?: string }>([
+      ...store.state.products
+        .filter((p) => p.sellerId === shop?.id)
+        .map((p) => [p.id, { label: p.name, imageUrl: p.thumbnailUrl }] as [string, { label: string; imageUrl?: string }]),
+      ...store.state.orders
+        .filter((o) => o.sellerId === shop?.id)
+        .flatMap((o) => o.items || [])
+        .filter((item) => item.productId && item.productNameSnapshot)
+        .map((item) => [item.productId!, { label: item.productNameSnapshot!, imageUrl: item.productImageSnapshot }] as [string, { label: string; imageUrl?: string }])
+    ])
+  ).map(([value, info]) => ({ value, label: info.label, imageUrl: info.imageUrl }));
 
   const availableShippingProviders = Array.from(new Set(
     store.state.orders
@@ -291,15 +309,12 @@ export default function SellerOrdersPage() {
   };
 
   return (
-    <Section
-      title="Đơn hàng shop"
-      className="space-y-4 pb-0"
-    >
+    <div className="space-y-4 pb-12">
       <div className="flex flex-col gap-3">
-        {/* Filters Summary (Single row) */}
-        <div className="flex flex-nowrap items-center gap-2.5 bg-white p-3 rounded-panel border border-line shadow-sm overflow-x-auto scrollbar-none">
-          <div className="text-sm font-bold text-slate-800 whitespace-nowrap shrink-0">Bộ lọc:</div>
-          <Select value={orderStatusFilter} onChange={(e) => setOrderStatusFilter(e.target.value)} className="w-52 sm:w-56 shrink-0 text-xs sm:text-sm h-9 font-medium">
+        {/* Filters Summary */}
+        <div className="flex items-center gap-2 bg-white p-2.5 sm:p-3 rounded-panel border border-line shadow-sm relative z-30 overflow-x-auto min-w-0">
+          <div className="text-xs sm:text-sm font-bold text-slate-800 whitespace-nowrap shrink-0">Bộ lọc:</div>
+          <Select value={orderStatusFilter} onChange={(e) => setOrderStatusFilter(e.target.value)} className="w-[185px] shrink-0 text-xs h-9 font-medium px-2.5 pr-7">
             <option value="">Trạng thái: Tất cả ({statusCounts.ALL})</option>
             <option value="PLACED">Chờ xác nhận ({statusCounts.PLACED})</option>
             <option value="READY_TO_SHIP">Chờ lấy hàng ({statusCounts.READY_TO_SHIP})</option>
@@ -311,7 +326,7 @@ export default function SellerOrdersPage() {
             <option value="RETURNED">Đã trả hàng/hoàn tiền ({statusCounts.RETURNED})</option>
             <option value="CANCELLED">Đã hủy ({statusCounts.CANCELLED})</option>
           </Select>
-          <Select value={paymentStatusFilter} onChange={(e) => setPaymentStatusFilter(e.target.value)} className="w-40 sm:w-44 shrink-0 text-xs sm:text-sm h-9 font-medium">
+          <Select value={paymentStatusFilter} onChange={(e) => setPaymentStatusFilter(e.target.value)} className="w-[175px] shrink-0 text-xs h-9 font-medium px-2.5 pr-7">
             <option value="">Thanh toán: Tất cả ({paymentCounts.ALL})</option>
             {Object.entries(paymentStatusLabel).map(([key, label]) => (
               <option key={key} value={key}>
@@ -319,24 +334,25 @@ export default function SellerOrdersPage() {
               </option>
             ))}
           </Select>
-          <Select value={noteFilter} onChange={(e) => setNoteFilter(e.target.value)} className="w-32 sm:w-36 shrink-0 text-xs sm:text-sm h-9">
+          <Select value={noteFilter} onChange={(e) => setNoteFilter(e.target.value)} className="w-[125px] shrink-0 text-xs h-9 px-2.5 pr-7">
             <option value="all">Ghi chú: Tất cả</option>
             <option value="yes">Có ghi chú</option>
             <option value="no">Không có ghi chú</option>
           </Select>
-          <Select value={shippingProviderFilter} onChange={(e) => setShippingProviderFilter(e.target.value)} className="w-36 sm:w-40 shrink-0 text-xs sm:text-sm h-9">
+          <Select value={shippingProviderFilter} onChange={(e) => setShippingProviderFilter(e.target.value)} className="w-[135px] shrink-0 text-xs h-9 px-2.5 pr-7">
             <option value="">Đơn vị VC: Tất cả</option>
             {availableShippingProviders.map(provider => (
               <option key={provider} value={provider}>{provider}</option>
             ))}
           </Select>
-          <div className="w-40 sm:w-48 shrink-0">
+          <div className="w-[140px] shrink-0">
             <MultiSelect 
               options={availableProducts}
               value={productFilters}
               onChange={setProductFilters}
               placeholder="Sản phẩm: Tất cả"
-              popupClassName="right-0 w-[150%] min-w-[320px] max-w-[90vw]"
+              buttonClassName="text-xs px-2.5"
+              popupClassName="right-0 w-[160%] min-w-[340px] max-w-[90vw] z-[100] shadow-2xl"
             />
           </div>
         </div>
@@ -809,6 +825,14 @@ export default function SellerOrdersPage() {
           </div>
         </div>
       )}
-    </Section>
+    </div>
+  );
+}
+
+export default function SellerOrdersPage() {
+  return (
+    <Suspense fallback={<div className="p-8 text-center text-muted font-medium">Đang tải danh sách đơn hàng...</div>}>
+      <SellerOrdersContent />
+    </Suspense>
   );
 }

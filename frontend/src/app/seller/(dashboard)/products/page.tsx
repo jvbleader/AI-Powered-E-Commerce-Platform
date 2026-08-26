@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { Plus, Box } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/ui/data-table";
@@ -42,7 +43,13 @@ export default function SellerProductsPage() {
     );
   }
 
-  const allShopProducts = store.state.products.filter((product) => product.sellerId === shop?.id);
+  const allShopProducts = store.state.products
+    .filter((product) => product.sellerId === shop?.id)
+    .sort((a, b) => {
+      const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      return timeB - timeA;
+    });
   const activeCount = allShopProducts.filter((p) => p.status === "ACTIVE").length;
   const hiddenCount = allShopProducts.filter((p) => p.status === "HIDDEN").length;
 
@@ -116,7 +123,13 @@ export default function SellerProductsPage() {
             const productVariants = store.state.variants.filter((variant) => variant.productId === product.id);
             const stock = productVariants.reduce((sum, variant) => sum + variant.inventory.quantity, 0);
             return [
-              <span key="name" className="font-bold">{product.name}</span>,
+              <Link
+                key="name"
+                href={`/seller/products/${product.id}`}
+                className="font-bold text-ink hover:text-primary hover:underline"
+              >
+                {product.name}
+              </Link>,
               getCategoryNames(store.state.categories, product) || "Bỏ trống",
               `${productVariants.length}`,
               <button
@@ -138,7 +151,13 @@ export default function SellerProductsPage() {
               `${product.soldCount}`,
               product.averageRating.toFixed(1),
               <StatusBadge key="st" status={product.status} label={productStatusLabel[product.status]} />,
-              <div key="actions" className="flex items-center gap-3 text-sm">
+              <div key="actions" className="flex items-center gap-3 text-sm whitespace-nowrap">
+                <Link
+                  className="font-bold text-primary hover:underline"
+                  href={`/seller/products/${product.id}`}
+                >
+                  Chi tiết
+                </Link>
                 <button
                   type="button"
                   className="font-bold text-sky hover:underline inline-flex items-center gap-1"
@@ -146,9 +165,8 @@ export default function SellerProductsPage() {
                   title="Quản lý tồn kho phân loại"
                 >
                   <Box className="h-3.5 w-3.5" />
-                  Quản lý kho
+                  Kho
                 </button>
-                <a className="font-bold text-primary hover:underline" href={`/seller/products/${product.id}/edit`}>Sửa</a>
                 {product.status !== "HIDDEN" ? (
                   <button className="text-muted hover:text-primary" onClick={() => { if (confirm("Ẩn sản phẩm?")) { store.hideSellerProduct(product.id).then((r) => { if(!r.ok) showToast(r.message||"", "danger") }) } }}>Ẩn</button>
                 ) : (

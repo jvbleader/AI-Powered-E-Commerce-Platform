@@ -26,6 +26,7 @@ class ShippingProviderPublic(BaseModel):
 
 class ShopPublicDetailResponse(BaseModel):
     id: int
+    public_id: str = ""
     shop_name: str
     shop_slug: str
     shop_logo_url: Optional[str] = None
@@ -160,6 +161,7 @@ async def get_featured_shops(db: DBSession, limit: int = Query(10, ge=1, le=50))
         result.append(
             ShopPublicDetailResponse(
                 id=seller.id,
+                public_id=getattr(seller, "public_id", "") or "",
                 shop_name=seller.shop_name,
                 shop_slug=seller.shop_slug,
                 shop_logo_url=seller.shop_logo_url,
@@ -198,6 +200,7 @@ async def get_public_shop_detail(
     
     return ShopPublicDetailResponse(
         id=seller.id,
+        public_id=getattr(seller, "public_id", "") or "",
         shop_name=seller.shop_name,
         shop_slug=seller.shop_slug,
         shop_logo_url=seller.shop_logo_url,

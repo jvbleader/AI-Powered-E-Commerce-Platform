@@ -12,8 +12,14 @@ from schemas.admin.admin_schema import (
     AdminTimeSeriesData,
     AdminPaymentBreakdown,
     AdminUserBreakdown,
+    AdminProductListResponse,
+    AdminUserGrowthResponse,
+    AdminUserGrowthPoint,
+    AdminActionCountsResponse,
+    AdminComprehensiveDashboardResponse,
 )
 import services.auth.auth_service as auth_service
+import services.admin.comprehensive_stats_service as comp_stats_service
 
 from core.database import DBSession
 from models.user import User
@@ -56,6 +62,32 @@ class CreateCategoryRequest(BaseModel):
     is_default_other: bool = False
 
 router = APIRouter(prefix="/admin", tags=["Admin"])
+
+
+@router.get(path="/dashboard/action-counts", response_model=AdminActionCountsResponse)
+async def get_dashboard_action_counts_api(
+    user: CurrentAdmin,
+    db: DBSession,
+) -> AdminActionCountsResponse:
+    """Lấy số lượng các tác vụ chờ xử lý (hồ sơ seller, vi phạm, đề xuất category, khiếu nại)."""
+    return await comp_stats_service.get_action_counts(db)
+
+
+@router.get(path="/dashboard/comprehensive", response_model=AdminComprehensiveDashboardResponse)
+async def get_comprehensive_dashboard_stats_api(
+    user: CurrentAdmin,
+    db: DBSession,
+    time_preset: str = "7DAYS",
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+) -> AdminComprehensiveDashboardResponse:
+    """Lấy thống kê toàn diện đa chiều phục vụ trang Dashboard Admin hiện đại."""
+    return await comp_stats_service.get_comprehensive_admin_stats(
+        db=db,
+        time_preset=time_preset,
+        start_date=start_date,
+        end_date=end_date,
+    )
 
 
 @router.get(path="/dashboard-stats", response_model=AdminDashboardStatsResponse)
@@ -331,6 +363,86 @@ async def get_detailed_statistics_api(
             monthly_stats=monthly_stats,
             top_products=top_products,
             top_sellers=top_sellers,
+        )
+    except Exception:
+        raise
+
+@router.get(path="/user-growth", response_model=AdminUserGrowthResponse)
+async def get_user_growth_api(
+    user: CurrentAdmin,
+    db: DBSession,
+) -> AdminUserGrowthResponse:
+    """Thống kê số người dùng đăng ký mới theo tuần (12 tuần ISO) và theo tháng (12 tháng)."""
+    from sqlalchemy import select, func
+    from datetime import datetime, timedelta, date as date_cls
+
+    try:
+        now = datetime.utcnow()
+        total_users = (await db.scalar(select(func.count(User.id)))) or 0
+
+        # ---- Weekly buckets: 12 tuần ISO gần nhất (tuần bắt đầu thứ Hai) ----
+        current_week_start = (now - timedelta(days=now.weekday())).replace(
+            hour=0, minute=0, second=0, microsecond=0
+        )
+        first_week_start = current_week_start - timedelta(weeks=11)
+
+        weekly_stmt = (
+            select(
+                func.yearweek(User.created_at, 3).label("wk"),
+                func.count(User.id),
+            )
+            .where(User.created_at.isnot(None))
+            .group_by(func.yearweek(User.created_at, 3))
+            .order_by(func.yearweek(User.created_at, 3))
+        )
+        weekly_res = await db.execute(weekly_stmt)
+        # yearweek(mode 3) => YYYYWW theo ISO; map về ngày thứ Hai của tuần để làm nhãn
+        weekly_map = {}
+        for wk, cnt in weekly_res.all():
+            iso_year, iso_week = int(wk) // 100, int(wk) % 100
+            try:
+                monday = date_cls.fromisocalendar(iso_year, iso_week, 1)
+                weekly_map[monday.isoformat()] = int(cnt or 0)
+            except ValueError:
+                continue
+
+        weekly: list[AdminUserGrowthPoint] = []
+        for i in range(12):
+            week_monday = (first_week_start + timedelta(weeks=i)).date()
+            key = week_monday.isoformat()
+            weekly.append(AdminUserGrowthPoint(date=key, count=weekly_map.get(key, 0)))
+
+        # ---- Monthly buckets: 12 tháng gần nhất ----
+        monthly_stmt = (
+            select(
+                func.date_format(User.created_at, "%Y-%m").label("mo"),
+                func.count(User.id),
+            )
+            .where(User.created_at.isnot(None))
+            .group_by(func.date_format(User.created_at, "%Y-%m"))
+            .order_by(func.date_format(User.created_at, "%Y-%m"))
+        )
+        monthly_res = await db.execute(monthly_stmt)
+        monthly_map = {row[0]: int(row[1] or 0) for row in monthly_res.all()}
+
+        monthly: list[AdminUserGrowthPoint] = []
+        y, m = now.year, now.month
+        # 12 tháng gần nhất tính cả tháng hiện tại -> bắt đầu từ tháng hiện tại lùi 11
+        months = []
+        for i in range(11, -1, -1):
+            mm = m - i
+            yy = y
+            while mm <= 0:
+                mm += 12
+                yy -= 1
+            months.append(f"{yy:04d}-{mm:02d}")
+        for key in months:
+            monthly.append(AdminUserGrowthPoint(date=key, count=monthly_map.get(key, 0)))
+
+        return AdminUserGrowthResponse(
+            total_users=total_users,
+            weekly=weekly,
+            monthly=monthly,
         )
     except Exception:
         raise
@@ -834,35 +946,111 @@ async def delete_category_admin_api(
     return {"message": "Đã xoá danh mục thành công"}
 
 
-@router.get(path="/products", response_model=list[ProductDetailPublicResponse])
+@router.get(path="/products", response_model=AdminProductListResponse)
 async def list_products_admin_api(
     user: CurrentAdmin,
     db: DBSession,
+    page: int = 1,
     limit: int = 100,
-    offset: int = 0,
-) -> list[ProductDetailPublicResponse]:
-    from sqlalchemy import select
+    search: Optional[str] = None,
+    status: Optional[str] = None,
+    category_id: Optional[int] = None,
+    sort_by: Optional[str] = "newest",
+) -> AdminProductListResponse:
+    import math
+    from sqlalchemy import select, func, or_
     from sqlalchemy.orm import selectinload
-    from models.catalog import Product
-    from models.catalog import ProductVariant
+    from models.catalog import Product, Category, ProductVariant
     from models.seller.seller_profile import SellerProfile
 
-    safe_limit = min(max(1, limit), 200)
+    safe_limit = min(max(1, limit), 500)
+    safe_page = max(1, page)
+    offset = (safe_page - 1) * safe_limit
+
+    stmt = select(Product).options(
+        selectinload(Product.seller).selectinload(SellerProfile.shipping_providers),
+        selectinload(Product.categories),
+        selectinload(Product.images),
+        selectinload(Product.variants).selectinload(ProductVariant.inventory),
+    )
+    count_stmt = select(func.count(Product.id))
+
+    # Apply filters
+    if search and search.strip():
+        kw = f"%{search.strip()}%"
+        search_filter = or_(
+            Product.name.ilike(kw),
+            Product.seller.has(SellerProfile.shop_name.ilike(kw)),
+        )
+        stmt = stmt.where(search_filter)
+        count_stmt = count_stmt.where(search_filter)
+
+    if status and status != "ALL":
+        stmt = stmt.where(Product.status == status)
+        count_stmt = count_stmt.where(Product.status == status)
+
+    if category_id is not None and category_id > 0:
+        cat_filter = Product.categories.any(Category.id == category_id)
+        stmt = stmt.where(cat_filter)
+        count_stmt = count_stmt.where(cat_filter)
+
+    # Sorting
+    if sort_by == "sold_desc":
+        stmt = stmt.order_by(Product.sold_count.desc(), Product.id.desc())
+    elif sort_by == "sold_asc":
+        stmt = stmt.order_by(Product.sold_count.asc(), Product.id.asc())
+    elif sort_by == "name_asc":
+        stmt = stmt.order_by(Product.name.asc(), Product.id.asc())
+    elif sort_by == "name_desc":
+        stmt = stmt.order_by(Product.name.desc(), Product.id.desc())
+    else:
+        stmt = stmt.order_by(Product.created_at.desc(), Product.id.desc())
+
+    total = (await db.scalar(count_stmt)) or 0
+    total_pages = math.ceil(total / safe_limit) if total > 0 else 1
+
+    stmt = stmt.limit(safe_limit).offset(offset)
+    res = await db.execute(stmt)
+    products = list(res.scalars().all())
+
+    return AdminProductListResponse(
+        items=products,
+        total=total,
+        page=safe_page,
+        limit=safe_limit,
+        total_pages=total_pages,
+    )
+
+
+@router.get(path="/products/{public_id}", response_model=ProductDetailPublicResponse)
+async def get_product_detail_admin_api(
+    public_id: str,
+    user: CurrentAdmin,
+    db: DBSession,
+) -> ProductDetailPublicResponse:
+    from sqlalchemy import select, or_
+    from sqlalchemy.orm import selectinload
+    from models.catalog import Product, ProductVariant
+    from models.seller.seller_profile import SellerProfile
+
+    conditions = [Product.public_id == public_id, Product.slug == public_id]
+    if public_id.isdigit():
+        conditions.append(Product.id == int(public_id))
+
     stmt = (
         select(Product)
+        .where(or_(*conditions))
         .options(
             selectinload(Product.seller).selectinload(SellerProfile.shipping_providers),
             selectinload(Product.categories),
             selectinload(Product.images),
-            selectinload(Product.variants).selectinload(ProductVariant.inventory)
+            selectinload(Product.variants).selectinload(ProductVariant.inventory),
         )
-        .order_by(Product.created_at.desc())
-        .limit(safe_limit)
-        .offset(offset)
     )
-    res = await db.execute(stmt)
-    products = res.scalars().all()
-    return products
+    product = await db.scalar(stmt)
+    if not product:
+        raise HTTPException(status_code=404, detail="Sản phẩm không tồn tại")
+    return product
 
 
 @router.get(path="/category-suggestions", response_model=list[CategorySuggestionPublicResponse])

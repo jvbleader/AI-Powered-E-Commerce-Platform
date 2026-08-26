@@ -473,6 +473,10 @@ async def pay_with_wallet(
                 )
             )
 
+        # Record payment inflow into platform finance ledger
+        from services.platform.platform_finance_service import record_order_payment_inflow
+        await record_order_payment_inflow(db, order)
+
     # Re-fetch with order links loaded
     payment = await payment_repository.get_payment_by_code_with_orders(
         db, payment.payment_code

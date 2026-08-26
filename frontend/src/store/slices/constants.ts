@@ -34,6 +34,14 @@ export const SELLER_ROUTES = {
   recalculateDashboardSummary: "/seller/dashboard-summary/recalculate"
 };
 
+export const SELLER_FINANCE_ROUTES = {
+  wallet: "/seller/finance/wallet",
+  transactions: "/seller/finance/transactions",
+  payouts: "/seller/finance/payouts",
+  withdraw: "/seller/finance/withdraw",
+  bankAccount: "/seller/finance/bank-account"
+};
+
 
 export const ADMIN_SELLER_APPLICATION_ROUTES = {
   list: "/admin/seller-applications",
@@ -44,6 +52,7 @@ export const ADMIN_SELLER_APPLICATION_ROUTES = {
 
 export const SELLER_PRODUCT_ROUTES = {
   list: "/seller/products",
+  detail: (productId: string) => `/seller/products/${productId}`,
   create: "/seller/products",
   update: (productId: string) => `/seller/products/${productId}`,
   hide: (productId: string) => `/seller/products/${productId}/hide`,

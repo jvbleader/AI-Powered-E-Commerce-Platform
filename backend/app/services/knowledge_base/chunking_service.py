@@ -102,26 +102,49 @@ def extract_pdf_pages(pdf_source: bytes | BinaryIO | str | Path) -> List[Dict[st
 
     Returns:
         List of dicts: `[{"page_number": 1, "text": "Page content..."}, ...]`
-    """
-    if isinstance(pdf_source, bytes):
-        stream = io.BytesIO(pdf_source)
-        reader = pypdf.PdfReader(stream)
-    elif isinstance(pdf_source, (str, Path)):
-        reader = pypdf.PdfReader(str(pdf_source))
-    else:
-        reader = pypdf.PdfReader(pdf_source)
 
-    pages_data: List[Dict[str, Any]] = []
-    for idx, page in enumerate(reader.pages):
-        page_num = idx + 1
-        page_text = page.extract_text() or ""
-        # Clean extra null/control chars
-        page_text = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f]", "", page_text).strip()
-        pages_data.append({
-            "page_number": page_num,
-            "text": page_text,
-        })
-    return pages_data
+    Raises:
+        ValueError: Nếu file PDF bị hỏng, có mật khẩu bảo vệ hoặc không thể đọc.
+    """
+    try:
+        if isinstance(pdf_source, bytes):
+            stream = io.BytesIO(pdf_source)
+            reader = pypdf.PdfReader(stream)
+        elif isinstance(pdf_source, (str, Path)):
+            reader = pypdf.PdfReader(str(pdf_source))
+        else:
+            reader = pypdf.PdfReader(pdf_source)
+
+        if reader.is_encrypted:
+            try:
+                # Thử giải mã nếu tài liệu dùng empty password
+                reader.decrypt("")
+            except Exception:
+                raise ValueError("File PDF đã được đặt mật khẩu bảo vệ. Vui lòng tải lên tài liệu không có mật khẩu.")
+
+        pages_data: List[Dict[str, Any]] = []
+        for idx, page in enumerate(reader.pages):
+            page_num = idx + 1
+            try:
+                page_text = page.extract_text() or ""
+            except Exception:
+                page_text = ""
+            # Clean extra null/control chars
+            page_text = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f]", "", page_text).strip()
+            pages_data.append({
+                "page_number": page_num,
+                "text": page_text,
+            })
+
+        if not pages_data:
+            raise ValueError("File PDF không chứa trang nội dung nào.")
+
+        return pages_data
+
+    except ValueError:
+        raise
+    except Exception as exc:
+        raise ValueError(f"Không thể đọc nội dung file PDF (file bị lỗi cấu trúc hoặc hỏng): {exc}")
 
 
 def chunk_pdf_document(
@@ -182,3 +205,31 @@ def chunk_pdf_document(
             global_chunk_idx += 1
 
     return result_chunks
+
+
+def parse_pages_from_extracted_text(text: str | None) -> List[Dict[str, Any]]:
+    """Reconstruct structured pages from a formatted extracted_text string stored in the database.
+
+    Handles strings formatted with '[Trang X]' page headers, returning `[{"page_number": X, "text": "..."}]`.
+    Falls back gracefully to a single page if no page markers are present.
+    """
+    if not text or not text.strip():
+        return []
+
+    pattern = re.compile(
+        r"\[Trang\s+(\d+)\]\s*\n([\s\S]*?)(?=(?:\[Trang\s+\d+\]\s*\n|$))",
+        re.IGNORECASE,
+    )
+    matches = list(pattern.finditer(text))
+    if not matches:
+        return [{"page_number": 1, "text": text.strip()}]
+
+    pages: List[Dict[str, Any]] = []
+    for match in matches:
+        page_num = int(match.group(1))
+        page_text = match.group(2).strip()
+        if page_text:
+            pages.append({"page_number": page_num, "text": page_text})
+
+    return pages or [{"page_number": 1, "text": text.strip()}]
+

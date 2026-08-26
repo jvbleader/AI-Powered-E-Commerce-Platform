@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { DataTable } from "@/components/ui/data-table";
 import { Section } from "@/components/ui/containers";
 import { StatusBadge } from "@/components/ui/badge";
@@ -10,8 +11,9 @@ import { Button } from "@/components/ui/button";
 import { Product, Category } from "@/types/models";
 import { useMarketplaceStore } from "@/store/use-marketplace-store";
 import { Input, Select } from "@/components/ui/input";
-
 import { TableSkeleton } from "@/components/ui/skeleton";
+
+const PAGE_SIZE = 100;
 
 export default function AdminProductsPage() {
   const { showToast } = useMarketplaceStore();
@@ -23,6 +25,7 @@ export default function AdminProductsPage() {
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [categoryFilter, setCategoryFilter] = useState("ALL");
   const [categories, setCategories] = useState<Category[]>([]);
+  const [currentPage, setCurrentPage] = useState(1);
 
   const handleHideProduct = async (productId: string) => {
     if (!confirm("Bạn có chắc muốn ẩn sản phẩm này?")) return;
@@ -60,10 +63,10 @@ export default function AdminProductsPage() {
   useEffect(() => {
     let isMounted = true;
     setLoading(true);
-    fetchAdminProducts()
+    fetchAdminProducts({ limit: 500 })
       .then((data) => {
         if (isMounted) {
-          setProducts(data);
+          setProducts(data.items || []);
           setLoading(false);
         }
       })
@@ -87,10 +90,15 @@ export default function AdminProductsPage() {
     };
   }, [showToast]);
 
+  // Reset page to 1 when any filter or sort changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, statusFilter, categoryFilter, sortBy]);
+
   const filteredAndSortedProducts = useMemo(() => {
     let result = products;
-    if (searchQuery) {
-      const q = searchQuery.toLowerCase();
+    if (searchQuery.trim()) {
+      const q = searchQuery.trim().toLowerCase();
       result = result.filter(
         (p) =>
           p.name.toLowerCase().includes(q) ||
@@ -122,10 +130,24 @@ export default function AdminProductsPage() {
       case "name_desc":
         result.sort((a, b) => b.name.localeCompare(a.name));
         break;
-      // "newest" uses original array order which is created_at desc from API
+      case "newest":
+      default:
+        result.sort((a, b) => {
+          const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+          const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+          return timeB - timeA;
+        });
+        break;
     }
     return result;
-  }, [products, searchQuery, sortBy]);
+  }, [products, searchQuery, statusFilter, categoryFilter, sortBy]);
+
+  const totalItems = filteredAndSortedProducts.length;
+  const totalPages = Math.ceil(totalItems / PAGE_SIZE) || 1;
+  const paginatedProducts = useMemo(() => {
+    const start = (currentPage - 1) * PAGE_SIZE;
+    return filteredAndSortedProducts.slice(start, start + PAGE_SIZE);
+  }, [filteredAndSortedProducts, currentPage]);
 
   return (
     <Section 
@@ -179,35 +201,78 @@ export default function AdminProductsPage() {
       {loading ? (
         <div className="p-4"><TableSkeleton headers={["Product", "Shop", "Category", "Status", "Sold", "Action"]} rows={10} /></div>
       ) : (
-        <DataTable
-          columns={["Product", "Shop", "Category", "Status", "Sold", "Action"]}
-          rows={filteredAndSortedProducts.map((product) => [
-            <a key="p" className="font-bold text-primary" href={`/admin/products/${product.id}`}>
-              {product.name}
-            </a>,
-            (product as any).seller?.shopName ?? "-",
-            (product as any).categories?.map((c: any) => c.name).join(", ") || "-",
-            <StatusBadge key="st" status={product.status} label={productStatusLabel[product.status]} />,
-            `${product.soldCount}`,
-            <div key="act" className="flex gap-2">
-              {product.status === "ACTIVE" && (
-                <Button variant="secondary" className="h-8 px-2 text-xs" onClick={() => handleHideProduct(product.id)}>
-                  Ẩn
-                </Button>
-              )}
-              {product.status === "HIDDEN" && (
-                <Button variant="secondary" className="h-8 px-2 text-xs" onClick={() => handleUnhideProduct(product.id)}>
-                  Hiện
-                </Button>
-              )}
-              {product.status !== "DELETED" && (
-                <Button variant="danger" className="h-8 px-2 text-xs" onClick={() => handleDeleteProduct(product.id)}>
-                  Xoá
-                </Button>
+        <>
+          <DataTable
+            columns={["Product", "Shop", "Category", "Status", "Sold", "Action"]}
+            rows={paginatedProducts.map((product) => [
+              <a key="p" className="font-bold text-primary" href={`/admin/products/${product.id}`}>
+                {product.name}
+              </a>,
+              (product as any).seller?.shopName ?? "-",
+              (product as any).categories?.map((c: any) => c.name).join(", ") || "-",
+              <StatusBadge key="st" status={product.status} label={productStatusLabel[product.status]} />,
+              `${product.soldCount}`,
+              <div key="act" className="flex gap-2">
+                {product.status === "ACTIVE" && (
+                  <Button variant="secondary" className="h-8 px-2 text-xs" onClick={() => handleHideProduct(product.id)}>
+                    Ẩn
+                  </Button>
+                )}
+                {product.status === "HIDDEN" && (
+                  <Button variant="secondary" className="h-8 px-2 text-xs" onClick={() => handleUnhideProduct(product.id)}>
+                    Hiện
+                  </Button>
+                )}
+                {product.status !== "DELETED" && (
+                  <Button variant="danger" className="h-8 px-2 text-xs" onClick={() => handleDeleteProduct(product.id)}>
+                    Xoá
+                  </Button>
+                )}
+              </div>
+            ])}
+          />
+          {totalItems > 0 && (
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-4 py-4 px-2 border-t border-line text-sm text-muted">
+              <div>
+                Hiển thị <span className="font-semibold text-foreground">{(currentPage - 1) * PAGE_SIZE + 1}</span> - <span className="font-semibold text-foreground">{Math.min(currentPage * PAGE_SIZE, totalItems)}</span> trên tổng số <span className="font-semibold text-foreground">{totalItems}</span> sản phẩm
+              </div>
+              {totalPages > 1 && (
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="secondary"
+                    className="min-h-0 h-8 px-2.5 text-xs flex items-center gap-1"
+                    disabled={currentPage <= 1}
+                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                    <span>Trước</span>
+                  </Button>
+                  <div className="flex items-center gap-1">
+                    {Array.from({ length: totalPages }, (_, idx) => idx + 1).map((pg) => (
+                      <Button
+                        key={pg}
+                        variant={pg === currentPage ? "primary" : "secondary"}
+                        className="min-h-0 h-8 w-8 p-0 text-xs font-semibold"
+                        onClick={() => setCurrentPage(pg)}
+                      >
+                        {pg}
+                      </Button>
+                    ))}
+                  </div>
+                  <Button
+                    variant="secondary"
+                    className="min-h-0 h-8 px-2.5 text-xs flex items-center gap-1"
+                    disabled={currentPage >= totalPages}
+                    onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                  >
+                    <span>Sau</span>
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
               )}
             </div>
-          ])}
-        />
+          )}
+        </>
       )}
     </Section>
   );

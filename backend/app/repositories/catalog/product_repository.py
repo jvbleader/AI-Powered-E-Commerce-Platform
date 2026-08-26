@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import List, Optional, Union, Any
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update, func, or_, and_, desc, delete, case
 from sqlalchemy.orm import selectinload, joinedload
@@ -122,6 +122,7 @@ async def get_products_by_seller(
             selectinload(Product.variants).selectinload(ProductVariant.inventory),
             selectinload(Product.categories),
         )
+        .order_by(desc(Product.created_at), desc(Product.id))
         .offset(skip)
         .limit(limit)
     )
@@ -608,14 +609,34 @@ async def get_recommended_products(
 
 
 async def get_variants_for_checkout(
-    db: AsyncSession, variant_ids: list[int]
+    db: AsyncSession, variant_identifiers: list[Union[str, int]]
 ) -> list[ProductVariant]:
+    if not variant_identifiers:
+        return []
+
+    int_ids = [int(v) for v in variant_identifiers if str(v).isdigit()]
+    str_ids = [str(v).strip() for v in variant_identifiers if not str(v).isdigit()]
+
+    conds = []
+    if int_ids:
+        conds.append(ProductVariant.id.in_(int_ids))
+    if str_ids:
+        conds.append(
+            or_(
+                ProductVariant.public_id.in_(str_ids),
+                ProductVariant.sku.in_(str_ids),
+            )
+        )
+
+    if not conds:
+        return []
+
     stmt = (
         select(ProductVariant)
         .join(ProductVariant.product)
         .options(selectinload(ProductVariant.product).selectinload(Product.seller))
         .where(
-            ProductVariant.id.in_(variant_ids),
+            or_(*conds),
             ProductVariant.status == "ACTIVE",
             Product.status == "ACTIVE",
         )

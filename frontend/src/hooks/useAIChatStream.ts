@@ -21,19 +21,36 @@ import {
 export function useAIChatStream() {
   const sessionUserId = useMarketplaceStore((s) => s.state.sessionUserId);
   const [sessionId, setSessionId] = useState<string>("");
+  const initialSyncRef = useRef(false);
 
+  // Restore sessionId from storage on client mount
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      if (sessionId) {
-        sessionStorage.setItem("chat_active_ai_session_id", sessionId);
-        if (sessionUserId) {
-          setSessionIdLocal(sessionUserId, sessionId);
-        }
-      } else {
-        sessionStorage.removeItem("chat_active_ai_session_id");
-        if (sessionUserId) {
-          clearSessionId(sessionUserId);
-        }
+    if (typeof window === "undefined" || initialSyncRef.current) return;
+    initialSyncRef.current = true;
+
+    const activeTabSession = sessionStorage.getItem("chat_active_ai_session_id");
+    const userStoredSession = sessionUserId
+      ? localStorage.getItem(`${STORAGE_KEYS.AI_SESSION}_${sessionUserId}`)
+      : null;
+
+    const restoredId = activeTabSession || userStoredSession || "";
+    if (restoredId) {
+      setSessionId(restoredId);
+    }
+  }, [sessionUserId]);
+
+  // Sync active sessionId to storage whenever it changes (after initial mount)
+  useEffect(() => {
+    if (typeof window === "undefined" || !initialSyncRef.current) return;
+    if (sessionId) {
+      sessionStorage.setItem("chat_active_ai_session_id", sessionId);
+      if (sessionUserId) {
+        setSessionIdLocal(sessionUserId, sessionId);
+      }
+    } else {
+      sessionStorage.removeItem("chat_active_ai_session_id");
+      if (sessionUserId) {
+        clearSessionId(sessionUserId);
       }
     }
   }, [sessionId, sessionUserId]);
@@ -49,6 +66,8 @@ export function useAIChatStream() {
   const isInitialLoad = useRef(true);
 
   const abortControllerRef = useRef<AbortController | null>(null);
+  const isMountedRef = useRef<boolean>(true);
+  const rafRef = useRef<number>(0);
   const messagesRef = useRef<AIChatMessage[]>(messages);
   messagesRef.current = messages;
 
@@ -117,31 +136,12 @@ export function useAIChatStream() {
           };
           setMessages([...history, pendingAssistantMsg]);
 
-          // Poll for completed background reply
+          // Poll for completed background reply (tối đa 45 lần x 2s = 90 giây)
           let retryCount = 0;
           pollTimerRef.current = setInterval(async () => {
             retryCount++;
             if (activeSessionIdRef.current !== targetSessionId) {
               clearPolling();
-              return;
-            }
-
-            if (retryCount > 15) {
-              clearPolling();
-              if (activeSessionIdRef.current === targetSessionId) {
-                setMessages((prev) =>
-                  prev.map((msg) =>
-                    msg.id === pendingAssistantMsg.id
-                      ? {
-                          ...msg,
-                          content:
-                            "Phản hồi bị gián đoạn hoặc quá thời gian chờ. Bạn vui lòng nhấn thử lại nhé!",
-                          isError: true,
-                        }
-                      : msg
-                  )
-                );
-              }
               return;
             }
 
@@ -156,11 +156,30 @@ export function useAIChatStream() {
                 clearPolling();
                 setMessages(polledHistory);
                 loadSessions(true);
+                return;
               }
             } catch {
               // continue polling
             }
-          }, 1500);
+
+            if (retryCount >= 45) {
+              clearPolling();
+              if (activeSessionIdRef.current === targetSessionId) {
+                setMessages((prev) =>
+                  prev.map((msg) =>
+                    msg.id === pendingAssistantMsg.id
+                      ? {
+                          ...msg,
+                          content:
+                            "Xin lỗi bạn, đã xảy ra sự cố trong quá trình xử lý phản hồi. Bạn vui lòng nhấn thử lại nhé!",
+                          isError: true,
+                        }
+                      : msg
+                  )
+                );
+              }
+            }
+          }, 2000);
         } else {
           setMessages(history);
         }
@@ -191,6 +210,23 @@ export function useAIChatStream() {
       clearPolling();
     };
   }, [sessionId, sessionUserId, loadHistoryWithPendingCheck, clearPolling]);
+
+  // Lifecycle cleanup on unmount to prevent memory leaks and orphaned timers
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+        abortControllerRef.current = null;
+      }
+      if (rafRef.current) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = 0;
+      }
+      clearPolling();
+    };
+  }, [clearPolling]);
 
   const sendMessage = useCallback(
     async (text: string) => {
@@ -274,10 +310,9 @@ export function useAIChatStream() {
       abortControllerRef.current = new AbortController();
 
       let pendingChunk = "";
-      let chunkRaf = 0;
       const flushChunks = () => {
-        chunkRaf = 0;
-        if (!pendingChunk) return;
+        rafRef.current = 0;
+        if (!pendingChunk || !isMountedRef.current) return;
         const text = pendingChunk;
         pendingChunk = "";
         setCurrentStatus(null);
@@ -296,14 +331,17 @@ export function useAIChatStream() {
         history: historyPayload,
         signal: abortControllerRef.current.signal,
         onStatus: (status) => {
+          if (!isMountedRef.current || abortControllerRef.current?.signal.aborted) return;
           setCurrentStatus(status);
         },
         onTextChunk: (chunk) => {
+          if (!isMountedRef.current || abortControllerRef.current?.signal.aborted) return;
           // Gộp token theo frame — tránh setState mỗi chunk làm giật list
           pendingChunk += chunk;
-          if (!chunkRaf) chunkRaf = requestAnimationFrame(flushChunks);
+          if (!rafRef.current) rafRef.current = requestAnimationFrame(flushChunks);
         },
         onProducts: (products: AIProductItem[]) => {
+          if (!isMountedRef.current || abortControllerRef.current?.signal.aborted) return;
           flushChunks();
           setMessages((prev) =>
             prev.map((msg) =>
@@ -312,6 +350,7 @@ export function useAIChatStream() {
           );
         },
         onCitations: (citations: AICitationItem[]) => {
+          if (!isMountedRef.current || abortControllerRef.current?.signal.aborted) return;
           flushChunks();
           setMessages((prev) =>
             prev.map((msg) =>
@@ -320,6 +359,7 @@ export function useAIChatStream() {
           );
         },
         onOrderContext: (order: AIOrderContext) => {
+          if (!isMountedRef.current || abortControllerRef.current?.signal.aborted) return;
           flushChunks();
           setMessages((prev) =>
             prev.map((msg) =>
@@ -328,32 +368,39 @@ export function useAIChatStream() {
           );
         },
         onEnd: () => {
-          if (chunkRaf) cancelAnimationFrame(chunkRaf);
+          if (rafRef.current) cancelAnimationFrame(rafRef.current);
           flushChunks();
+          if (!isMountedRef.current || abortControllerRef.current?.signal.aborted) return;
           setIsStreaming(false);
           setCurrentStatus(null);
           // Reload sessions to update sidebar ordering and timestamps
           loadSessions(true);
         },
         onError: (err) => {
-          if (chunkRaf) cancelAnimationFrame(chunkRaf);
+          if (rafRef.current) cancelAnimationFrame(rafRef.current);
           flushChunks();
+          if (!isMountedRef.current || abortControllerRef.current?.signal.aborted) return;
           setIsStreaming(false);
           setCurrentStatus(null);
           const errMsg = err.message || "Lỗi kết nối đến trợ lý AI";
-          setError(errMsg);
-          setMessages((prev) =>
-            prev.map((msg) =>
-              msg.id === assistantMsgId
-                ? {
-                    ...msg,
-                    content:
-                      "Xin lỗi bạn, đã xảy ra sự cố trong quá trình xử lý phản hồi. Bạn vui lòng nhấn thử lại nhé!",
-                    isError: true,
-                  }
-                : msg
-            )
-          );
+
+          if (activeSessionId) {
+            loadHistoryWithPendingCheck(activeSessionId);
+          } else {
+            setError(errMsg);
+            setMessages((prev) =>
+              prev.map((msg) =>
+                msg.id === assistantMsgId
+                  ? {
+                      ...msg,
+                      content:
+                        "Xin lỗi bạn, đã xảy ra sự cố trong quá trình xử lý phản hồi. Bạn vui lòng nhấn thử lại nhé!",
+                      isError: true,
+                    }
+                  : msg
+              )
+            );
+          }
         }
       });
     },
@@ -433,6 +480,21 @@ export function useAIChatStream() {
     [sessionId, switchChat, clearChat]
   );
 
+  const stopStreaming = useCallback(() => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    if (rafRef.current) {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = 0;
+    }
+    if (isMountedRef.current) {
+      setIsStreaming(false);
+      setCurrentStatus(null);
+    }
+  }, []);
+
   return {
     sessionId,
     messages,
@@ -443,6 +505,7 @@ export function useAIChatStream() {
     chatSessions,
     isLoadingSessions,
     sendMessage,
+    stopStreaming,
     clearChat,
     switchChat,
     deleteSession,

@@ -246,8 +246,6 @@ export type BackendOrderResponse = {
   seller_confirmed_at?: string | null;
   subtotal_amount: string | number;
   shipping_fee: string | number;
-  product_discount_amount: string | number;
-  shipping_discount_amount: string | number;
   total_amount: string | number;
   customer_note?: string | null;
   preferred_payment_method?: string | null;
@@ -361,6 +359,7 @@ export type MarketplaceStore = {
 
   // ── Product slice ──
   fetchSellerProducts: () => Promise<any>;
+  fetchSellerProductDetail: (productId: string) => Promise<any>;
   createSellerProduct: (payload: any) => Promise<any>;
   updateSellerProduct: (productId: string, payload: any) => Promise<any>;
   hideSellerProduct: (productId: string) => Promise<any>;
@@ -390,6 +389,13 @@ export type MarketplaceStore = {
   walletTopup: (amount: number, method: string) => Promise<any>;
   walletPayOrders: (orderCodes: string[], pin: string) => Promise<any>;
 
+  // ── Seller Finance slice ──
+  fetchSellerWallet: () => Promise<{ ok: boolean; wallet?: SellerWalletData; message?: string }>;
+  fetchSellerWalletTransactions: (params?: { tx_type?: string; start_date?: string; end_date?: string; page?: number; limit?: number }) => Promise<{ ok: boolean; items?: SellerWalletTransactionData[]; total?: number; message?: string }>;
+  fetchSellerPayouts: (params?: { page?: number; limit?: number }) => Promise<{ ok: boolean; items?: SellerPayoutData[]; total?: number; message?: string }>;
+  requestSellerWithdrawal: (payload: WithdrawalPayload) => Promise<{ ok: boolean; payout?: SellerPayoutData; message?: string }>;
+  updateSellerBankAccount: (payload: BankAccountPayload) => Promise<{ ok: boolean; bankInfo?: any; message?: string }>;
+
   // ── Core slice ──
   resetDemo: () => Promise<void>;
   showToast: (message: string, tone?: ToastTone) => Promise<void>;
@@ -400,4 +406,62 @@ export type MarketplaceStore = {
   updateViolationReportStatus: (reportId: string, status: import("@/types/models").ViolationReportStatus) => Promise<any>;
   hideProductByAdmin: (productId: string, productPublicId?: string) => Promise<{ok: boolean, message?: string}>;
   deleteViolationReport: (reportId: string) => Promise<any>;
+};
+
+export type SellerWalletData = {
+  id: number;
+  seller_id: number;
+  available_balance: number;
+  pending_balance: number;
+  total_withdrawn: number;
+  bank_info: {
+    bank_name?: string | null;
+    bank_account_number?: string | null;
+    bank_account_name?: string | null;
+  };
+  created_at: string;
+  updated_at?: string | null;
+};
+
+export type SellerWalletTransactionData = {
+  id: number;
+  transaction_type: "ORDER_SETTLEMENT" | "WITHDRAWAL" | "REFUND_DEDUCTION" | "ADJUSTMENT" | string;
+  amount: number;
+  balance_before: number;
+  balance_after: number;
+  gross_amount?: number | null;
+  payment_fee?: number | null;
+  commission_fee?: number | null;
+  order_id?: number | null;
+  order_code?: string | null;
+  payout_id?: number | null;
+  payout_code?: string | null;
+  description: string;
+  created_at: string;
+};
+
+export type SellerPayoutData = {
+  id: number;
+  payout_code?: string | null;
+  amount: number;
+  payout_status: "PENDING" | "PROCESSING" | "PAID" | "FAILED" | "REJECTED" | string;
+  bank_name?: string | null;
+  bank_account_number?: string | null;
+  bank_account_name?: string | null;
+  note?: string | null;
+  paid_at?: string | null;
+  created_at: string;
+};
+
+export type WithdrawalPayload = {
+  amount: number;
+  bank_name?: string;
+  bank_account_number?: string;
+  bank_account_name?: string;
+};
+
+export type BankAccountPayload = {
+  bank_name: string;
+  bank_account_number: string;
+  bank_account_name: string;
 };

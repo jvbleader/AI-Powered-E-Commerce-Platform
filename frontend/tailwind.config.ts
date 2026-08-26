@@ -16,9 +16,7 @@ const config: Config = {
         muted: "#5E6A63",
         line: "#E2E8E3",
         primary: "#0B6B4E",
-        amber: "#F5A524",
-        coral: "#E75A4F",
-        sky: "#3B82F6"
+        coral: "#E75A4F"
       },
       borderRadius: {
         panel: "8px"

@@ -119,6 +119,8 @@ async def update_order_status_to_delivered(db: AsyncSession, order: Order) -> Or
 
     if order.preferred_payment_method == "COD":
         order.payment_status = "PAID"
+        from services.platform.platform_finance_service import record_order_payment_inflow
+        await record_order_payment_inflow(db, order)
 
     log = OrderStatusLog(
         order_id=order.id,

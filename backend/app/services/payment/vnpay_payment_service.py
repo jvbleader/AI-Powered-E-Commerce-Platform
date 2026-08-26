@@ -96,6 +96,9 @@ async def _mark_orders_for_paid_payment(payment: Payment, db: AsyncSession) -> N
                         note="Payment completed via VNPay",
                     )
                 )
+            # Record payment inflow into platform finance ledger
+            from services.platform.platform_finance_service import record_order_payment_inflow
+            await record_order_payment_inflow(db, order)
 
 
 async def apply_vnpay_payment_result(

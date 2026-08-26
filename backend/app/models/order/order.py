@@ -38,14 +38,6 @@ class Order(Base):
         ),
         CheckConstraint("subtotal_amount >= 0", name="ck_orders_subtotal_amount"),
         CheckConstraint("shipping_fee >= 0", name="ck_orders_shipping_fee"),
-        CheckConstraint(
-            "product_discount_amount >= 0",
-            name="ck_orders_product_discount_amount",
-        ),
-        CheckConstraint(
-            "shipping_discount_amount >= 0",
-            name="ck_orders_shipping_discount_amount",
-        ),
         CheckConstraint("total_amount >= 0", name="ck_orders_total_amount"),
         Index("ix_orders_user_id", "user_id"),
         Index("ix_orders_seller_id", "seller_id"),
@@ -93,18 +85,6 @@ class Order(Base):
     )
     subtotal_amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
     shipping_fee: Mapped[Decimal] = mapped_column(
-        Numeric(12, 2),
-        nullable=False,
-        default=Decimal("0.00"),
-        server_default=text("0.00"),
-    )
-    product_discount_amount: Mapped[Decimal] = mapped_column(
-        Numeric(12, 2),
-        nullable=False,
-        default=Decimal("0.00"),
-        server_default=text("0.00"),
-    )
-    shipping_discount_amount: Mapped[Decimal] = mapped_column(
         Numeric(12, 2),
         nullable=False,
         default=Decimal("0.00"),
@@ -170,7 +150,6 @@ class Order(Base):
         uselist=False,
     )
     refunds: Mapped[list["Refund"]] = relationship(back_populates="order")
-    coupon_usages: Mapped[list["CouponUsage"]] = relationship(back_populates="order")
     payout: Mapped["SellerPayout | None"] = relationship(
         back_populates="order",
         uselist=False,

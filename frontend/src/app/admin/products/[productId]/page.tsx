@@ -8,7 +8,7 @@ import { EmptyState } from "@/components/ui/feedback";
 import { Panel, Section } from "@/components/ui/containers";
 import { StatusBadge } from "@/components/ui/badge";
 import { useMarketplaceStore } from "@/store/use-marketplace-store";
-import { fetchAdminProducts, hideAdminProduct, unhideAdminProduct, deleteAdminProduct } from "@/services/admin-api";
+import { fetchAdminProductDetail, hideAdminProduct, unhideAdminProduct, deleteAdminProduct } from "@/services/admin-api";
 import { Product } from "@/types/models";
 import { formatVnd, productStatusLabel } from "@/lib/helpers";
 
@@ -100,18 +100,22 @@ export default function AdminProductDetailPage() {
 
   useEffect(() => {
     let isMounted = true;
-    fetchAdminProducts()
+    setLoading(true);
+    fetchAdminProductDetail(productId)
       .then((data) => {
         if (isMounted) {
-          const found = data.find((item) => item.id === productId || item.slug === productId);
-          setProduct(found || null);
-          setProductStatus(found?.status || "ACTIVE");
+          setProduct(data || null);
+          setProductStatus(data?.status || "ACTIVE");
           setSelectedImageIndex(0);
           setLoading(false);
         }
       })
       .catch((err) => {
-        if (isMounted) setLoading(false);
+        console.error("Error fetching product detail:", err);
+        if (isMounted) {
+          setProduct(null);
+          setLoading(false);
+        }
       });
     return () => {
       isMounted = false;

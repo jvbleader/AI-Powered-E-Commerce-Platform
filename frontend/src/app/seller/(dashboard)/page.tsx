@@ -2,44 +2,21 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { RefreshCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/feedback";
 import { Panel, Section } from "@/components/ui/containers";
 import { StatusBadge } from "@/components/ui/badge";
-import { MetricCard } from "@/components/shared/cards";
-import { formatVnd, sellerStatusLabel } from "@/lib/helpers";
+import { sellerStatusLabel } from "@/lib/helpers";
 import { useMarketplaceStore } from "@/store/use-marketplace-store";
 import Unauthorized from "@/components/shared/unauthorized-page";
 import type { BackendSellerDashboardSummary } from "@/store/slices/types";
 
-const formatLocalTime = (isoString?: string | null) => {
-  if (!isoString) return "";
-  let cleanIso = isoString;
-  if (!cleanIso.endsWith("Z") && !cleanIso.includes("+") && !cleanIso.includes("-", 10)) {
-    cleanIso += "Z";
-  }
-  const date = new Date(cleanIso);
-  if (isNaN(date.getTime())) return isoString;
-
-  const formatter = new Intl.DateTimeFormat("en-GB", {
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour12: false
-  });
-
-  const parts = formatter.formatToParts(date).reduce((acc, part) => {
-    acc[part.type] = part.value;
-    return acc;
-  }, {} as Record<string, string>);
-
-  return `${parts.hour}:${parts.minute}:${parts.second} ${parts.day}/${parts.month}/${parts.year}`;
-};
-
+import { DashboardHeader } from "./components/dashboard-header";
+import { ActionCenter } from "./components/action-center";
+import { KpiMetrics } from "./components/kpi-metrics";
+import { RevenueAnalyticsChart } from "./components/revenue-analytics-chart";
+import { RecentOrdersTable } from "./components/recent-orders-table";
+import { TopProductsWidget } from "./components/top-products-widget";
 
 export default function SellerDashboardPage() {
   const router = useRouter();
@@ -53,7 +30,10 @@ export default function SellerDashboardPage() {
     if (recalculate) {
       if (cooldownLeft > 0) {
         const minutesLeft = Math.ceil(cooldownLeft / 60);
-        store.showToast(`Bạn chỉ có thể cập nhật dữ liệu 5 phút một lần. Vui lòng thử lại sau ${minutesLeft} phút.`, "danger");
+        store.showToast(
+          `Bạn chỉ có thể cập nhật dữ liệu 5 phút một lần. Vui lòng thử lại sau ${minutesLeft} phút.`,
+          "danger"
+        );
         return;
       }
       setRecalculating(true);
@@ -108,9 +88,13 @@ export default function SellerDashboardPage() {
     return () => clearInterval(interval);
   }, [summary?.updated_at]);
 
-
   if (!store.getCurrentUser()) {
-    return <Unauthorized title="Cần đăng nhập" description="Bạn cần đăng nhập trước khi truy cập dashboard người bán." />;
+    return (
+      <Unauthorized
+        title="Cần đăng nhập"
+        description="Bạn cần đăng nhập trước khi truy cập dashboard người bán."
+      />
+    );
   }
 
   if (!shop) {
@@ -131,7 +115,11 @@ export default function SellerDashboardPage() {
         <Panel>
           <StatusBadge status={shop.status} label={sellerStatusLabel[shop.status]} />
           <p className="mt-2 text-sm leading-6 text-muted">Shop hiện chưa ở trạng thái được duyệt.</p>
-          <Button className="mt-4" variant="secondary" onClick={() => router.push(`/seller/${shop.status.toLowerCase()}`)}>
+          <Button
+            className="mt-4"
+            variant="secondary"
+            onClick={() => router.push(`/seller/${shop.status.toLowerCase()}`)}
+          >
             Xem trạng thái
           </Button>
         </Panel>
@@ -139,59 +127,97 @@ export default function SellerDashboardPage() {
     );
   }
 
-  const sellerOrders = store.state.orders.filter((order) => order.sellerId === shop?.id);
-  const revenueFallback = sellerOrders.filter((order) => order.orderStatus === "COMPLETED").reduce((sum, order) => sum + order.totalAmount, 0);
-  const waitingFallback = sellerOrders.filter((order) => !order.sellerConfirmed && order.orderStatus === "PLACED").length;
+  // Derive state for current shop
+  const sellerOrders = store.state.orders.filter((order) => order.sellerId === shop.id);
+  const sellerProducts = store.state.products.filter((product) => product.sellerId === shop.id);
+  const sellerVariants = store.state.variants;
 
-  const displayRevenue = summary ? summary.total_revenue : revenueFallback;
-  const displayTotalSold = summary ? summary.total_sold : (shop?.totalSold ?? 0);
-  const displayWaiting = summary ? summary.pending_orders : waitingFallback;
-  const displayProducts = summary ? summary.total_products : store.state.products.filter((product) => product.sellerId === shop?.id).length;
+  // Fallbacks and counters (only subtotalAmount - tiền hàng)
+  const revenueFallback = sellerOrders
+    .filter((order) => order.orderStatus === "COMPLETED")
+    .reduce((sum, order) => sum + (order.subtotalAmount ?? 0), 0);
+
+  const pendingConfirmationCount = sellerOrders.filter(
+    (order) => !order.sellerConfirmed && order.orderStatus === "PLACED"
+  ).length;
+
+  const readyToShipCount = sellerOrders.filter(
+    (order) =>
+      order.orderStatus === "READY_TO_SHIP" ||
+      (order.sellerConfirmed && order.orderStatus === "PLACED")
+  ).length;
+
+  const lowStockCount = sellerProducts.filter((product) => {
+    const variants = sellerVariants.filter((v) => v.productId === product.id);
+    const stock = variants.reduce((sum, v) => sum + (v.inventory?.quantity ?? 0), 0);
+    return variants.length > 0 && stock <= 5;
+  }).length;
+
+  const returnRefundCount = sellerOrders.filter(
+    (order) =>
+      order.returnRequest?.returnStatus === "REQUESTED" ||
+      order.returnRequest?.returnStatus === "DISPUTED" ||
+      order.orderStatus === "RETURNED" ||
+      (Boolean(order.returnTag) && order.returnTag !== "CANCELLED")
+  ).length;
+
+  const realtimeTotalSold = sellerOrders
+    .filter((order) => order.orderStatus === "COMPLETED")
+    .reduce(
+      (sum, order) =>
+        sum + (order.items || []).reduce((itemSum, item) => itemSum + (item.quantity || 0), 0),
+      0
+    );
+
+  const displayRevenue = sellerOrders.length > 0 ? revenueFallback : (summary?.total_revenue ?? 0);
+  const displayTotalSold = sellerOrders.length > 0 ? realtimeTotalSold : (summary?.total_sold ?? shop.totalSold ?? 0);
+  const displayTotalOrders = sellerOrders.length;
+  const displayProducts = summary ? summary.total_products : sellerProducts.length;
 
   return (
-    <Section title="Tổng quan">
-      <div className="mb-4 flex items-center justify-between">
-        <span className="text-xs text-muted">
-          {summary?.updated_at
-            ? `Cập nhật gần nhất: ${formatLocalTime(summary.updated_at)}`
-            : "Chưa đồng bộ thống kê DB"}
-        </span>
-        <Button
-          variant="secondary"
-          onClick={() => handleFetchSummary(true)}
-          disabled={recalculating || cooldownLeft > 0}
-          className="flex items-center gap-1.5 text-xs min-h-8 py-1 px-3"
-        >
-          <RefreshCcw className={`h-3.5 w-3.5 ${recalculating ? "animate-spin" : ""}`} />
-          {recalculating
-            ? "Đang tính toán..."
-            : cooldownLeft > 0
-            ? `Cập nhật dữ liệu (${Math.floor(cooldownLeft / 60)}:${String(cooldownLeft % 60).padStart(2, "0")})`
-            : "Cập nhật dữ liệu"}
-        </Button>
-      </div>
+    <div className="space-y-6 pb-12">
+      {/* 1. Header & Quick Actions */}
+      <DashboardHeader
+        shopName={shop.shopName}
+        shopStatus={shop.status}
+        updatedAt={summary?.updated_at}
+        recalculating={recalculating}
+        cooldownLeft={cooldownLeft}
+        onRefresh={() => handleFetchSummary(true)}
+      />
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <MetricCard label="Doanh thu hoàn thành" value={formatVnd(displayRevenue)} />
-        <MetricCard label="Tổng đã bán" value={`${displayTotalSold}`} />
-        <MetricCard label="Đơn cần xác nhận" value={`${displayWaiting}`} />
-        <MetricCard label="Sản phẩm" value={`${displayProducts}`} />
-      </div>
+      {/* 2. Action Center (To-Do List) */}
+      <ActionCenter
+        pendingConfirmationCount={pendingConfirmationCount}
+        readyToShipCount={readyToShipCount}
+        lowStockCount={lowStockCount}
+        returnRefundCount={returnRefundCount}
+      />
 
-      <div className="mt-4 grid gap-4 lg:grid-cols-2">
-        <Panel>
-          <h3 className="font-bold">Thao tác nhanh</h3>
-          <div className="mt-3 flex flex-wrap gap-2">
-            <Button onClick={() => router.push("/seller/products/new")}>Tạo sản phẩm</Button>
-            <Button variant="secondary" onClick={() => router.push("/seller/orders")}>Xem đơn hàng</Button>
-          </div>
-        </Panel>
-        <Panel>
-          <h3 className="font-bold">Nhắc hạn xác nhận</h3>
-          <p className="mt-2 text-sm text-muted">{displayWaiting} đơn đang chờ xác nhận.</p>
-        </Panel>
+      {/* 3. Core KPI Metrics */}
+      <KpiMetrics
+        totalRevenue={displayRevenue}
+        totalSold={displayTotalSold}
+        totalOrders={displayTotalOrders}
+        totalProducts={displayProducts}
+      />
+
+      {/* 4. Interactive Revenue & Order Analytics Chart */}
+      <RevenueAnalyticsChart orders={sellerOrders} />
+
+      {/* 5. Split Section: Recent Orders (60%) & Top Products (40%) */}
+      <div className="grid gap-6 lg:grid-cols-12">
+        <div className="lg:col-span-7 xl:col-span-8">
+          <RecentOrdersTable orders={sellerOrders} />
+        </div>
+        <div className="lg:col-span-5 xl:col-span-4">
+          <TopProductsWidget
+            products={sellerProducts}
+            variants={sellerVariants}
+          />
+        </div>
       </div>
-    </Section>
+    </div>
   );
 }
 

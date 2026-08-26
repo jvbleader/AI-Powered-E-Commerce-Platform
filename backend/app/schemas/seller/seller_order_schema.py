@@ -15,8 +15,6 @@ class OrderResponse(BaseModel):
     seller_confirmed_at: Optional[datetime]
     subtotal_amount: Decimal
     shipping_fee: Decimal
-    product_discount_amount: Decimal
-    shipping_discount_amount: Decimal
     total_amount: Decimal
     customer_note: Optional[str]
     preferred_payment_method: Optional[str] = None

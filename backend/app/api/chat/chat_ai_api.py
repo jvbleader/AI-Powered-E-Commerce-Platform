@@ -46,12 +46,18 @@ async def stream_chat_message_endpoint(
         user_id = current_user.id if current_user else None
 
         if user_id:
-            session = await chat_repository.get_or_create_session(
-                session_id=request.session_id,
-                user_id=user_id,
-                session_token=request.session_token,
-                db=db,
-            )
+            try:
+                session = await chat_repository.get_or_create_session(
+                    session_id=request.session_id,
+                    user_id=user_id,
+                    session_token=request.session_token,
+                    db=db,
+                )
+            except PermissionError as e:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=str(e) or "Không có quyền truy cập phiên chat này",
+                )
 
             # Persist user message for logged-in user
             await chat_repository.add_chat_message(
@@ -165,12 +171,20 @@ async def stream_chat_message_endpoint(
         async def sse_generator():
             try:
                 while True:
-                    chunk = await queue.get()
+                    try:
+                        chunk = await asyncio.wait_for(queue.get(), timeout=2.5)
+                    except asyncio.TimeoutError:
+                        # Gửi SSE keep-alive comment định kỳ để ngăn chặn browser/proxy timeout
+                        yield ": keep-alive\n\n"
+                        continue
+
                     if chunk is None:
                         break
                     yield chunk
             except asyncio.CancelledError:
-                logger.info(f"Client disconnected from SSE stream for session {session_id_str}. Background task will complete and save response.")
+                logger.info(
+                    f"Client disconnected from SSE stream for session {session_id_str}. Background task will complete and save response."
+                )
             except Exception as err:
                 logger.debug(f"SSE client generator closed: {err}")
 
@@ -187,6 +201,8 @@ async def stream_chat_message_endpoint(
             headers=headers,
         )
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error in stream_chat_message_endpoint: {e}")
         raise HTTPException(
@@ -209,8 +225,8 @@ async def get_chat_history_endpoint(
     session = None
     if session_id:
         session = await chat_repository.get_session_by_id(session_id, db=db)
-        if session and session.user_id is not None and session.user_id != current_user.id:
-            # Session belongs to another user
+        if session and (session.user_id is None or session.user_id != current_user.id):
+            # Session belongs to another user or unauthenticated guest
             return ChatHistoryResponse(session_id=session_id, messages=[])
 
     if not session and current_user and not session_id:

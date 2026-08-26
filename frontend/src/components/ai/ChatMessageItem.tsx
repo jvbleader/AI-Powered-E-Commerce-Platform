@@ -2,37 +2,54 @@
 
 import { memo, useMemo } from "react";
 import { Bot, User, AlertTriangle, RotateCcw } from "lucide-react";
-import { AIChatMessage, AICitationItem } from "@/services/aiChatService";
+import DOMPurify from "dompurify";
+import { AIChatMessage } from "@/services/aiChatService";
 import { ProductCardInChat } from "./ProductCardInChat";
-import { PolicyCitationBadge } from "./PolicyCitationBadge";
 import { OrderQuickActionCard } from "./OrderQuickActionCard";
 import { cn } from "@/lib/utils";
 import { formatDate } from "@/lib/helpers";
 
+const SANITIZE_CONFIG = {
+  ALLOWED_TAGS: ["strong", "em", "code", "br", "p", "span", "b", "i", "ul", "ol", "li"],
+  ALLOWED_ATTR: ["class"],
+};
+
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
 function formatMarkdown(text: string): string {
   if (!text) return "";
-  return text
+  const safeText = escapeHtml(text);
+  const rawHtml = safeText
     .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
     .replace(/\*(.*?)\*/g, "<em>$1</em>")
     .replace(/`([^`]+)`/g, "<code class='bg-emerald-50 px-1.5 py-0.5 rounded text-emerald-600 font-mono text-xs border border-emerald-100'>$1</code>")
     .replace(/\n/g, "<br/>");
+
+  if (typeof window !== "undefined") {
+    return DOMPurify.sanitize(rawHtml, SANITIZE_CONFIG);
+  }
+  return rawHtml;
 }
 
 function ChatMessageItemInner({
   message,
   isStreaming,
   onRetry,
-  onOpenCitation,
 }: {
   message: AIChatMessage;
   isStreaming?: boolean;
   onRetry?: () => void;
-  onOpenCitation?: (citation: AICitationItem) => void;
 }) {
   const isAssistant = message.role === "assistant";
   const hasContent = Boolean(message.content && message.content.trim().length > 0);
   const hasProducts = Boolean(message.products && message.products.length > 0);
-  const hasCitations = Boolean(message.citations && message.citations.length > 0);
   const hasOrderContext = Boolean(message.orderContext);
 
   const html = useMemo(
@@ -44,7 +61,7 @@ function ChatMessageItemInner({
   const shouldRenderTextBubble =
     hasContent ||
     !isAssistant ||
-    (!hasProducts && !hasCitations && !hasOrderContext) ||
+    (!hasProducts && !hasOrderContext) ||
     Boolean(message.isError);
 
   return (
@@ -108,15 +125,6 @@ function ChatMessageItemInner({
 
             {isStreaming && hasContent && (
               <span className="inline-block w-1.5 h-4 ml-1 align-middle bg-emerald-500 animate-pulse" />
-            )}
-
-            {/* Policy Citations Badge List Inside Bubble */}
-            {isAssistant && hasCitations && (
-              <PolicyCitationBadge
-                citations={message.citations!}
-                onSelectCitation={onOpenCitation}
-                className="mt-2.5 pt-2 border-t border-slate-100"
-              />
             )}
           </div>
         )}

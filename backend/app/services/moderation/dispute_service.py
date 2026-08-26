@@ -46,6 +46,12 @@ async def get_disputes(
     base_where = []
     if status_filter:
         base_where.append(OrderReturn.return_status == status_filter)
+    else:
+        base_where.append(
+            OrderReturn.return_status.in_(
+                ["DISPUTED", "SUPPORT_APPROVED", "SUPPORT_REJECTED"]
+            )
+        )
 
     count_stmt = select(func.count(OrderReturn.id))
     if base_where:
@@ -158,6 +164,8 @@ async def resolve_dispute(
             order=order,
             db=db,
         )
+        from services.platform.platform_finance_service import record_order_refund
+        await record_order_refund(db, order, order.total_amount, "Sàn chấp thuận khiếu nại hoàn tiền")
 
         for item in order.items:
             if not item.variant_id:
@@ -254,6 +262,10 @@ async def resolve_dispute(
         if stats:
             stats.total_sold += sum(i.quantity for i in order.items)
             stats.total_revenue += Decimal(str(order.total_amount))
+
+        # Settle funds to seller wallet and release platform revenue
+        from services.seller.seller_wallet_service import settle_order_to_wallet
+        await settle_order_to_wallet(db, order)
 
         await order_repo.add_order_status_log(
             db,

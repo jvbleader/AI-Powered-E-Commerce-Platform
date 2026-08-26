@@ -23,6 +23,7 @@ import repositories.catalog.product_repository as product_repository
 import repositories.seller.seller_profile_repository as seller_profile_repository
 import repositories.user.user_address_repository as user_address_repository
 from services.engagement.notification_service import send_notification
+import services.seller.seller_wallet_service as seller_wallet_service
 
 
 def generate_order_code() -> str:
@@ -295,11 +296,19 @@ async def checkout_from_cart(user: User, data: CheckoutCartRequest, db: AsyncSes
 async def checkout_direct(user: User, data: CheckoutDirectRequest, db: AsyncSession):
     variant_ids = [item.variant_id for item in data.items]
     variants_list = await product_repository.get_variants_for_checkout(db, variant_ids)
-    variants = {v.id: v for v in variants_list}
+    variants = {}
+    for v in variants_list:
+        variants[v.id] = v
+        variants[str(v.id)] = v
+        if getattr(v, "public_id", None):
+            variants[str(v.public_id)] = v
+        if getattr(v, "sku", None):
+            variants[str(v.sku)] = v
 
     items_to_checkout = []
     for req_item in data.items:
-        variant = variants.get(req_item.variant_id)
+        key = req_item.variant_id
+        variant = variants.get(key) or variants.get(str(key))
         if not variant:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -397,6 +406,9 @@ async def confirm_receipt(user: User, order_code: str, db: AsyncSession):
         stats.total_sold += sum(i.quantity for i in order.items)
         stats.total_revenue += Decimal(str(order.total_amount))
 
+    # Settle funds to seller wallet (95% net payout on product amount)
+    await seller_wallet_service.settle_order_to_wallet(db, order)
+
     # Lấy seller user_id
     from repositories.seller.seller_profile_repository import get_seller_profile_by_id
     seller = await get_seller_profile_by_id(order.seller_id, db)
@@ -454,6 +466,8 @@ async def cancel_order(user: User, order_code: str, reason: str, db: AsyncSessio
             order=order,
             db=db,
         )
+        from services.platform.platform_finance_service import record_order_refund
+        await record_order_refund(db, order, order.total_amount, "Khách hàng hủy đơn")
         order.payment_status = "REFUNDED"
 
     for item in order.items:
@@ -597,6 +611,8 @@ async def process_expired_orders(db: AsyncSession) -> dict:
                 order=order,
                 db=db,
             )
+            from services.platform.platform_finance_service import record_order_refund
+            await record_order_refund(db, order, order.total_amount, "Tự động hủy do Shop quá hạn xác nhận")
             order.payment_status = "REFUNDED"
 
         await order_repository.add_order_status_log(
@@ -842,6 +858,9 @@ async def auto_complete_delivered_orders(db: AsyncSession) -> int:
         if stats:
             stats.total_sold += sum(i.quantity for i in order.items)
             stats.total_revenue += Decimal(str(order.total_amount))
+
+        # Settle funds to seller wallet (95% net payout on product amount)
+        await seller_wallet_service.settle_order_to_wallet(db, order)
 
         seller = await seller_profile_repository.get_seller_profile_by_id(order.seller_id, db)
         if seller:

@@ -37,18 +37,12 @@ class ProductSearchStrategy(BaseSearchStrategy):
         builder.set_pagination(page, size)
         sort_by = _normalize_sort(sort_by)
 
-        if query_vector and sort_by == "relevance":
-            builder.add_knn(
-                field="embedding",
-                query_vector=query_vector,
-                k=size * 2,
-                num_candidates=100
-            )
-
         if processed_query:
+            tokens = processed_query.split()
+            has_short_token = any(len(t) < 4 for t in tokens)
             fuzziness = (
-                FUZZINESS_VALUE
-                if FUZZINESS_ENABLED and len(processed_query) >= FUZZINESS_MIN_LENGTH
+                "AUTO:4,7"
+                if FUZZINESS_ENABLED and len(processed_query) >= FUZZINESS_MIN_LENGTH and not has_short_token
                 else None
             )
             builder.add_multi_match(
@@ -64,14 +58,18 @@ class ProductSearchStrategy(BaseSearchStrategy):
                     "name", processed_query, boost=NAME_PREFIX_BOOST
                 )
 
-        # Apply Filters
+        # Collect Filters (applied to both lexical post_filter/filter and vector knn.filter)
+        knn_filters: list[dict] = [{"term": {"status": "ACTIVE"}}]
+
         if filters.get("category_slug"):
             slugs = [s.strip() for s in filters["category_slug"].split(",") if s.strip()]
             builder.add_post_filter("category_slugs", slugs)
+            knn_filters.append({"terms": {"category_slugs": slugs}})
 
         if filters.get("shop_slug"):
             slugs = [s.strip() for s in filters["shop_slug"].split(",") if s.strip()]
             builder.add_post_filter("shop_slug", slugs)
+            knn_filters.append({"terms": {"shop_slug": slugs}})
 
         # Also support seller_id string representing shop slugs (as sent by frontend)
         if filters.get("seller_id"):
@@ -79,9 +77,11 @@ class ProductSearchStrategy(BaseSearchStrategy):
             if all(v.strip().isdigit() for v in val.split(",")):
                 seller_ids = [int(v.strip()) for v in val.split(",") if v.strip()]
                 builder.add_post_filter("seller_id", seller_ids)
+                knn_filters.append({"terms": {"seller_id": seller_ids}})
             else:
                 slugs = [s.strip() for s in val.split(",") if s.strip()]
                 builder.add_post_filter("shop_slug", slugs)
+                knn_filters.append({"terms": {"shop_slug": slugs}})
 
         if filters.get("min_price") is not None or filters.get("max_price") is not None:
             builder.add_range_filter(
@@ -89,15 +89,23 @@ class ProductSearchStrategy(BaseSearchStrategy):
                 gte=filters.get("min_price"),
                 lte=filters.get("max_price"),
             )
+            price_range = {}
+            if filters.get("min_price") is not None:
+                price_range["gte"] = filters.get("min_price")
+            if filters.get("max_price") is not None:
+                price_range["lte"] = filters.get("max_price")
+            knn_filters.append({"range": {"min_price": price_range}})
 
         min_rating = filters.get("min_rating")
         if min_rating is None:
             min_rating = filters.get("rating")
         if min_rating is not None:
             builder.add_range_filter("average_rating", gte=min_rating)
+            knn_filters.append({"range": {"average_rating": {"gte": min_rating}}})
 
         if filters.get("brand"):
             builder.add_term_filter("brand_name.keyword", filters["brand"])
+            knn_filters.append({"term": {"brand_name.keyword": filters["brand"]}})
 
         if filters.get("pickup_address"):
             addresses = [s.strip() for s in filters["pickup_address"].split(",") if s.strip()]
@@ -105,9 +113,20 @@ class ProductSearchStrategy(BaseSearchStrategy):
 
         if filters.get("in_stock") is True:
             builder.add_term_filter("in_stock", True)
+            knn_filters.append({"term": {"in_stock": True}})
 
         # Default filters
         builder.add_term_filter("status", "ACTIVE")
+
+        # Add kNN vector search with full filter enforcement
+        if query_vector and sort_by == "relevance":
+            builder.add_knn(
+                field="embedding",
+                query_vector=query_vector,
+                k=size,
+                num_candidates=100,
+                filter_dsl=knn_filters,
+            )
 
         # Add Aggregations
         for agg_name, agg_dsl in AGGREGATIONS_CONFIG.items():

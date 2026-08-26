@@ -67,6 +67,23 @@ img {
   outline-offset: 2px;
 }
 
+/* Recharts & SVG focus outline reset */
+.recharts-responsive-container,
+.recharts-responsive-container *,
+.recharts-wrapper,
+.recharts-wrapper *,
+.recharts-surface,
+.recharts-surface *,
+.recharts-layer,
+.recharts-layer *,
+.recharts-sector,
+.recharts-rectangle,
+svg,
+svg * {
+  outline: none !important;
+  -webkit-tap-highlight-color: transparent;
+}
+
 /* PORCELAIN BENTO GLASS UTILITIES */
 .bento-card {
   background: #ffffff;

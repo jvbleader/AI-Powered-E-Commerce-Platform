@@ -20,8 +20,6 @@ import { SellerSessionSidebar } from "./SellerSessionSidebar";
 import { SellerMessageList } from "./SellerMessageList";
 import { AiComposerInput } from "./AiComposerInput";
 import { SellerComposerInput } from "./SellerComposerInput";
-import { PolicyArticleModal } from "./PolicyArticleModal";
-import type { AICitationItem } from "@/services/aiChatService";
 import type { SellerSessionSummary } from "@/types/chat";
 
 type PendingShopInfo = {
@@ -52,7 +50,6 @@ export function ChatWidget() {
   const [deferCreate, setDeferCreate] = useState(false);
   const [pendingShopInfo, setPendingShopInfo] = useState<PendingShopInfo | null>(null);
   const [showScrollDown, setShowScrollDown] = useState(false);
-  const [selectedCitation, setSelectedCitation] = useState<AICitationItem | null>(null);
 
   // AI Chat
   const {
@@ -329,7 +326,9 @@ export function ChatWidget() {
       } else {
         setActiveTab('AI');
         setActiveShopId(null);
-        clearAiChat();
+        if (detail?.newChat) {
+          clearAiChat();
+        }
       }
       if (detail?.productDraft) {
         setProductDraft(detail.productDraft);
@@ -340,7 +339,7 @@ export function ChatWidget() {
     };
     window.addEventListener('open-chat-widget', handleOpenChat);
     return () => window.removeEventListener('open-chat-widget', handleOpenChat);
-  }, [openSellerShopChat]);
+  }, [openSellerShopChat, clearAiChat]);
 
   // Deep-link from notification: /chat?tab=SELLER&session_id=...&shop_id=...
   useEffect(() => {
@@ -521,27 +520,22 @@ export function ChatWidget() {
 
   const handleTabChange = useCallback((tab: "AI" | "SELLER") => {
     setActiveTab(tab);
-    if (tab === "AI") {
-      setActiveShopId(null);
-      clearAiChat();
-      scrollToLatestRef.current(true);
-    }
-  }, [clearAiChat]);
+    scrollToLatestRef.current(true);
+  }, []);
 
   const handleSelectAi = useCallback(() => {
-    setActiveShopId(null);
-    clearAiChat();
+    setActiveTab("AI");
     scrollToLatestRef.current(true);
-  }, [clearAiChat]);
+  }, []);
 
   const handleSelectAiSession = useCallback((sessionId: string) => {
-    setActiveShopId(null);
+    setActiveTab("AI");
     switchAiChat(sessionId);
     scrollToLatestRef.current(true);
   }, [switchAiChat]);
 
   const handleNewAiChat = useCallback(() => {
-    setActiveShopId(null);
+    setActiveTab("AI");
     clearAiChat();
     scrollToLatestRef.current(true);
   }, [clearAiChat]);
@@ -552,9 +546,6 @@ export function ChatWidget() {
 
   const handleOpenWidget = () => {
     setIsOpen(true);
-    setActiveTab("AI");
-    setActiveShopId(null);
-    clearAiChat();
     scrollToLatestRef.current(true);
   };
 
@@ -563,12 +554,12 @@ export function ChatWidget() {
       setProductDraft(null);
       setOrderDraft(null);
       clearSellerDraft();
+      setDeferCreate(false);
+      setPendingShopInfo(null);
+      setActiveShopId(null);
+      setActiveConversationId(null);
     }
     setIsOpen(false);
-    setActiveShopId(null);
-    setActiveConversationId(null);
-    setDeferCreate(false);
-    setPendingShopInfo(null);
     setShowScrollDown(false);
     pendingMarkShopNotifications.current = null;
   };
@@ -711,7 +702,6 @@ export function ChatWidget() {
                       isStreaming={isStreaming}
                       currentStatus={currentStatus}
                       onRetry={retryAiMessage}
-                      onOpenCitation={setSelectedCitation}
                     />
                     <div ref={messagesEndRef} className="h-px shrink-0" aria-hidden />
                   </ChatScrollArea>
@@ -933,13 +923,6 @@ export function ChatWidget() {
           </div>
         </div>
       )}
-
-      {/* Policy Article Full View / Excerpt Modal */}
-      <PolicyArticleModal
-        citation={selectedCitation}
-        isOpen={Boolean(selectedCitation)}
-        onClose={() => setSelectedCitation(null)}
-      />
     </>
   );
 }

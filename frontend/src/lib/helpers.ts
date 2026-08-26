@@ -28,6 +28,18 @@ export const formatVnd = (value?: number | string | null) => {
   }).format(num);
 };
 
+/** Rút gọn số tiền VND cho nhãn trục biểu đồ: 85000000 → "85tr", 1200000000 → "1.2 tỷ". */
+export const formatVndCompact = (value?: number | string | null) => {
+  const num = value === null || value === undefined || value === "" ? NaN : Number(value);
+  if (Number.isNaN(num)) return "0";
+  const abs = Math.abs(num);
+  const trim = (n: number) => n.toFixed(1).replace(/\.0$/, "").replace(".", ",");
+  if (abs >= 1_000_000_000) return `${trim(num / 1_000_000_000)} tỷ`;
+  if (abs >= 1_000_000) return `${trim(num / 1_000_000)} tr`;
+  if (abs >= 1_000) return `${Math.round(num / 1_000)}k`;
+  return String(Math.round(num));
+};
+
 /** API datetimes are UTC but often serialized without a timezone suffix. */
 export function parseApiDateTime(value?: string | Date): Date | null {
   if (!value) return null;
@@ -89,11 +101,18 @@ export const getPrimaryVariant = (product: Product, variants: ProductVariant[]) 
 
 export const getShop = (shops: Shop[], sellerId: string) => shops.find((shop) => shop.id === sellerId);
 
-export const getCategoryNames = (categories: Category[], product: Product) =>
-  product.categoryIds
-    .map((id) => categories.find((category) => category.id === id)?.name)
+export const getCategoryNames = (categories: Category[] = [], product: Product) => {
+  if (product.categories && product.categories.length > 0) {
+    return product.categories.map((c) => c.name).filter(Boolean).join(", ");
+  }
+  if (!product.categoryIds || product.categoryIds.length === 0) {
+    return "";
+  }
+  return product.categoryIds
+    .map((id) => categories.find((category) => String(category.id) === String(id))?.name)
     .filter(Boolean)
     .join(", ");
+};
 
 export const roleLabel: Record<Role | "GUEST", string> = {
   GUEST: "Khách",
@@ -335,8 +354,6 @@ export const createOrderFromGroup = (
     sellerConfirmed: false,
     subtotalAmount: group.subtotal,
     shippingFee: group.shippingFee,
-    productDiscountAmount: 0,
-    shippingDiscountAmount: 0,
     totalAmount: group.total,
     customerNote,
     paymentExpiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),

@@ -17,10 +17,11 @@ interface MultiSelectProps {
   onChange: (value: string[]) => void;
   placeholder?: string;
   className?: string;
+  buttonClassName?: string;
   popupClassName?: string;
 }
 
-export function MultiSelect({ options, value, onChange, placeholder = "Select...", className, popupClassName }: MultiSelectProps) {
+export function MultiSelect({ options, value, onChange, placeholder = "Select...", className, buttonClassName, popupClassName }: MultiSelectProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState("");
   const containerRef = useRef<HTMLDivElement>(null);
@@ -64,14 +65,14 @@ export function MultiSelect({ options, value, onChange, placeholder = "Select...
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="flex h-10 w-full items-center justify-between rounded-panel border border-line bg-white px-3 text-sm text-ink transition hover:border-primary focus:border-primary focus:outline-none"
+        className={cn("flex h-9 w-full items-center justify-between rounded-panel border border-line bg-white px-3 text-xs sm:text-sm text-ink transition hover:border-primary focus:border-primary focus:outline-none", buttonClassName)}
       >
         <span className="truncate">{displayValue}</span>
-        <ChevronDown className={cn("h-4 w-4 text-muted transition-transform", isOpen && "rotate-180")} />
+        <ChevronDown className={cn("h-4 w-4 text-muted transition-transform ml-1 shrink-0", isOpen && "rotate-180")} />
       </button>
 
       {isOpen && (
-        <div className={cn("absolute z-50 mt-1 max-h-[400px] overflow-hidden rounded-md border border-line bg-white shadow-lg flex flex-col", popupClassName || "w-full min-w-[200px]")}>
+        <div className={cn("absolute z-[100] mt-1 max-h-[360px] overflow-hidden rounded-md border border-line bg-white shadow-2xl flex flex-col", popupClassName || "w-full min-w-[200px]")}>
           <div className="p-2 border-b border-line shrink-0">
             <input 
               type="text" 

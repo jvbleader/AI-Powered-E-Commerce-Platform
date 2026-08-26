@@ -47,6 +47,23 @@ export const createProductSlice: StateCreator<MarketplaceStore, [], [], any> = (
         return { ok: false, message: error instanceof ApiError ? error.message : "Lỗi khi tải sản phẩm." };
       }
     },
+    fetchSellerProductDetail: async (productId: string) => {
+      const { state, verificationContext } = get();
+
+      if (!get().getCurrentShop()) return { ok: false, message: "Shop không tồn tại." };
+      try {
+        const response = await apiFetch<BackendProductResponse>(SELLER_PRODUCT_ROUTES.detail(productId));
+        const { product, variants } = normalizeBackendProduct(response, get().getCurrentShop()!.id);
+        setState((prev: AppState) => ({
+          ...prev,
+          products: [product, ...prev.products.filter((p) => p.id !== product.id)],
+          variants: [...variants, ...prev.variants.filter((v) => v.productId !== product.id)]
+        }));
+        return { ok: true, product, variants, raw: response };
+      } catch (error) {
+        return { ok: false, message: error instanceof ApiError ? error.message : "Lỗi khi tải chi tiết sản phẩm." };
+      }
+    },
     createSellerProduct: async (payload: any) => {
       const { state, verificationContext } = get();
 
