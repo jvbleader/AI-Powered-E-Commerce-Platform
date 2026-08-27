@@ -18,6 +18,7 @@ from services.knowledge_base.kb_admin_service import UPLOAD_DIR
 router = APIRouter(prefix="/policies", tags=["Public Policies"])
 
 
+@router.get("", response_model=ArticleListResponse)
 @router.get("/", response_model=ArticleListResponse)
 async def list_public_policies_api(
     db: DBSession,

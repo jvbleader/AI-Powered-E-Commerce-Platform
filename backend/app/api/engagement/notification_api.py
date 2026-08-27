@@ -49,6 +49,7 @@ async def stream_notifications(request: Request, current_user: CurrentUser):
     return StreamingResponse(event_generator(), media_type="text/event-stream")
 
 
+@router.get("", response_model=list[NotificationResponse])
 @router.get("/", response_model=list[NotificationResponse])
 async def get_notifications(
     current_user: CurrentUser,
