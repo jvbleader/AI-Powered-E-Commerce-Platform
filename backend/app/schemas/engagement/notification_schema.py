@@ -13,4 +13,4 @@ class NotificationResponse(BaseModel):
     content: str
     is_read: bool
     action_url: Optional[str] = None
-    created_at: datetime
+    created_at: Optional[datetime] = None

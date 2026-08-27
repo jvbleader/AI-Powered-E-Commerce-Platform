@@ -9,7 +9,7 @@ from sqlalchemy.dialects import mysql
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
-from models.base import Base
+from models.base import Base, utc_now
 
 if TYPE_CHECKING:
     from models.user import User
@@ -36,6 +36,7 @@ class Notification(Base):
     action_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), 
+        default=utc_now,
         server_default=func.now()
     )
 
