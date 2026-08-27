@@ -2,10 +2,12 @@
 
 import { useEffect, useState, useRef, useCallback } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { ArrowLeft, Bell, CreditCard, LogOut, Plus, Store, Star, Copy, Check, ExternalLink, RotateCcw, Truck, MapPin, MessageSquare, ShieldCheck, FileText, HelpCircle, Loader2, Package, Headset, LayoutDashboard, User as UserIcon, Mail, Smartphone, X, Upload, ChevronLeft, ChevronRight, Wallet as WalletIcon, KeyRound, RefreshCw, AlertCircle, CheckCircle2 } from "lucide-react";
+import { ArrowLeft, Bell, CreditCard, LogOut, Plus, Store, Star, Copy, Check, ExternalLink, RotateCcw, Truck, MapPin, MessageSquare, ShieldCheck, FileText, HelpCircle, Loader2, Package, Headset, LayoutDashboard, User as UserIcon, Mail, Smartphone, X, Upload, ChevronLeft, ChevronRight, Wallet as WalletIcon, KeyRound, RefreshCw, AlertCircle, CheckCircle2, Building2, ArrowUpRight } from "lucide-react";
 import { createReviewApi, fetchMyReviewsApi, type UserReviewResponse } from "@/services/review-api";
 import { uploadImage } from "@/services/upload-api";
-import { walletApi, type WalletInfo, type WalletTransaction } from "@/services/wallet-api";
+import { walletApi, type WalletInfo, type WalletTransaction, type UpdateWalletBankAccountRequest } from "@/services/wallet-api";
+import { UserWithdrawalModal } from "@/components/wallet/UserWithdrawalModal";
+import { UserBankAccountModal } from "@/components/wallet/UserBankAccountModal";
 import { Button } from "@/components/ui/button";
 import { ImageUpload } from "@/components/ui/image-upload";
 import { Field, Input, Select, Textarea } from "@/components/ui/input";
@@ -323,6 +325,11 @@ export default function AccountPage() {
     const [topupSubmitting, setTopupSubmitting] = useState(false);
     const [topupError, setTopupError] = useState("");
 
+    // Withdrawal & Bank Modal states
+    const [withdrawModalOpen, setWithdrawModalOpen] = useState(false);
+    const [bankModalOpen, setBankModalOpen] = useState(false);
+    const [returnToWithdraw, setReturnToWithdraw] = useState(false);
+
     const fetchWallet = useCallback(async () => {
       try {
         setLoadingWallet(true);
@@ -515,6 +522,38 @@ export default function AccountPage() {
       }
     };
 
+    const handleWithdrawSubmit = async (amount: number, pin?: string): Promise<boolean> => {
+      try {
+        const res = await walletApi.withdraw({
+          amount,
+          pin,
+        });
+        showToast(
+          `Rút tiền thành công! Đã chuyển ${formatVnd(amount)} tới tài khoản ${res.bank_info?.bank_name || ""}. (Mã GD: ${res.transaction_code})`,
+          "success"
+        );
+        fetchWallet();
+        fetchTransactions(1, txnFilter);
+        setCurrentPage(1);
+        return true;
+      } catch (err: any) {
+        showToast(err?.message || "Rút tiền thất bại.", "danger");
+        throw err;
+      }
+    };
+
+    const handleBankSubmit = async (payload: UpdateWalletBankAccountRequest): Promise<boolean> => {
+      try {
+        await walletApi.updateBankAccount(payload);
+        showToast("Cập nhật thông tin ngân hàng thành công!", "success");
+        fetchWallet();
+        return true;
+      } catch (err: any) {
+        showToast(err?.message || "Cập nhật ngân hàng thất bại.", "danger");
+        return false;
+      }
+    };
+
     const presetAmounts = [50000, 100000, 200000, 500000, 1000000, 2000000];
     const totalPages = Math.ceil(totalTxns / LIMIT);
 
@@ -527,6 +566,9 @@ export default function AccountPage() {
       }
       if (type === "REFUND_ORDER" || type === "REFUND") {
         return <Badge tone="warning">Hoàn tiền</Badge>;
+      }
+      if (type === "WITHDRAWAL") {
+        return <Badge tone="danger">Rút tiền</Badge>;
       }
       return <Badge tone="neutral">{type}</Badge>;
     };
@@ -577,25 +619,58 @@ export default function AccountPage() {
                   </Button>
                 </div>
 
-                <div className="mt-4 mb-5">
-                  <span className="text-xs font-semibold text-muted uppercase tracking-wider block">Số dư khả dụng</span>
-                  <div className="text-3xl font-black text-emerald-600 mt-1">
-                    {loadingWallet ? "..." : formatVnd(wallet?.balance ?? 0)}
+                <div className="mt-4 mb-5 flex items-center justify-between gap-4">
+                  <div>
+                    <span className="text-xs font-semibold text-muted uppercase tracking-wider block">Số dư khả dụng</span>
+                    <div className="text-3xl font-black text-emerald-600 mt-1">
+                      {loadingWallet ? "..." : formatVnd(wallet?.balance ?? 0)}
+                    </div>
                   </div>
+                  <Button
+                    onClick={() => setWithdrawModalOpen(true)}
+                    disabled={loadingWallet}
+                    className="h-10 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-sm gap-1.5 flex items-center shrink-0"
+                  >
+                    <ArrowUpRight className="h-4 w-4" />
+                    <span>Rút tiền</span>
+                  </Button>
                 </div>
 
                 <div className="flex flex-wrap items-center gap-3 pt-4 border-t border-line">
                   <div className="flex items-center gap-1.5 text-xs font-medium text-muted">
-                    <span>Trạng thái ví:</span>
+                    <span>Trạng thái:</span>
                     <Badge tone={wallet?.status === "ACTIVE" ? "success" : "danger"}>
                       {wallet?.status === "ACTIVE" ? "Hoạt động" : (wallet?.status || "Hoạt động")}
                     </Badge>
                   </div>
                   <div className="flex items-center gap-1.5 text-xs font-medium text-muted">
-                    <span>Bảo mật PIN:</span>
+                    <span>Mã PIN:</span>
                     <Badge tone={wallet?.has_pin ? "success" : "warning"}>
                       {wallet?.has_pin ? "Đã thiết lập" : "Chưa có"}
                     </Badge>
+                  </div>
+                  <div className="flex items-center gap-1.5 text-xs font-medium text-muted">
+                    <span>Ngân hàng:</span>
+                    {wallet?.bank_info?.bank_name ? (
+                      <button
+                        type="button"
+                        onClick={() => setBankModalOpen(true)}
+                        className="hover:opacity-80 transition-opacity"
+                        title="Bấm để thay đổi tài khoản nhận tiền"
+                      >
+                        <Badge tone="info">
+                          {wallet.bank_info.bank_name} - {wallet.bank_info.bank_account_number}
+                        </Badge>
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setBankModalOpen(true)}
+                        className="text-primary hover:underline text-xs font-semibold"
+                      >
+                        + Thêm tài khoản
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -980,6 +1055,7 @@ export default function AccountPage() {
                   <option value="TOPUP">Nạp tiền</option>
                   <option value="ORDER_PAYMENT">Thanh toán đơn hàng</option>
                   <option value="REFUND_ORDER">Hoàn tiền</option>
+                  <option value="WITHDRAWAL">Rút tiền</option>
                 </Select>
               </div>
             </div>
@@ -1086,6 +1162,32 @@ export default function AccountPage() {
             )}
           </Panel>
         </div>
+
+        {/* User Withdrawal & Bank Modals */}
+        <UserWithdrawalModal
+          open={withdrawModalOpen}
+          onOpenChange={setWithdrawModalOpen}
+          wallet={wallet}
+          onSubmitWithdraw={handleWithdrawSubmit}
+          onOpenBankSettings={() => {
+            setReturnToWithdraw(true);
+            setWithdrawModalOpen(false);
+            setBankModalOpen(true);
+          }}
+        />
+
+        <UserBankAccountModal
+          open={bankModalOpen}
+          onOpenChange={(open) => {
+            setBankModalOpen(open);
+            if (!open && returnToWithdraw) {
+              setWithdrawModalOpen(true);
+              setReturnToWithdraw(false);
+            }
+          }}
+          initialBankInfo={wallet?.bank_info}
+          onSubmit={handleBankSubmit}
+        />
       </Section>
     );
   }

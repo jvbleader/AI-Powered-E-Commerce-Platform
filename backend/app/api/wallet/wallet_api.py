@@ -10,16 +10,20 @@ from core.database import DBSession
 from dependencies.auth import CurrentUser
 from schemas.payment.payment_schema import PaymentResponse, VNPayIpnResponse
 from schemas.wallet.wallet_schema import (
+    BankAccountInfo,
     ChangePinRequest,
     CreatePinRequest,
     ResetPinRequest,
     TopupRequest,
     TopupResponse,
     TopupVNPayReturnResponse,
+    UpdateWalletBankAccountRequest,
     WalletPaymentRequest,
     WalletResponse,
     WalletTransactionListResponse,
     WalletTransactionResponse,
+    WalletWithdrawalRequest,
+    WalletWithdrawalResponse,
 )
 import repositories.wallet.wallet_repository as wallet_repository
 import services.wallet.wallet_service as wallet_service
@@ -36,12 +40,21 @@ async def get_wallet(user: CurrentUser, db: DBSession):
             balance=Decimal("0.00"),
             status="ACTIVE",
             has_pin=False,
+            bank_info=None,
             created_at=user.created_at,
+        )
+    bank_info = None
+    if wallet.bank_name or wallet.bank_account_number or wallet.bank_account_name:
+        bank_info = BankAccountInfo(
+            bank_name=wallet.bank_name,
+            bank_account_number=wallet.bank_account_number,
+            bank_account_name=wallet.bank_account_name,
         )
     return WalletResponse(
         balance=wallet.balance,
         status=wallet.status,
         has_pin=wallet.pin_hash is not None,
+        bank_info=bank_info,
         created_at=wallet.created_at,
     )
 
@@ -225,3 +238,55 @@ async def get_transactions(
         limit=limit,
         offset=offset,
     )
+
+
+@router.post("/withdraw", response_model=WalletWithdrawalResponse)
+async def withdraw(
+    user: CurrentUser, data: WalletWithdrawalRequest, db: DBSession
+):
+    try:
+        txn, bank_info = await wallet_service.withdraw_from_wallet(
+            user=user,
+            amount=data.amount,
+            pin=data.pin,
+            bank_name=data.bank_name,
+            bank_account_number=data.bank_account_number,
+            bank_account_name=data.bank_account_name,
+            db=db,
+        )
+        await db.commit()
+        return WalletWithdrawalResponse(
+            transaction_code=txn.transaction_code,
+            amount=abs(txn.amount),
+            balance_before=txn.balance_before,
+            balance_after=txn.balance_after,
+            bank_info=BankAccountInfo(**bank_info),
+            message="Rút tiền từ ví thành công. Tiền đã được chuyển tới tài khoản ngân hàng của bạn.",
+            created_at=txn.created_at,
+        )
+    except Exception:
+        await db.rollback()
+        raise
+
+
+@router.put("/bank-account", response_model=BankAccountInfo)
+async def update_bank_account(
+    user: CurrentUser, data: UpdateWalletBankAccountRequest, db: DBSession
+):
+    try:
+        wallet = await wallet_service.update_wallet_bank_account(
+            user_id=user.id,
+            bank_name=data.bank_name,
+            bank_account_number=data.bank_account_number,
+            bank_account_name=data.bank_account_name,
+            db=db,
+        )
+        await db.commit()
+        return BankAccountInfo(
+            bank_name=wallet.bank_name,
+            bank_account_number=wallet.bank_account_number,
+            bank_account_name=wallet.bank_account_name,
+        )
+    except Exception:
+        await db.rollback()
+        raise

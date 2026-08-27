@@ -19,6 +19,8 @@ logger = logging.getLogger(__name__)
 
 TOPUP_MIN_AMOUNT = Decimal("10000")
 TOPUP_MAX_AMOUNT = Decimal("10000000")
+MIN_WITHDRAWAL_AMOUNT = Decimal("50000")
+MAX_WITHDRAWAL_AMOUNT = Decimal("10000000")
 PIN_MAX_FAILED_ATTEMPTS = 5
 PIN_LOCK_DURATION_MINUTES = 30
 
@@ -68,9 +70,14 @@ def verify_pin(wallet: Wallet, pin: str) -> None:
             wallet.pin_locked_until = utc_now() + timedelta(
                 minutes=PIN_LOCK_DURATION_MINUTES
             )
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Mã PIN không chính xác. Đã nhập sai {wallet.pin_failed_attempts}/{PIN_MAX_FAILED_ATTEMPTS} lần. Ví bị khóa tạm thời trong {PIN_LOCK_DURATION_MINUTES} phút.",
+            )
+        remaining = PIN_MAX_FAILED_ATTEMPTS - wallet.pin_failed_attempts
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="PIN không chính xác.",
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Mã PIN ví không chính xác. Bạn còn {remaining} lần thử trước khi bị khóa tạm thời.",
         )
     # Reset on success
     wallet.pin_failed_attempts = 0
@@ -628,6 +635,138 @@ async def expire_stale_pending_topups(db: AsyncSession) -> int:
     )
     result = await db.execute(stmt)
     return result.rowcount or 0
+
+
+async def update_wallet_bank_account(
+    user_id: int,
+    bank_name: str,
+    bank_account_number: str,
+    bank_account_name: str,
+    db: AsyncSession,
+) -> Wallet:
+    b_name = bank_name.strip()
+    b_acc_num = bank_account_number.strip()
+    b_acc_name = bank_account_name.strip().upper()
+
+    if not b_name or not b_acc_num or not b_acc_name:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Thông tin ngân hàng không được để trống",
+        )
+
+    wallet = await get_or_create_wallet(user_id, db, for_update=True)
+    wallet.bank_name = b_name
+    wallet.bank_account_number = b_acc_num
+    wallet.bank_account_name = b_acc_name
+    await db.flush()
+    return wallet
+
+
+async def withdraw_from_wallet(
+    user,
+    amount: Decimal,
+    pin: str | None,
+    bank_name: str | None,
+    bank_account_number: str | None,
+    bank_account_name: str | None,
+    db: AsyncSession,
+) -> tuple[WalletTransaction, dict[str, str | None]]:
+    from services.engagement.notification_service import send_notification
+
+    if amount < MIN_WITHDRAWAL_AMOUNT:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Số tiền rút tối thiểu là {int(MIN_WITHDRAWAL_AMOUNT):,} VNĐ".replace(",", "."),
+        )
+    if amount > MAX_WITHDRAWAL_AMOUNT:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Số tiền rút tối đa mỗi lần là {int(MAX_WITHDRAWAL_AMOUNT):,} VNĐ".replace(",", "."),
+        )
+
+    wallet = await wallet_repository.get_wallet_by_user_id(db, user.id, for_update=True)
+    if not wallet:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Bạn chưa có ví. Vui lòng nạp tiền hoặc kích hoạt ví trước.",
+        )
+    if wallet.status != "ACTIVE":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Ví đang bị khóa.",
+        )
+
+    # Validate PIN if user has set PIN
+    if wallet.pin_hash:
+        if not pin:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Vui lòng nhập mã PIN ví để xác thực giao dịch rút tiền.",
+            )
+        verify_pin(wallet, pin)
+
+    # Determine bank details
+    b_name = (bank_name or wallet.bank_name or "").strip()
+    b_acc_num = (bank_account_number or wallet.bank_account_number or "").strip()
+    b_acc_name = (bank_account_name or wallet.bank_account_name or "").strip().upper()
+
+    if not b_name or not b_acc_num or not b_acc_name:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Vui lòng cung cấp đầy đủ thông tin tài khoản ngân hàng nhận tiền.",
+        )
+
+    # Save / update bank info on wallet if changed or newly provided
+    wallet.bank_name = b_name
+    wallet.bank_account_number = b_acc_num
+    wallet.bank_account_name = b_acc_name
+
+    # Check sufficient balance
+    if wallet.balance < amount:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Số dư khả dụng ({int(wallet.balance):,}đ) không đủ để rút {int(amount):,}đ".replace(",", "."),
+        )
+
+    # Deduct balance
+    balance_before = wallet.balance
+    wallet.balance -= amount
+    balance_after = wallet.balance
+
+    txn_code = generate_wallet_txn_code()
+    now = utc_now()
+
+    txn = WalletTransaction(
+        wallet_id=wallet.id,
+        transaction_code=txn_code,
+        amount=-amount,
+        balance_before=balance_before,
+        balance_after=balance_after,
+        transaction_type="WITHDRAWAL",
+        reference_type="BANK_WITHDRAWAL",
+        description=f"Rút tiền về {b_name} ({b_acc_num}): -{int(amount):,} VND".replace(",", "."),
+        created_at=now,
+    )
+    await wallet_repository.add_wallet_transaction(db, txn)
+
+    # Send in-app notification to user
+    formatted_amount = f"{int(amount):,}đ".replace(",", ".")
+    await send_notification(
+        db=db,
+        user_id=user.id,
+        type="wallet",
+        title="Rút tiền từ ví thành công",
+        content=f"Lệnh rút tiền {txn_code} thành công. Số tiền {formatted_amount} đã được chuyển tới {b_name} ({b_acc_num}).",
+        action_url="/account/wallet",
+    )
+
+    bank_info = {
+        "bank_name": b_name,
+        "bank_account_number": b_acc_num,
+        "bank_account_name": b_acc_name,
+    }
+    return txn, bank_info
+
 
 
 

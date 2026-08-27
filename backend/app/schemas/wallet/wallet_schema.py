@@ -5,11 +5,28 @@ from typing import List, Optional
 from pydantic import BaseModel, Field
 
 
+# --- Bank Account Info ---
+class BankAccountInfo(BaseModel):
+    bank_name: Optional[str] = None
+    bank_account_number: Optional[str] = None
+    bank_account_name: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+class UpdateWalletBankAccountRequest(BaseModel):
+    bank_name: str = Field(min_length=2, max_length=100)
+    bank_account_number: str = Field(min_length=4, max_length=50)
+    bank_account_name: str = Field(min_length=2, max_length=150)
+
+
 # --- Wallet Info ---
 class WalletResponse(BaseModel):
     balance: Decimal
     status: str
     has_pin: bool
+    bank_info: Optional[BankAccountInfo] = None
     created_at: datetime
 
     class Config:
@@ -84,3 +101,25 @@ class TopupVNPayReturnResponse(BaseModel):
     display_success: bool
     message: str
     new_balance: Optional[Decimal] = None
+
+
+# --- Withdrawal ---
+class WalletWithdrawalRequest(BaseModel):
+    amount: Decimal = Field(ge=50000, le=10_000_000, description="Số tiền rút tối thiểu 50.000 VNĐ, tối đa 10.000.000 VNĐ")
+    pin: Optional[str] = Field(None, min_length=6, max_length=6, pattern=r"^\d{6}$")
+    bank_name: Optional[str] = None
+    bank_account_number: Optional[str] = None
+    bank_account_name: Optional[str] = None
+
+
+class WalletWithdrawalResponse(BaseModel):
+    transaction_code: str
+    amount: Decimal
+    balance_before: Decimal
+    balance_after: Decimal
+    bank_info: BankAccountInfo
+    message: str
+    created_at: datetime
+
+    class Config:
+        from_attributes = True

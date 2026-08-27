@@ -1,9 +1,16 @@
 import { apiFetch } from "@/services/api";
 
+export interface BankAccountInfo {
+  bank_name?: string | null;
+  bank_account_number?: string | null;
+  bank_account_name?: string | null;
+}
+
 export interface WalletInfo {
   balance: number;
   status: string;
   has_pin: boolean;
+  bank_info?: BankAccountInfo | null;
   created_at: string;
 }
 
@@ -49,6 +56,30 @@ export interface WalletPaymentResponse {
   order_codes: string[];
 }
 
+export interface WalletWithdrawalRequest {
+  amount: number;
+  pin?: string | null;
+  bank_name?: string | null;
+  bank_account_number?: string | null;
+  bank_account_name?: string | null;
+}
+
+export interface WalletWithdrawalResponse {
+  transaction_code: string;
+  amount: number;
+  balance_before: number;
+  balance_after: number;
+  bank_info: BankAccountInfo;
+  message: string;
+  created_at: string;
+}
+
+export interface UpdateWalletBankAccountRequest {
+  bank_name: string;
+  bank_account_number: string;
+  bank_account_name: string;
+}
+
 export const walletApi = {
   getWallet: () =>
     apiFetch<WalletInfo>("/wallet"),
@@ -88,9 +119,22 @@ export const walletApi = {
       body: JSON.stringify({ order_codes: orderCodes, pin }),
     }),
 
+  withdraw: (data: WalletWithdrawalRequest) =>
+    apiFetch<WalletWithdrawalResponse>("/wallet/withdraw", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  updateBankAccount: (data: UpdateWalletBankAccountRequest) =>
+    apiFetch<BankAccountInfo>("/wallet/bank-account", {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+
   getTransactions: (limit = 20, offset = 0, transactionType?: string) => {
     const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
     if (transactionType) params.set("transaction_type", transactionType);
     return apiFetch<WalletTransactionListResponse>(`/wallet/transactions?${params.toString()}`);
   },
 };
+

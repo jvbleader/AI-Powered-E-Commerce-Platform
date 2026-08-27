@@ -62,6 +62,13 @@ class Wallet(Base):
     status: Mapped[str] = mapped_column(
         String(20), nullable=False, default="ACTIVE"
     )
+    bank_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    bank_account_number: Mapped[str | None] = mapped_column(
+        String(50), nullable=True
+    )
+    bank_account_name: Mapped[str | None] = mapped_column(
+        String(150), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, default=utc_now
     )

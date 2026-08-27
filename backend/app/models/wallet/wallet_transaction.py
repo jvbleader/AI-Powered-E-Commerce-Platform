@@ -26,7 +26,7 @@ class WalletTransaction(Base):
 
     __table_args__ = (
         CheckConstraint(
-            "transaction_type IN ('TOPUP', 'ORDER_PAYMENT', 'REFUND_ORDER')",
+            "transaction_type IN ('TOPUP', 'ORDER_PAYMENT', 'REFUND_ORDER', 'WITHDRAWAL')",
             name="ck_wallet_transactions_type",
         ),
         Index("ix_wallet_transactions_wallet_id", "wallet_id"),
