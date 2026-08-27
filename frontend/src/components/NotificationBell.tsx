@@ -129,11 +129,11 @@ export function NotificationBell() {
   }, [isOpen]);
 
   const fetchNotifications = async () => {
-    if (!user) return;
+    if (!user || isLoading) return;
     setIsLoading(true);
     try {
       const data = await apiFetch<NotificationItem[]>('/notifications');
-      setNotifications(data || []);
+      setNotifications(Array.isArray(data) ? data : []);
     } catch (error: any) {
       if (error?.status === 401 || error?.message?.includes("đăng nhập")) {
         return;
@@ -216,7 +216,7 @@ export function NotificationBell() {
       ref={dropdownRef}
       onMouseEnter={() => {
         setIsOpen(true);
-        if (notifications.length === 0) fetchNotifications();
+        fetchNotifications();
       }}
       onMouseLeave={() => setIsOpen(false)}
     >

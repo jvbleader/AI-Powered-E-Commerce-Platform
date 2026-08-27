@@ -11,6 +11,7 @@ from core.database import DBSession
 from core.redis import get_redis_client
 from dependencies.auth import CurrentUser
 from models.engagement import Notification
+from schemas.engagement.notification_schema import NotificationResponse
 
 router = APIRouter()
 
@@ -48,7 +49,7 @@ async def stream_notifications(request: Request, current_user: CurrentUser):
     return StreamingResponse(event_generator(), media_type="text/event-stream")
 
 
-@router.get("/")
+@router.get("/", response_model=list[NotificationResponse])
 async def get_notifications(
     current_user: CurrentUser,
     db: DBSession,
