@@ -8,7 +8,6 @@ from core.config import settings
 from core.database import DBSession
 from dependencies.auth import CurrentAdmin, CurrentUser
 from schemas.payment.payment_schema import (
-    MockPaymentCallbackRequest,
     PaymentCreateRequest,
     PaymentResponse,
     VNPayIpnResponse,
@@ -203,16 +202,3 @@ async def vnpay_refund(
         await db.rollback()
         raise
 
-
-@router.post("/mock-callback", response_model=PaymentResponse)
-async def mock_callback(
-    data: MockPaymentCallbackRequest,
-    db: DBSession,
-):
-    try:
-        payment = await payment_service.process_mock_callback(data, db)
-        await db.commit()
-        return payment
-    except Exception:
-        await db.rollback()
-        raise

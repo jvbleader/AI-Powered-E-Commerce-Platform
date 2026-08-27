@@ -9,7 +9,7 @@ class PaymentCreateRequest(BaseModel):
     order_codes: List[str] = Field(
         description="Danh sách order_code của các đơn hàng cần thanh toán"
     )
-    payment_method: str = Field(description="BANK, MOMO, CREDIT_CARD, MOCK, VNPAY")
+    payment_method: str = Field(description="VNPAY, WALLET, COD")
 
 
 class VNPayPaymentCreateRequest(BaseModel):
@@ -90,12 +90,3 @@ class VNPayPaymentCreateResponse(BaseModel):
     payment: PaymentResponse
     payment_url: str
 
-
-class MockPaymentCallbackRequest(BaseModel):
-    payment_code: str
-    status: str = Field(
-        description="Trạng thái trả về từ mock gateway: PAID, FAILED, CANCELLED"
-    )
-    transaction_code: Optional[str] = Field(
-        default=None, description="Mã giao dịch giả lập"
-    )

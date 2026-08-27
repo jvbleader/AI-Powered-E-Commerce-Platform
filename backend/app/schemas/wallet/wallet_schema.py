@@ -38,7 +38,7 @@ class ResetPinRequest(BaseModel):
 # --- Top-up ---
 class TopupRequest(BaseModel):
     amount: Decimal = Field(gt=0, le=10_000_000)
-    method: str = Field(description="VNPAY or MOCK")
+    method: str = Field(default="VNPAY", description="VNPAY")
 
 
 class TopupResponse(BaseModel):

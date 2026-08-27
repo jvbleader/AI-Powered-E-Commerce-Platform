@@ -2,14 +2,17 @@
 
 import { useEffect, useLayoutEffect, useState, useRef, useCallback } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import Link from "next/link";
 import {
   Bell,
   ChevronDown,
+  ChevronRight,
   Clock,
   Compass,
   Grid,
   Heart,
   HelpCircle,
+  Home,
   LayoutDashboard,
   LogOut,
   Menu,
@@ -422,6 +425,11 @@ export function MarketplaceHeader() {
               </div>
             </div>
 
+            {/* Mobile Notification Bell */}
+            <div className="flex shrink-0 items-center lg:hidden">
+              <NotificationBell />
+            </div>
+
             {/* ACTION NAV — width theo nội dung; có badge thì nở, search flex-1 tự thu */}
             <div className="hidden shrink-0 items-center justify-end gap-1 lg:flex">
               {/* NOTIFICATION BELL */}
@@ -831,3 +839,202 @@ export function MarketplaceFooter() {
     </footer>
   );
 }
+
+export function MobileBottomNav() {
+  const pathname = usePathname() || "/";
+  const router = useRouter();
+  const store = useMarketplaceStore();
+  const [categoryDrawerOpen, setCategoryDrawerOpen] = useState(false);
+
+  // Cart item count
+  const cartRows = store.getCartRows();
+  const cartCount = cartRows.reduce((sum, row) => sum + row.item.quantity, 0);
+
+  const currentUser = store.getCurrentUser();
+  const categories = store.state.categories;
+
+  // Paths where BottomNav should be hidden
+  const isExcluded =
+    pathname.startsWith("/payment") ||
+    pathname === "/checkout" ||
+    pathname === "/support" ||
+    pathname === "/chat";
+
+  if (isExcluded) {
+    return null;
+  }
+
+  const isHomeActive = pathname === "/";
+  const isProductsActive = pathname.startsWith("/products") || pathname.startsWith("/categories");
+  const isCartActive = pathname === "/cart";
+  const isAccountActive = pathname.startsWith("/account") || pathname === "/login" || pathname === "/register";
+
+  const handleOpenAiChat = () => {
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(
+        new CustomEvent("open-chat-widget", {
+          detail: { tab: "AI" }
+        })
+      );
+    }
+  };
+
+  return (
+    <>
+      {/* CATEGORY BOTTOM SHEET / DRAWER */}
+      {categoryDrawerOpen && (
+        <div className="fixed inset-0 z-50 flex flex-col justify-end bg-slate-900/60 backdrop-blur-xs animate-in fade-in-50 duration-200 lg:hidden">
+          <div
+            className="flex-1"
+            onClick={() => setCategoryDrawerOpen(false)}
+            aria-label="Đóng danh mục"
+          />
+          <div className="max-h-[75vh] w-full rounded-t-3xl border-t border-slate-200 bg-white p-4 shadow-2xl flex flex-col animate-in slide-in-from-bottom-6 duration-200 pb-[calc(1rem+env(safe-area-inset-bottom))]">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-emerald-600 text-white shadow-sm">
+                  <Grid className="h-4 w-4" />
+                </div>
+                <div>
+                  <h3 className="font-heading text-sm font-bold text-slate-900">Danh mục sản phẩm</h3>
+                  <p className="text-[11px] text-slate-500">Khám phá các ngành hàng trên Shepoo</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setCategoryDrawerOpen(false)}
+                className="rounded-full p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="mt-3 flex-1 overflow-y-auto pr-1">
+              <div className="grid grid-cols-2 gap-2">
+                <Link
+                  href="/products"
+                  onClick={() => setCategoryDrawerOpen(false)}
+                  className="flex items-center justify-between rounded-2xl border border-emerald-200 bg-emerald-50/70 p-3 text-xs font-bold text-emerald-800 transition-colors active:scale-98"
+                >
+                  <div className="flex items-center gap-2 truncate">
+                    <Sparkles className="h-4 w-4 text-emerald-600 shrink-0" />
+                    <span className="truncate">Tất cả sản phẩm</span>
+                  </div>
+                  <ChevronRight className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+                </Link>
+
+                {categories.map((cat) => (
+                  <Link
+                    key={cat.id}
+                    href={`/categories/${cat.slug}`}
+                    onClick={() => setCategoryDrawerOpen(false)}
+                    className="flex items-center justify-between rounded-2xl border border-slate-100 bg-slate-50/80 p-3 text-xs font-semibold text-slate-700 transition-colors hover:border-emerald-300 hover:bg-emerald-50/50 hover:text-emerald-700 active:scale-98"
+                  >
+                    <div className="flex items-center gap-2 truncate">
+                      <Package className="h-4 w-4 text-slate-400 shrink-0" />
+                      <span className="truncate">{cat.name}</span>
+                    </div>
+                    <ChevronRight className="h-3.5 w-3.5 text-slate-300 shrink-0" />
+                  </Link>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MOBILE BOTTOM NAVIGATION BAR (Fixed at bottom on < lg) */}
+      <nav
+        aria-label="Thanh điều hướng di động"
+        className="fixed inset-x-0 bottom-0 z-40 block border-t border-slate-200/80 bg-white/95 backdrop-blur-md shadow-lg lg:hidden pb-[env(safe-area-inset-bottom)]"
+      >
+        <div className="mx-auto flex h-14 max-w-md items-center justify-around px-2">
+          {/* 1. Trang chủ */}
+          <Link
+            href="/"
+            className={`flex flex-1 flex-col items-center justify-center py-1 transition-colors ${
+              isHomeActive ? "text-emerald-600 font-bold" : "text-slate-500 hover:text-slate-900"
+            }`}
+          >
+            <div className="relative">
+              <Home className={`h-5 w-5 ${isHomeActive ? "stroke-[2.5]" : "stroke-[1.75]"}`} />
+            </div>
+            <span className="mt-0.5 text-[10px] leading-tight">Trang chủ</span>
+          </Link>
+
+          {/* 2. Danh mục */}
+          <button
+            type="button"
+            onClick={() => setCategoryDrawerOpen(true)}
+            className={`flex flex-1 flex-col items-center justify-center py-1 transition-colors ${
+              isProductsActive || categoryDrawerOpen
+                ? "text-emerald-600 font-bold"
+                : "text-slate-500 hover:text-slate-900"
+            }`}
+          >
+            <div className="relative">
+              <Grid className={`h-5 w-5 ${isProductsActive ? "stroke-[2.5]" : "stroke-[1.75]"}`} />
+            </div>
+            <span className="mt-0.5 text-[10px] leading-tight">Danh mục</span>
+          </button>
+
+          {/* 3. Trợ lý AI (Special Center Highlight) */}
+          <button
+            type="button"
+            onClick={handleOpenAiChat}
+            className="flex flex-1 flex-col items-center justify-center py-1 text-slate-600 transition-transform active:scale-95 group"
+          >
+            <div className="relative flex h-8 w-8 items-center justify-center rounded-2xl bg-gradient-to-tr from-emerald-600 to-teal-500 text-white shadow-md shadow-emerald-500/25 transition-transform group-hover:scale-105">
+              <Sparkles className="h-4 w-4 animate-spin-slow" />
+            </div>
+            <span className="mt-0.5 text-[10px] font-bold text-emerald-700 leading-tight">Trợ lý AI</span>
+          </button>
+
+          {/* 4. Giỏ hàng */}
+          <Link
+            href="/cart"
+            className={`flex flex-1 flex-col items-center justify-center py-1 transition-colors ${
+              isCartActive ? "text-emerald-600 font-bold" : "text-slate-500 hover:text-slate-900"
+            }`}
+          >
+            <div className="relative">
+              <ShoppingCart className={`h-5 w-5 ${isCartActive ? "stroke-[2.5]" : "stroke-[1.75]"}`} />
+              {cartCount > 0 && (
+                <span className="absolute -top-1.5 -right-2.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[9px] font-black text-white shadow-xs">
+                  {cartCount > 99 ? "99+" : cartCount}
+                </span>
+              )}
+            </div>
+            <span className="mt-0.5 text-[10px] leading-tight">Giỏ hàng</span>
+          </Link>
+
+          {/* 5. Tài khoản */}
+          <Link
+            href={currentUser ? "/account" : "/login"}
+            className={`flex flex-1 flex-col items-center justify-center py-1 transition-colors ${
+              isAccountActive ? "text-emerald-600 font-bold" : "text-slate-500 hover:text-slate-900"
+            }`}
+          >
+            <div className="relative">
+              {currentUser?.avatarUrl ? (
+                <img
+                  src={currentUser.avatarUrl}
+                  alt={currentUser.fullName}
+                  className={`h-5 w-5 rounded-full object-cover ring-1 ${
+                    isAccountActive ? "ring-emerald-600" : "ring-slate-300"
+                  }`}
+                />
+              ) : (
+                <User className={`h-5 w-5 ${isAccountActive ? "stroke-[2.5]" : "stroke-[1.75]"}`} />
+              )}
+            </div>
+            <span className="mt-0.5 text-[10px] leading-tight truncate max-w-[50px]">
+              {currentUser ? currentUser.fullName.split(" ").slice(-1)[0] : "Tôi"}
+            </span>
+          </Link>
+        </div>
+      </nav>
+    </>
+  );
+}
+

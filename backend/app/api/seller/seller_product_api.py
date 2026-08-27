@@ -1,6 +1,7 @@
 from typing import Annotated
 from fastapi import APIRouter, Depends, Query, status, BackgroundTasks
 from services.search.search_helpers import sync_product_to_es, delete_product_from_es_by_public_id
+from services.common.azure_blob_service import azure_blob_service
 import services.search.search_service as search_svc
 from sqlalchemy.ext.asyncio import AsyncSession
 from core.database import DBSession
@@ -81,9 +82,11 @@ async def update_product_api(
 ) -> ProductResponse:
     result = None
     try:
-        result = await update_seller_product(user, product_id, data, db)
+        result, removed_urls = await update_seller_product(user, product_id, data, db)
         await db.commit()
         background_tasks.add_task(sync_product_to_es, result.public_id)
+        if removed_urls:
+            background_tasks.add_task(azure_blob_service.delete_blobs_by_urls, removed_urls)
     except Exception:
         await db.rollback()
         raise

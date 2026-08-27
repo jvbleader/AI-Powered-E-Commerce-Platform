@@ -154,7 +154,13 @@ async def get_product_by_public_id_and_seller(
 
 async def update_product(
     db: AsyncSession, product: Product, data: ProductUpdateRequest
-) -> Product:
+) -> tuple[Product, list[str]]:
+    # 0. Track removed image URLs for cleanup
+    old_image_urls: set[str] = set()
+    old_variant_image_urls: set[str] = set()
+    new_image_urls: set[str] = set()
+    new_variant_image_urls: set[str] = set()
+
     # 1. Update basic fields
     update_data = data.model_dump(
         exclude_unset=True, exclude={"category_ids", "images", "variants"}
@@ -172,6 +178,12 @@ async def update_product(
 
     # 3. Update Images
     if data.images is not None:
+        existing_imgs_res = await db.execute(
+            select(ProductImage.image_url).where(ProductImage.product_id == product.id)
+        )
+        old_image_urls = set(filter(None, existing_imgs_res.scalars().all()))
+        new_image_urls = {img.image_url for img in data.images if img.image_url}
+
         await db.execute(
             delete(ProductImage).where(ProductImage.product_id == product.id)
         )
@@ -198,6 +210,8 @@ async def update_product(
         )
         existing_variants_result = await db.execute(stmt)
         existing_variants = list(existing_variants_result.scalars().all())
+        old_variant_image_urls = {v.image_url for v in existing_variants if v.image_url}
+        new_variant_image_urls = {v.image_url for v in data.variants if v.image_url}
         existing_variant_map = {v.public_id: v for v in existing_variants}
 
         incoming_public_ids = [v.public_id for v in data.variants if v.public_id]
@@ -282,6 +296,24 @@ async def update_product(
 
     await db.flush()
 
+    # Calculate removed URLs
+    candidate_removed = (old_image_urls - new_image_urls) | (old_variant_image_urls - new_variant_image_urls)
+    all_current_urls = new_image_urls | new_variant_image_urls
+    if data.images is None:
+        existing_imgs_res = await db.execute(
+            select(ProductImage.image_url).where(ProductImage.product_id == product.id)
+        )
+        all_current_urls.update(filter(None, existing_imgs_res.scalars().all()))
+    if data.variants is None:
+        existing_vars_res = await db.execute(
+            select(ProductVariant.image_url).where(
+                ProductVariant.product_id == product.id, ProductVariant.status != "DELETED"
+            )
+        )
+        all_current_urls.update(filter(None, existing_vars_res.scalars().all()))
+
+    removed_urls = list(candidate_removed - all_current_urls)
+
     # Reload with relationships
     query = (
         select(Product)
@@ -296,7 +328,7 @@ async def update_product(
     result = await db.execute(query)
     product_with_rels = result.scalar_one()
 
-    return product_with_rels
+    return product_with_rels, removed_urls
 
 
 async def soft_delete_product(db: AsyncSession, product: Product) -> Product:

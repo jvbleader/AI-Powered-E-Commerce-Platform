@@ -117,15 +117,7 @@ async def topup(
     request: Request, user: CurrentUser, data: TopupRequest, db: DBSession
 ):
     try:
-        if data.method == "MOCK":
-            txn, wallet = await wallet_service.topup_mock(user.id, data.amount, db)
-            await db.commit()
-            return TopupResponse(
-                transaction_code=txn.transaction_code,
-                amount=txn.amount,
-                new_balance=wallet.balance,
-            )
-        elif data.method == "VNPAY":
+        if data.method == "VNPAY":
             ip_addr = request.headers.get("x-forwarded-for", "127.0.0.1").split(",")[0].strip()
             payment_url, txn_code = await wallet_service.topup_vnpay(
                 user.id, data.amount, db, ip_addr
@@ -140,7 +132,7 @@ async def topup(
         else:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Phương thức nạp không hợp lệ. Chọn VNPAY hoặc MOCK.",
+                detail="Phương thức nạp không hợp lệ. Chỉ hỗ trợ VNPAY.",
             )
     except Exception:
         await db.rollback()

@@ -231,7 +231,10 @@ async def user_to_response(user: User, db: AsyncSession) -> UserMeResponse:
         roles=roles,
     )
 
-async def update_profile(user: User, data: "UserUpdateRequest", db: AsyncSession) -> UserMeResponse:
+async def update_profile(
+    user: User, data: "UserUpdateRequest", db: AsyncSession
+) -> tuple[UserMeResponse, str | None]:
+    old_avatar: str | None = None
     if data.full_name is not None:
         user.full_name = data.full_name
     if data.gender is not None:
@@ -239,6 +242,9 @@ async def update_profile(user: User, data: "UserUpdateRequest", db: AsyncSession
     if data.date_of_birth is not None:
         user.date_of_birth = data.date_of_birth
     if data.avatar_url is not None:
+        if user.avatar_url and user.avatar_url != data.avatar_url:
+            old_avatar = user.avatar_url
         user.avatar_url = data.avatar_url
     
-    return await user_to_response(user, db)
+    response = await user_to_response(user, db)
+    return response, old_avatar

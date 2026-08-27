@@ -22,12 +22,11 @@ export type PaymentStatus =
   | "PARTIAL_REFUND_PENDING"
   | "PARTIALLY_REFUNDED";
 export enum PaymentMethodEnum {
-  MOCK = "MOCK",
   VNPAY = "VNPAY",
   WALLET = "WALLET",
   COD = "COD",
 }
-export type PaymentMethod = "MOCK" | "VNPAY" | "WALLET" | "COD";
+export type PaymentMethod = "VNPAY" | "WALLET" | "COD";
 export type OrderReturnStatus =
   | "REQUESTED"
   | "SELLER_APPROVED"

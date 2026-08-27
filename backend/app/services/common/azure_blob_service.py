@@ -167,20 +167,41 @@ class AzureBlobService:
             logger.error(f"Failed to upload bytes to Azure: {e}")
             raise HTTPException(status_code=500, detail="Failed to upload file to Azure.")
 
+    def is_azure_blob_url(self, url: str | None) -> bool:
+        """Checks if a URL points to the configured Azure Blob container."""
+        if not url or not isinstance(url, str):
+            return False
+        if not hasattr(self, "container_name") or not self.container_name:
+            return "blob.core.windows.net" in url
+        return "blob.core.windows.net" in url and f"/{self.container_name}/" in url
+
     async def delete_blob_by_url(self, blob_url: str) -> bool:
         """Deletes a blob by its public URL."""
         try:
-            if not hasattr(self, "blob_service_client"):
+            if not hasattr(self, "blob_service_client") or not blob_url:
+                return False
+            if not self.is_azure_blob_url(blob_url):
                 return False
             container_client = await self.get_container_client()
             if self.container_name in blob_url:
                 blob_name = blob_url.split(f"{self.container_name}/")[-1]
                 blob_client = container_client.get_blob_client(blob_name)
                 await blob_client.delete_blob()
+                logger.info(f"Successfully deleted blob from Azure: {blob_name}")
                 return True
         except Exception as e:
             logger.warning(f"Failed to delete blob from Azure: {e}")
         return False
+
+    async def delete_blobs_by_urls(self, blob_urls: list[str]) -> None:
+        """Safely deletes multiple blobs by their public URLs (e.g. in background tasks)."""
+        if not blob_urls:
+            return
+        for url in blob_urls:
+            try:
+                await self.delete_blob_by_url(url)
+            except Exception as e:
+                logger.warning(f"Error in delete_blobs_by_urls for {url}: {e}")
 
 
 azure_blob_service = AzureBlobService()

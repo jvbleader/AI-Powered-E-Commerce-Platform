@@ -1,12 +1,13 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Request, Response, status
+from fastapi import APIRouter, Depends, Request, Response, status, BackgroundTasks
 from pydantic import EmailStr
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.database import DBSession
 from dependencies.auth import CurrentUser
 from models.user import User
+from services.common.azure_blob_service import azure_blob_service
 import repositories.user.user_role_repository as user_role_repository
 from schemas.auth.auth_schema import (
     ChangePasswordRequest,
@@ -170,10 +171,13 @@ async def update_me(
     data: UserUpdateRequest,
     current_user: CurrentUser,
     db: DBSession,
+    background_tasks: BackgroundTasks,
 ):
     try:
-        result = await auth_service.update_profile(current_user, data, db)
+        result, old_avatar = await auth_service.update_profile(current_user, data, db)
         await db.commit()
+        if old_avatar:
+            background_tasks.add_task(azure_blob_service.delete_blob_by_url, old_avatar)
     except Exception:
         await db.rollback()
         raise

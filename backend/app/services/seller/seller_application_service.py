@@ -132,7 +132,7 @@ async def get_my_seller_application(user: User, db: AsyncSession) -> SellerProfi
 
 async def update_my_seller_application(
     user: User, data: SellerApplicationRequest, db: AsyncSession
-) -> SellerProfile:
+) -> tuple[SellerProfile, str | None]:
     seller_profile = await get_seller_profile_by_user_id(user.id, db)
 
     if not seller_profile:
@@ -171,6 +171,10 @@ async def update_my_seller_application(
         seller_profile.status = "PENDING"
         seller_profile.rejected_reason = None
 
+    old_logo_url: str | None = None
+    if seller_profile.shop_logo_url and seller_profile.shop_logo_url != data.shop_logo_url:
+        old_logo_url = seller_profile.shop_logo_url
+
     seller_profile.shop_name = data.shop_name
     seller_profile.shop_logo_url = data.shop_logo_url
     seller_profile.shop_slug = shop_slug
@@ -184,7 +188,7 @@ async def update_my_seller_application(
     seller_profile.shipping_providers = shipping_providers
     seller_profile.shop_description = data.shop_description
 
-    return seller_profile
+    return seller_profile, old_logo_url
 
 
 async def list_seller_applications(

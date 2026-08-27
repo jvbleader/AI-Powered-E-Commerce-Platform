@@ -24,7 +24,7 @@ export default function CheckoutPage() {
   const [addressId, setAddressId] = useState(
     store.state.addresses.find((item) => item.userId === user?.id && item.isDefault)?.id ?? ""
   );
-  const [method, setMethod] = useState<PaymentMethod>("MOCK");
+  const [method, setMethod] = useState<PaymentMethod>("VNPAY");
   const [note, setNote] = useState("");
   const [shopShippingMap, setShopShippingMap] = useState<Record<string, string>>({});
   const [walletInfo, setWalletInfo] = useState<WalletInfo | null>(null);
@@ -196,7 +196,7 @@ export default function CheckoutPage() {
                 </Field>
                 <Field label="Phương thức thanh toán">
                   <Select value={method} onChange={(event) => setMethod(event.target.value as PaymentMethod)}>
-                    {(["MOCK", "VNPAY", "WALLET", "COD"] as PaymentMethod[]).map((key) => (
+                    {(["VNPAY", "WALLET", "COD"] as PaymentMethod[]).map((key) => (
                       <option key={key} value={key}>{paymentMethodLabel[key]}</option>
                     ))}
                   </Select>

@@ -132,7 +132,7 @@ export const createOrderSlice: StateCreator<MarketplaceStore, [], [], any> = (se
             payment_method: method
           }) as any;
           paymentRes = {
-            id: rawPaymentRes.public_id || "mock-id",
+            id: rawPaymentRes.public_id || rawPaymentRes.payment_code || "pay-id",
             paymentCode: rawPaymentRes.payment_code,
             userId: get().getCurrentUser()!.id,
             paymentMethod: rawPaymentRes.payment_method,

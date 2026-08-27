@@ -583,9 +583,9 @@ export function ChatWidget() {
 
   return (
     <>
-      {/* Nút Chat nổi — kiểu Shopee, màu hệ thống */}
+      {/* Nút Chat nổi — kiểu Shopee, màu hệ thống (Desktop chỉ hiển thị ở góc) */}
       {!isOpen && (
-        <div className="fixed bottom-0 right-2 z-50">
+        <div className="fixed bottom-0 right-2 z-50 hidden lg:block">
           <button
             onClick={handleOpenWidget}
             className="relative flex items-center gap-2 rounded-t-lg bg-emerald-500 px-4 py-2.5 text-sm font-semibold text-white shadow-soft transition-all duration-200 hover:bg-emerald-600 active:scale-[0.98]"
@@ -601,9 +601,9 @@ export function ChatWidget() {
         </div>
       )}
 
-      {/* Khung chat — dính mép dưới, lề phải vài px */}
+      {/* Khung chat — dính mép dưới trên desktop, toàn màn hình / bottom-sheet trên mobile */}
       {isOpen && (
-        <div ref={panelRef} className="chat-widget-panel fixed bottom-0 right-2 z-50 flex h-[min(600px,calc(100vh-48px))] w-[800px] max-w-[calc(100vw-16px)] flex-col overflow-hidden rounded-t-xl border border-b-0 border-slate-200 bg-white shadow-2xl animate-in fade-in slide-in-from-bottom-3 duration-200">
+        <div ref={panelRef} className="chat-widget-panel fixed inset-x-0 bottom-0 top-0 sm:top-auto sm:inset-x-auto sm:right-2 z-50 flex h-full sm:h-[min(600px,calc(100vh-48px))] w-full sm:w-[800px] sm:max-w-[calc(100vw-16px)] flex-col overflow-hidden sm:rounded-t-xl border sm:border-b-0 border-slate-200 bg-white shadow-2xl animate-in fade-in slide-in-from-bottom-3 duration-200">
           {/* Header chung */}
           <div className="flex shrink-0 items-center justify-between border-b border-slate-200 bg-white px-4 py-1.5">
             <h2 className="font-heading text-sm font-bold leading-none text-primary flex items-center gap-1.5">

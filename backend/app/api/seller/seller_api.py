@@ -2,6 +2,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status, BackgroundTasks
 from services.search.search_helpers import update_shop_in_es
+from services.common.azure_blob_service import azure_blob_service
 
 from pydantic import EmailStr
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -98,12 +99,14 @@ async def update_my_application_api(
 ):
     result = None
     try:
-        result = await update_my_seller_application(user, data, db)
+        result, old_logo_url = await update_my_seller_application(user, data, db)
         await db.commit()
         
         # Trigger ES sync for Shop
         if result and result.id:
             background_tasks.add_task(update_shop_in_es, result.id)
+        if old_logo_url:
+            background_tasks.add_task(azure_blob_service.delete_blob_by_url, old_logo_url)
             
     except Exception:
         await db.rollback()

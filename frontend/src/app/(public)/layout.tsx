@@ -6,7 +6,7 @@ import { Sparkles } from "lucide-react";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { fetchCategories } from "@/services/product-api";
 import { useMarketplaceStore } from "@/store/use-marketplace-store";
-import { MarketplaceHeader, MarketplaceFooter } from "@/components/shared/navbar";
+import { MarketplaceHeader, MarketplaceFooter, MobileBottomNav } from "@/components/shared/navbar";
 import { AuthHeader } from "@/components/shared/auth-header";
 import { ChatWidget } from "@/components/ai/ChatWidget";
 import { CustomerChatInboxProvider } from "@/components/ai/CustomerChatInboxProvider";
@@ -113,7 +113,7 @@ export default function MarketplaceLayout({
       <ErrorBoundary>{children}</ErrorBoundary>
     </div>
   ) : (
-    <div className={`min-h-screen bg-canvas text-slate-900 flex flex-col justify-between ${!isAuthRoute ? "marketplace-layout-shell" : ""}`}>
+    <div className={`min-h-screen bg-canvas text-slate-900 flex flex-col justify-between ${!isAuthRoute ? "marketplace-layout-shell pb-16 lg:pb-0" : ""}`}>
       {isAuthRoute ? (
         <AuthHeader />
       ) : (
@@ -124,6 +124,7 @@ export default function MarketplaceLayout({
 
       <ChatWidget />
       <MarketplaceFooter />
+      {!isAuthRoute && <MobileBottomNav />}
     </div>
   );
 

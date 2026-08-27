@@ -26,7 +26,6 @@ export default function PaymentPageClient({ paymentCode }: PaymentPageClientProp
   const ready = store.ready;
   const fetchPaymentDetail = useMarketplaceStore((s) => s.fetchPaymentDetail);
   const [resuming, setResuming] = useState(false);
-  const [mockPaying, setMockPaying] = useState(false);
   const [walletPaying, setWalletPaying] = useState(false);
   const [walletPin, setWalletPin] = useState("");
   const [walletInfo, setWalletInfo] = useState<WalletInfo | null>(null);
@@ -82,7 +81,6 @@ export default function PaymentPageClient({ paymentCode }: PaymentPageClientProp
   const hasCancelledOrder = linkedOrders.some((order) => order.orderStatus === "CANCELLED");
   const canPayPayment = (payment.paymentStatus === "PENDING" || payment.paymentStatus === "FAILED") && !isExpired && !hasCancelledOrder;
   const isVNPay = payment.paymentMethod === "VNPAY";
-  const canMockPay = canPayPayment && !isVNPay && !isWallet && payment.paymentMethod === "MOCK";
   const canResumeVNPay = isVNPay && canPayPayment;
   const canWalletPay = isWallet && canPayPayment;
 
@@ -146,25 +144,6 @@ export default function PaymentPageClient({ paymentCode }: PaymentPageClientProp
                 >
                   {resuming ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <CreditCard className="h-4 w-4" aria-hidden="true" />}
                   {resuming ? "Đang chuyển hướng..." : "Tiếp tục thanh toán VNPay"}
-                </Button>
-              ) : null}
-              {canMockPay ? (
-                <Button
-                  disabled={mockPaying}
-                  onClick={async () => {
-                    setMockPaying(true);
-                    try {
-                      await paymentApi.mockCallback({ payment_code: payment.paymentCode, status: "PAID" });
-                      store.updatePaymentStatus(payment.paymentCode, "PAID");
-                      showToast("Đã thanh toán đơn hàng.", "success");
-                    } catch {
-                      showToast("Lỗi khi thanh toán đơn hàng.", "danger");
-                      setMockPaying(false);
-                    }
-                  }}
-                >
-                  {mockPaying ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <CreditCard className="h-4 w-4" aria-hidden="true" />}
-                  {mockPaying ? "Đang xử lý thanh toán..." : "Thanh toán ngay"}
                 </Button>
               ) : null}
               {canWalletPay ? (

@@ -32,7 +32,7 @@ class CheckoutCartRequest(BaseModel):
     )
     payment_method: Optional[str] = Field(
         default=None,
-        description="Phương thức thanh toán dự kiến: MOCK, VNPAY, ...",
+        description="Phương thức thanh toán dự kiến: VNPAY, WALLET, COD, ...",
     )
     shipping_providers: List[ShopShippingProvider] = Field(
         description="Đơn vị vận chuyển được chọn cho từng shop",
@@ -53,7 +53,7 @@ class CheckoutDirectRequest(BaseModel):
     )
     payment_method: Optional[str] = Field(
         default=None,
-        description="Phương thức thanh toán dự kiến: MOCK, VNPAY, ...",
+        description="Phương thức thanh toán dự kiến: VNPAY, WALLET, COD, ...",
     )
     shipping_provider_public_id: str = Field(description="ID công khai của đơn vị vận chuyển được chọn")
 

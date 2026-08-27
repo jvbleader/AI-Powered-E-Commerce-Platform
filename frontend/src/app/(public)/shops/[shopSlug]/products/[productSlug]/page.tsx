@@ -75,6 +75,8 @@ export default function ProductDetailPage() {
   const [showReport, setShowReport] = useState(false);
   const [addingToCart, setAddingToCart] = useState(false);
   const [buyingNow, setBuyingNow] = useState(false);
+  const [mobileVariantSheetOpen, setMobileVariantSheetOpen] = useState(false);
+  const [mobileSheetAction, setMobileSheetAction] = useState<"CART" | "BUY">("CART");
   const [shopStats, setShopStats] = useState({ products: 0, reviews: 0, totalSold: 0, approvedAt: "" });
   const [product, setProduct] = useState<Product | undefined>(undefined);
   const [shop, setShop] = useState<Shop | undefined>(undefined);
@@ -403,8 +405,34 @@ export default function ProductDetailPage() {
     }
   };
 
+  const handleOpenShopChat = () => {
+    if (!product || !activeShop) return;
+    window.dispatchEvent(
+      new CustomEvent("open-chat-widget", {
+        detail: {
+          shopId: Number(activeShop.id) || activeShop.id,
+          fromProductPage: true,
+          shopInfo: {
+            id: Number(activeShop.id) || activeShop.id,
+            name: activeShop.shopName,
+            avatar: activeShop.logoUrl || null,
+            shop_slug: activeShop.shopSlug
+          },
+          productDraft: {
+            id: product.id,
+            public_id: product.id,
+            name: product.name,
+            slug: product.slug,
+            thumbnailUrl: product.thumbnailUrl,
+            price: selectedVariant?.price ?? productVariants[0]?.price ?? 0
+          }
+        }
+      })
+    );
+  };
+
   return (
-    <main className="mx-auto max-w-[1252px] px-4 sm:px-6 lg:px-8 py-6 space-y-6 bg-canvas min-h-screen">
+    <main className="mx-auto max-w-[1252px] px-4 sm:px-6 lg:px-8 py-6 space-y-6 bg-canvas min-h-screen pb-20 lg:pb-6">
       {/* BREADCRUMB */}
       <nav className="flex items-center gap-2 text-xs font-semibold text-slate-500">
         <a href="/" className="hover:text-emerald-700 transition-colors">Shepoo</a>
@@ -889,6 +917,206 @@ export default function ProductDetailPage() {
 
       {/* SEMANTIC SIMILAR PRODUCTS */}
       <SemanticSimilarProducts productSlug={productSlug} />
+
+      {/* MOBILE STICKY ACTION BAR (< lg) */}
+      {product && (
+        <div className="fixed inset-x-0 bottom-0 z-30 flex items-center gap-2 border-t border-slate-200 bg-white/95 backdrop-blur-md px-3 py-2 shadow-2xl lg:hidden pb-[calc(0.5rem+env(safe-area-inset-bottom))]">
+          {/* Chat with shop button */}
+          <button
+            type="button"
+            onClick={handleOpenShopChat}
+            className="flex flex-col items-center justify-center rounded-xl border border-slate-200 bg-slate-50 px-3 py-1.5 text-[10px] font-bold text-slate-700 transition-colors hover:bg-slate-100 active:scale-95 shrink-0"
+          >
+            <MessageSquare className="h-4 w-4 text-emerald-600 mb-0.5" />
+            <span>Chat Shop</span>
+          </button>
+
+          {/* Add to Cart Button */}
+          <button
+            type="button"
+            disabled={
+              addingToCart ||
+              buyingNow ||
+              product.status !== "ACTIVE" ||
+              (selectedVariant && isSelectedVariantOutOfStock)
+            }
+            onClick={() => {
+              if (!selectedVariant && productVariants.length > 1) {
+                setMobileSheetAction("CART");
+                setMobileVariantSheetOpen(true);
+              } else {
+                handleAddToCart();
+              }
+            }}
+            className="flex-1 flex items-center justify-center gap-1.5 rounded-xl border border-emerald-600 bg-emerald-50/70 py-2.5 text-xs font-extrabold text-emerald-700 transition-all hover:bg-emerald-100 active:scale-98 disabled:opacity-50"
+          >
+            <ShoppingCart className="h-4 w-4 shrink-0" />
+            <span className="truncate">{addingToCart ? "Đang thêm..." : "Thêm giỏ"}</span>
+          </button>
+
+          {/* Buy Now Button */}
+          <button
+            type="button"
+            disabled={
+              addingToCart ||
+              buyingNow ||
+              product.status !== "ACTIVE" ||
+              (selectedVariant && isSelectedVariantOutOfStock)
+            }
+            onClick={() => {
+              if (!selectedVariant && productVariants.length > 1) {
+                setMobileSheetAction("BUY");
+                setMobileVariantSheetOpen(true);
+              } else {
+                handleBuyNow();
+              }
+            }}
+            className="flex-1 flex items-center justify-center gap-1.5 rounded-xl bg-emerald-600 py-2.5 text-xs font-extrabold text-white shadow-md transition-all hover:bg-emerald-700 active:scale-98 disabled:opacity-50"
+          >
+            <span className="truncate">{buyingNow ? "Đang mua..." : "Mua ngay"}</span>
+          </button>
+        </div>
+      )}
+
+      {/* MOBILE VARIANT SELECTION BOTTOM SHEET (< lg) */}
+      {mobileVariantSheetOpen && product && (
+        <div className="fixed inset-0 z-50 flex flex-col justify-end bg-slate-900/60 backdrop-blur-xs animate-in fade-in-50 duration-200 lg:hidden">
+          <div
+            className="flex-1"
+            onClick={() => setMobileVariantSheetOpen(false)}
+            aria-label="Đóng bảng chọn phân loại"
+          />
+          <div className="max-h-[80vh] w-full rounded-t-3xl border-t border-slate-200 bg-white p-4 shadow-2xl flex flex-col animate-in slide-in-from-bottom-6 duration-200 pb-[calc(1rem+env(safe-area-inset-bottom))]">
+            {/* Header with image, price, and close button */}
+            <div className="flex items-start gap-3 border-b border-slate-100 pb-3">
+              <img
+                src={selectedImage || selectedVariant?.imageUrl || product.thumbnailUrl}
+                alt={product.name}
+                className="h-16 w-16 rounded-xl object-cover border border-slate-200 shrink-0 bg-slate-50"
+              />
+              <div className="flex-1 min-w-0">
+                <PriceDisplay
+                  price={selectedVariant?.price ?? productVariants[0]?.price ?? 0}
+                  salePrice={selectedVariant?.salePrice}
+                  className="text-emerald-700 text-lg font-black"
+                />
+                <p className="text-[11px] text-slate-500 mt-0.5">
+                  Kho: {selectedVariant?.inventory?.quantity ?? productVariants[0]?.inventory?.quantity ?? 0}
+                </p>
+                {selectedVariant && (
+                  <p className="text-[11px] font-semibold text-slate-700 truncate">
+                    Đã chọn: {selectedVariant.variantName}
+                  </p>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => setMobileVariantSheetOpen(false)}
+                className="rounded-full p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Scrollable Variant and Quantity Section */}
+            <div className="flex-1 overflow-y-auto py-3 space-y-4 pr-1">
+              {product.variantOptions && product.variantOptions.length > 0 ? (
+                product.variantOptions.map((opt: any, optIdx: number) => (
+                  <div key={optIdx} className="space-y-1.5">
+                    <span className="text-xs font-bold text-slate-800">{opt.name}</span>
+                    <div className="flex flex-wrap gap-2">
+                      {opt.values.map((val: string, valIdx: number) => {
+                        const isSelected = selectedTierIndex[optIdx] === valIdx;
+                        return (
+                          <button
+                            key={valIdx}
+                            type="button"
+                            onClick={() => handleOptionClick(optIdx, valIdx)}
+                            className={`rounded-xl px-3 py-1.5 text-xs font-semibold border transition-all ${
+                              isSelected
+                                ? "border-emerald-600 bg-emerald-50 text-emerald-700 font-bold"
+                                : "border-slate-200 bg-white text-slate-700"
+                            }`}
+                          >
+                            {val}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="space-y-1.5">
+                  <span className="text-xs font-bold text-slate-800">Phân loại</span>
+                  <div className="flex flex-wrap gap-2">
+                    {productVariants.map((variant) => {
+                      const isSelected = selectedVariant?.id === variant.id;
+                      return (
+                        <button
+                          key={variant.id}
+                          type="button"
+                          onClick={() => {
+                            setSelectedVariantId(variant.id);
+                            if (variant.imageUrl) setSelectedImage(variant.imageUrl);
+                          }}
+                          className={`rounded-xl px-3 py-1.5 text-xs font-semibold border transition-all ${
+                            isSelected
+                              ? "border-emerald-600 bg-emerald-50 text-emerald-700 font-bold"
+                              : "border-slate-200 bg-white text-slate-700"
+                          }`}
+                        >
+                          {variant.variantName}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Quantity Stepper in Mobile Sheet */}
+              <div className="flex items-center justify-between border-t border-slate-100 pt-3">
+                <span className="text-xs font-bold text-slate-800">Số lượng</span>
+                <QuantityStepper
+                  value={isSelectedVariantOutOfStock ? 0 : Math.max(1, Math.min(quantity, selectedVariant?.inventory?.quantity ?? 1))}
+                  onChange={setQuantity}
+                  min={isSelectedVariantOutOfStock ? 0 : 1}
+                  max={isSelectedVariantOutOfStock ? 0 : (selectedVariant?.inventory?.quantity ?? 1)}
+                  disabled={isSelectedVariantOutOfStock}
+                />
+              </div>
+            </div>
+
+            {/* Confirm Button */}
+            <div className="border-t border-slate-100 pt-3">
+              <Button
+                disabled={
+                  addingToCart ||
+                  buyingNow ||
+                  !selectedVariant ||
+                  product.status !== "ACTIVE" ||
+                  selectedVariant.status !== "ACTIVE" ||
+                  isSelectedVariantOutOfStock
+                }
+                onClick={async () => {
+                  if (mobileSheetAction === "BUY") {
+                    await handleBuyNow();
+                  } else {
+                    await handleAddToCart();
+                  }
+                  setMobileVariantSheetOpen(false);
+                }}
+                className="w-full rounded-xl bg-emerald-600 py-3 text-sm font-extrabold text-white shadow-md hover:bg-emerald-700 active:scale-98 disabled:opacity-50"
+              >
+                {isSelectedVariantOutOfStock
+                  ? "Sản phẩm hết hàng"
+                  : mobileSheetAction === "BUY"
+                    ? "Xác nhận Mua ngay"
+                    : "Xác nhận Thêm vào giỏ"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </main>
   );

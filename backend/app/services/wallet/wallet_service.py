@@ -126,30 +126,6 @@ def _validate_topup_amount(amount: Decimal) -> None:
         )
 
 
-async def topup_mock(
-    user_id: int, amount: Decimal, db: AsyncSession
-) -> tuple[WalletTransaction, Wallet]:
-    _validate_topup_amount(amount)
-    wallet = await get_or_create_wallet(user_id, db, for_update=True)
-
-    balance_before = wallet.balance
-    wallet.balance += amount
-    balance_after = wallet.balance
-
-    txn = WalletTransaction(
-        wallet_id=wallet.id,
-        transaction_code=generate_wallet_txn_code(),
-        amount=amount,
-        balance_before=balance_before,
-        balance_after=balance_after,
-        transaction_type="TOPUP",
-        reference_type="MOCK",
-        description=f"Nạp tiền vào ví (Mock): +{amount:,.0f} VND",
-    )
-    await wallet_repository.add_wallet_transaction(db, txn)
-    return txn, wallet
-
-
 async def topup_vnpay(
     user_id: int,
     amount: Decimal,

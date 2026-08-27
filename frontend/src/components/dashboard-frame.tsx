@@ -1,6 +1,6 @@
 "use client";
 
-import { ReactNode } from "react";
+import { ReactNode, useState, useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -21,9 +21,12 @@ import {
   UserPlus,
   Scale,
   Wallet,
-  Landmark
+  Landmark,
+  ChevronLeft,
+  ChevronRight,
+  Menu,
+  X
 } from "lucide-react";
-import { ChevronLeft, ChevronRight, Menu } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { Button, IconButton } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -80,6 +83,11 @@ export function DashboardFrame({
   const store = useMarketplaceStore();
   const pathname = usePathname() || "/";
   const router = useRouter();
+  const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
+
+  useEffect(() => {
+    setMobileDrawerOpen(false);
+  }, [pathname]);
 
   const nav: Array<[string, string, LucideIcon]> =
     kind === "seller"
@@ -139,13 +147,155 @@ export function DashboardFrame({
 
   const frame = (
     <div className="h-screen bg-canvas flex flex-col overflow-hidden">
+      {/* MOBILE SIDEBAR DRAWER (< lg) */}
+      {mobileDrawerOpen && (
+        <div className="fixed inset-0 z-50 flex lg:hidden bg-slate-900/60 backdrop-blur-xs animate-in fade-in-50 duration-200">
+          <div
+            className="fixed inset-0"
+            onClick={() => setMobileDrawerOpen(false)}
+            aria-label="Đóng menu"
+          />
+          <div className="relative flex w-72 max-w-[85vw] flex-col bg-white p-4 shadow-2xl animate-in slide-in-from-left duration-200">
+            {/* Drawer Header */}
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <Link
+                href={homeHref}
+                onClick={() => setMobileDrawerOpen(false)}
+                className="flex items-center gap-2 font-black text-ink"
+              >
+                <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-primary font-heading text-sm font-black text-white">
+                  S
+                </span>
+                <span className="text-sm font-bold">{BRAND_NAME}</span>
+                <span className="text-muted text-xs font-normal">– {kindLabel[kind]}</span>
+              </Link>
+              <button
+                type="button"
+                onClick={() => setMobileDrawerOpen(false)}
+                className="rounded-full p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Shop / User Info Card in Drawer */}
+            <div className="my-3 rounded-xl border border-slate-100 bg-slate-50/80 p-3">
+              {kind === "seller" && store.getCurrentShop() ? (
+                <div className="flex items-center gap-2.5">
+                  {store.getCurrentShop()?.logoUrl ? (
+                    <img
+                      src={store.getCurrentShop()?.logoUrl}
+                      alt={store.getCurrentShop()?.shopName}
+                      className="h-9 w-9 rounded-full object-cover border border-line"
+                    />
+                  ) : (
+                    <div className="h-9 w-9 rounded-full bg-primary text-white flex items-center justify-center font-bold text-sm">
+                      {store.getCurrentShop()?.shopName.charAt(0).toUpperCase()}
+                    </div>
+                  )}
+                  <div className="flex flex-col min-w-0">
+                    <span className="text-xs font-bold text-slate-900 truncate">
+                      {store.getCurrentShop()?.shopName}
+                    </span>
+                    <span className="text-[11px] text-slate-500 truncate">
+                      {store.getCurrentUser()?.fullName}
+                    </span>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2.5">
+                  <div className="h-9 w-9 rounded-full bg-primary text-white flex items-center justify-center font-bold text-sm">
+                    {store.getCurrentUser()?.fullName?.charAt(0).toUpperCase() || "A"}
+                  </div>
+                  <div className="flex flex-col min-w-0">
+                    <span className="text-xs font-bold text-slate-900 truncate">
+                      {store.getCurrentUser()?.fullName || "Quản trị viên"}
+                    </span>
+                    <span className="text-[11px] text-slate-500 truncate">
+                      {store.getCurrentUser()?.email}
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Navigation items */}
+            <div className="flex-1 overflow-y-auto pr-1">
+              <nav className="grid gap-1">
+                {nav.map(([href, label, Icon]) => {
+                  const isActive = pathname === href;
+                  return (
+                    <Link
+                      key={href}
+                      href={href}
+                      onClick={() => setMobileDrawerOpen(false)}
+                      className={cn(
+                        NAV_LINK_CLASS,
+                        isActive && activeLinkClass,
+                        "py-2.5"
+                      )}
+                    >
+                      <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
+                      <span className="truncate">{label}</span>
+                    </Link>
+                  );
+                })}
+              </nav>
+            </div>
+
+            {/* Drawer Footer Actions */}
+            <div className="mt-auto border-t border-slate-100 pt-3 space-y-2">
+              {canSwitchToBuyer && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMobileDrawerOpen(false);
+                    store.switchRole("CUSTOMER");
+                    router.push("/");
+                  }}
+                  className="w-full flex items-center justify-center gap-2 rounded-xl bg-emerald-50 py-2 text-xs font-bold text-emerald-700 border border-emerald-200 hover:bg-emerald-100 transition-colors"
+                >
+                  <ShoppingCart className="h-4 w-4" />
+                  Chuyển sang Mua hàng
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={async () => {
+                  setMobileDrawerOpen(false);
+                  await store.logout();
+                  if (typeof window !== "undefined") {
+                    window.location.href = "/login?logout=1";
+                  }
+                }}
+                className="w-full flex items-center justify-center gap-2 rounded-xl py-2 text-xs font-bold text-rose-600 hover:bg-rose-50 transition-colors"
+              >
+                <LogOut className="h-4 w-4" />
+                Đăng xuất
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* TOP HEADER */}
       <div className="border-b border-line bg-white shrink-0">
-        <div className="flex items-center justify-between px-6 py-3">
-          <div className="flex items-center gap-6">
+        <div className="flex items-center justify-between px-4 sm:px-6 py-3">
+          <div className="flex items-center gap-3 sm:gap-6">
+            {/* Mobile Hamburger Button (< lg) */}
+            <button
+              type="button"
+              onClick={() => setMobileDrawerOpen(true)}
+              className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 shadow-2xs hover:bg-slate-50 active:scale-95 lg:hidden"
+              aria-label="Mở menu quản trị"
+            >
+              <Menu className="h-5 w-5" />
+            </button>
+
             <Link href={homeHref} className="flex items-center gap-2 font-black text-ink">
               <span className="flex h-9 w-9 items-center justify-center rounded-panel bg-primary text-white">S</span>
-              <span>{BRAND_NAME}</span>
-              <span className="text-muted text-sm font-normal">– {kindLabel[kind]}</span>
+              <span className="truncate max-w-[100px] sm:max-w-none">{BRAND_NAME}</span>
+              <span className="text-muted text-xs sm:text-sm font-normal truncate">– {kindLabel[kind]}</span>
             </Link>
 
             {kind === "supporter" && (
@@ -168,7 +318,7 @@ export function DashboardFrame({
           </div>
           <div className="flex items-center gap-2">
             {kind === "seller" && store.getCurrentShop() ? (
-              <div className="flex items-center gap-2 mr-2">
+              <div className="hidden sm:flex items-center gap-2 mr-2">
                 {store.getCurrentShop()?.logoUrl ? (
                   <img
                     src={store.getCurrentShop()?.logoUrl}
@@ -186,11 +336,12 @@ export function DashboardFrame({
                 </div>
               </div>
             ) : (
-              <span className="text-sm text-muted mr-2">{store.getCurrentUser()?.fullName ?? "Khách"}</span>
+              <span className="hidden sm:inline text-sm text-muted mr-2">{store.getCurrentUser()?.fullName ?? "Khách"}</span>
             )}
             {canSwitchToBuyer ? (
               <Button
                 variant="secondary"
+                className="hidden sm:inline-flex"
                 onClick={() => {
                   store.switchRole("CUSTOMER");
                   router.push("/");
@@ -216,7 +367,7 @@ export function DashboardFrame({
       </div>
       {pathname.includes("/violation-reports") ? (
         <div className="w-full flex-1 overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-          <div className={cn("w-full px-6 py-5 grid gap-4 items-start transition-all duration-300", kind !== "supporter" ? (store.state.sidebarCollapsed ? "lg:grid-cols-[80px_1fr]" : "lg:grid-cols-[250px_1fr]") : "")}>
+          <div className={cn("w-full px-3 py-4 sm:px-6 sm:py-5 grid gap-4 items-start transition-all duration-300", kind !== "supporter" ? (store.state.sidebarCollapsed ? "lg:grid-cols-[80px_1fr]" : "lg:grid-cols-[250px_1fr]") : "")}>
             {kind !== "supporter" && (
               <aside className="sticky top-5 h-[calc(100vh-6.5rem)] overflow-hidden rounded-panel border border-line bg-white p-3 hidden lg:flex flex-col">
                 <nav className={cn("grid gap-1", store.state.sidebarCollapsed ? "[&_span]:hidden [&_a]:justify-center [&_a]:px-0" : "")}>{renderSellerOrDefaultNav()}</nav>
@@ -235,7 +386,7 @@ export function DashboardFrame({
           </div>
         </div>
       ) : (
-        <div className={cn("w-full flex-1 overflow-hidden px-6 py-5 grid gap-4 transition-all duration-300", kind !== "supporter" ? (store.state.sidebarCollapsed ? "lg:grid-cols-[80px_1fr]" : "lg:grid-cols-[250px_1fr]") : "")}>
+        <div className={cn("w-full flex-1 overflow-hidden px-3 py-4 sm:px-6 sm:py-5 grid gap-4 transition-all duration-300", kind !== "supporter" ? (store.state.sidebarCollapsed ? "lg:grid-cols-[80px_1fr]" : "lg:grid-cols-[250px_1fr]") : "")}>
           {kind !== "supporter" && (
             <aside className="h-full overflow-hidden rounded-panel border border-line bg-white p-3 hidden lg:flex flex-col">
               <nav className={cn("grid gap-1", store.state.sidebarCollapsed ? "[&_span]:hidden [&_a]:justify-center [&_a]:px-0" : "")}>{renderSellerOrDefaultNav()}</nav>

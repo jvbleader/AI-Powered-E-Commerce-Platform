@@ -30,12 +30,6 @@ export interface VNPayPaymentCreateResponse {
   payment_url: string;
 }
 
-export interface MockPaymentCallbackRequest {
-  payment_code: string;
-  status: string;
-  transaction_code?: string;
-}
-
 export const paymentApi = {
   createPayment: (data: PaymentCreateRequest) =>
     apiFetch<Payment>("/payments/create", {
@@ -53,12 +47,6 @@ export const paymentApi = {
     apiFetch<VNPayPaymentCreateResponse>("/payments/vnpay/resume", {
       method: "POST",
       body: JSON.stringify({ payment_code: paymentCode }),
-    }),
-
-  mockCallback: (data: MockPaymentCallbackRequest) =>
-    apiFetch<Payment>("/payments/mock-callback", {
-      method: "POST",
-      body: JSON.stringify(data),
     }),
 
   getPaymentDetail: (paymentCode: string) =>

@@ -53,7 +53,7 @@ async def get_seller_products(
 
 async def update_seller_product(
     user: User, product_id: str, data: ProductUpdateRequest, db: AsyncSession
-) -> ProductResponse:
+) -> tuple[ProductResponse, list[str]]:
     seller_profile = await _get_active_seller_profile(user, db)
 
     product = await get_product_by_public_id_and_seller(
@@ -64,8 +64,8 @@ async def update_seller_product(
             status_code=status.HTTP_404_NOT_FOUND, detail="Product not found"
         )
 
-    updated_product = await update_product(db, product, data)
-    return ProductResponse.model_validate(updated_product)
+    updated_product, removed_urls = await update_product(db, product, data)
+    return ProductResponse.model_validate(updated_product), removed_urls
 
 
 async def delete_seller_product(

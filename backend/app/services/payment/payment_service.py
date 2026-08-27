@@ -9,7 +9,7 @@ from models.base import utc_now
 from models.payment import Payment
 from models.payment import PaymentOrder
 from models.user import User
-from schemas.payment.payment_schema import MockPaymentCallbackRequest, PaymentCreateRequest
+from schemas.payment.payment_schema import PaymentCreateRequest
 import repositories.order.order_repository as order_repository
 import repositories.payment.payment_repository as payment_repository
 
@@ -80,73 +80,6 @@ async def create_payment(
     payment = await payment_repository.get_payment_by_code_with_orders(
         db, payment.payment_code
     )
-    return payment
-
-
-async def process_mock_callback(data: MockPaymentCallbackRequest, db: AsyncSession):
-    payment = await payment_repository.get_payment_by_code_with_orders(
-        db, data.payment_code
-    )
-
-    if not payment:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Không tìm thấy giao dịch thanh toán",
-        )
-
-    if payment.payment_method != "MOCK":
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Mock callback chỉ áp dụng cho phương thức MOCK",
-        )
-
-    if payment.payment_status != "PENDING":
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Giao dịch đã được xử lý (Trạng thái: {payment.payment_status})",
-        )
-
-    if data.status == "PAID":
-        payment.payment_status = "PAID"
-        payment.paid_at = utc_now()
-        payment.transaction_code = (
-            data.transaction_code or f"TXN-{secrets.token_hex(6).upper()}"
-        )
-        payment.gateway_response = {"mock": True, "status": "success"}
-
-        # Cập nhật trạng thái các đơn hàng liên quan
-        for po in payment.order_links:
-            order = po.order
-            if order.payment_status == "PENDING":
-                if order.order_status == "CANCELLED":
-                    order.payment_status = "REFUND_PENDING"
-                else:
-                    order.payment_status = "PAID"
-                    if order.seller_confirmed and order.order_status == "PLACED":
-                        old_status = order.order_status
-                        order.order_status = "READY_TO_SHIP"
-                        
-                        # Log status change
-                        from models.order import OrderStatusLog
-                        log = OrderStatusLog(
-                            order_id=order.id,
-                            old_status=old_status,
-                            new_status="READY_TO_SHIP",
-                            note="Payment completed and seller already confirmed",
-                        )
-                        db.add(log)
-
-    elif data.status in ["FAILED", "CANCELLED"]:
-        payment.payment_status = data.status
-        payment.failed_at = utc_now() if data.status == "FAILED" else None
-        payment.cancelled_at = utc_now() if data.status == "CANCELLED" else None
-        payment.gateway_response = {"mock": True, "status": data.status.lower()}
-    else:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Trạng thái callback không hợp lệ",
-        )
-
     return payment
 
 

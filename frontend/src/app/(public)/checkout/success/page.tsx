@@ -20,7 +20,7 @@ export default function CheckoutSuccessPage() {
   const [walletPin, setWalletPin] = useState("");
 
   const orderCodes = store.state.lastCheckoutOrderCodes ?? [];
-  const paymentMethod = store.state.lastCheckoutPaymentMethod ?? "MOCK";
+  const paymentMethod = store.state.lastCheckoutPaymentMethod ?? "VNPAY";
 
   // Luôn làm mới thông tin đơn hàng khi vào trang để có paymentStatus mới nhất
   useEffect(() => {

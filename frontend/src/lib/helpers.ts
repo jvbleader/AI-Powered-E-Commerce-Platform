@@ -172,7 +172,6 @@ export const paymentStatusLabel: Record<PaymentStatus, string> = {
 };
 
 export const paymentMethodLabel: Record<PaymentMethod, string> = {
-  MOCK: "Thanh toán giả lập",
   VNPAY: "VNPay",
   WALLET: "Ví tiền",
   COD: "Thanh toán khi nhận hàng (COD)"
@@ -393,7 +392,7 @@ export const createPaymentFromOrders = (
   paymentCode: code,
   userId,
   paymentMethod: method,
-  paymentGateway: method === "MOCK" ? "MOCK_GATEWAY" : method === "VNPAY" ? "VNPAY" : method === "WALLET" ? "WALLET" : method,
+  paymentGateway: method === "VNPAY" ? "VNPAY" : method === "WALLET" ? "WALLET" : method,
   paymentStatus: "PENDING",
   amount: orders.reduce((sum, order) => sum + order.totalAmount, 0),
   expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),

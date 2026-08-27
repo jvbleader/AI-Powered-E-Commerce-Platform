@@ -318,8 +318,8 @@ export default function AccountPage() {
     const [pinErrors, setPinErrors] = useState<Record<string, string>>({});
 
     // Top-up state
-    const [topupAmount, setTopupAmount] = useState<string>("");
-    const [topupMethod, setTopupMethod] = useState<"MOCK" | "VNPAY">("MOCK");
+    const [topupAmount, setTopupAmount] = useState<string>("" );
+    const [topupMethod, setTopupMethod] = useState<"VNPAY">("VNPAY");
     const [topupSubmitting, setTopupSubmitting] = useState(false);
     const [topupError, setTopupError] = useState("");
 
@@ -659,10 +659,9 @@ export default function AccountPage() {
                 <Field label="Phương thức nạp">
                   <Select
                     value={topupMethod}
-                    onChange={(e) => setTopupMethod(e.target.value as "MOCK" | "VNPAY")}
+                    onChange={(e) => setTopupMethod(e.target.value as "VNPAY")}
                     className="bg-canvas/50 border-line focus:bg-white rounded-xl h-11 text-sm font-semibold text-ink"
                   >
-                    <option value="MOCK">Giả lập (Nạp ngay lập tức)</option>
                     <option value="VNPAY">Cổng thanh toán VNPay (ATM / QR / Visa)</option>
                   </Select>
                 </Field>
@@ -1268,7 +1267,7 @@ export default function AccountPage() {
         router.push(`/payment/${payment.paymentCode}`);
         return;
       }
-      const method = order.preferredPaymentMethod ?? store.state.lastCheckoutPaymentMethod ?? "MOCK";
+      const method = order.preferredPaymentMethod ?? store.state.lastCheckoutPaymentMethod ?? "VNPAY";
       const result = await store.createCheckoutPayment([order.orderCode], method);
       if (!result.ok) {
         showToast(result.message || "Không thể tạo giao dịch thanh toán.", "danger");
@@ -1504,7 +1503,7 @@ export default function AccountPage() {
         router.push(`/payment/${payment.paymentCode}`);
         return;
       }
-      const method = order.preferredPaymentMethod ?? store.state.lastCheckoutPaymentMethod ?? "MOCK";
+      const method = order.preferredPaymentMethod ?? store.state.lastCheckoutPaymentMethod ?? "VNPAY";
       const result = await store.createCheckoutPayment([order.orderCode], method);
       if (!result.ok) {
         showToast(result.message || "Không thể tạo giao dịch thanh toán.", "danger");
